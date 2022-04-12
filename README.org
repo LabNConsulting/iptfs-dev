@@ -1,0 +1,64 @@
+#+STARTUP: overview indent
+
+* Linux TFS development environment
+There's a Makefile that will git clone the needed repos.
+** Usage Notes
+*** Qemu
+**** consoles
+2 serial consoles are created using unix sockets '/tmp/qemu-sock/console' and
+'/tmp/qemu-sock/con2'. These can be accessed in the namespace with the following
+command:
+
+~socat /dev/stdin,escape=0x1d,rawer unix-connect:/tmp/qemu-sock/console~
+
+And outside of the namespace with
+
+~socat /dev/stdin,escape=0x1d,rawer unix-connect:<rundir>/<name>/s/console~
+
+Where ~<rundir>~ is usually ~/tmp/unet-root/~, so if the node name is ~r1~:
+
+~sudo socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/unet-root/r1/console~
+
+If your ~socat~ doesn't support ~rawer~ option replace with ~raw,echo=0,icanon=0~.
+**** GDB
+#+begin_src bash
+  $ sudo gdb linux/vmlinux
+  (gdb) target remote /tmp/unet-root/r1/s/gdbserver
+  ...
+
+  or
+  (gdb) target remote /tmp/unet-test/tests.simplenet.test_simplenet/r1/s/gdbserver
+
+  target remote /tmp/unet-test/tests.simplenet.test_simplenet/r1/s/gdbserver
+  target remote /tmp/unet-test/tests.verify.test_verify/r1/s/gdbserver
+  target remote /tmp/unet-test/tests.errors.test_errors/r1/s/gdbserver
+  target remote /tmp/unet-test/tests.utpkt.test_utpkt/r1/s/gdbserver
+  target remote /tmp/unet-test/tests.stress.test_stress/r2/s/gdbserver
+
+  target remote /tmp/unet-test/tests.errors.test_errors/r2/s/gdbserver
+  target remote /tmp/unet-test/tests.simplenet.test_simplenet/r2/s/gdbserver
+#+end_src
+** Design Notes
+*** From Steffen's Mail
+[...] look at:
+
+net/xfrm/*
+net/ipv4/xfrm*
+net/ipv4/esp4*
+net/ipv6/xfrm*
+net/ipv6/esp6*
+
+> Anything else you think might be useful too would be much appreciated of course.
+
+I think TFS should be a new encapsulation mode. We currently have
+tunnel, transport and beet mode (and some odd ipv6 modes). Adding
+a tfs_tunnel mode to add all the TFS special stuff would be the
+way to go at a first glance. The modes are implemented in:
+
+net/xfrm/xfrm_output.c
+net/xfrm/xfrm_input.c
+
+** Bugs
+- xfrmi_rcv_cb is looking up xfrm_state from our newly created skb from decaping
+  iptfs, but it has not xfrm_state so we panic
+  - Need to associate the xfrm_state with new skbs too.. is there a refcnt for this?
