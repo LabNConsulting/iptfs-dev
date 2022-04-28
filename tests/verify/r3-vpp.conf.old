@@ -1,0 +1,21 @@
+ipsec select backend esp 1
+set interface rx-placement UnknownEthernet0 worker 0
+set interface rx-placement UnknownEthernet1 worker 1
+set int state UnknownEthernet0 up
+set int state UnknownEthernet1 up
+set int ip address UnknownEthernet0 11.11.11.11/24
+set int ip address UnknownEthernet1 13.13.11.1/16
+
+set ip neighbor UnknownEthernet1 13.13.12.1 02:42:0d:0d:0d:0c static
+set ip neighbor UnknownEthernet0 11.11.11.253 02:00:0b:00:00:fd static
+ipsec itf create instance 0
+ipsec sa add 10 spi 112 esp crypto-key 4a506a794f574265564551694d6537684a506a794f574265564551694d653768 crypto-alg aes-gcm-256 salt 0x1A2B tunnel-src 13.13.12.1 tunnel-dst 13.13.11.1 use-esn use-anti-replay  inbound
+ipsec sa add 20 spi 111 esp crypto-key 4a506a794f574265564551694d6537684a506a794f574265564551694d653768 crypto-alg aes-gcm-256 salt 0x1A2B tunnel-src 13.13.11.1 tunnel-dst 13.13.12.1 use-esn use-anti-replay
+ipsec tunnel protect ipsec0 sa-in 10 sa-out 20
+set interface unnumbered ipsec0 use UnknownEthernet1
+set interface state ipsec0 up
+ip route add 48.0.0.0/24 via ipsec0
+ip route add 12.12.12.0/24 via ipsec0
+ip route add 16.0.0.0/24 via 11.11.11.253
+create loopback interface
+set int state loop0 up

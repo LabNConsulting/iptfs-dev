@@ -1,0 +1,128 @@
+topology:
+  networks-autonumber: true
+  dns: "mgmt0"
+  networks:
+    - name: mgmt0
+      ip: 192.168.0.254/24
+      nat: true
+    - name: net0
+      ip: 10.0.0.254/24
+    - name: net1
+      ip: 10.0.1.254/24
+    - name: net2
+      ip: 10.0.2.254/24
+  nodes:
+    - name: h1
+      kind: host
+      connections:
+        - to: mgmt0
+        - to: net0
+    - name: r1
+      kind: linux
+      connections:
+        - to: mgmt0
+        - to: net0
+        - to: net1
+          # eth2 is router interconnect
+    - name: r2
+      kind: vpp
+      connections:
+        - to: mgmt0
+          name: eth0
+        - to: net2
+          name: eth1
+        - to: net1
+          # eth2 is router interconnect
+          name: eth2
+    - name: h2
+      kind: host
+      connections:
+        - to: mgmt0
+        - to: net2
+kinds:
+  #vpp unix { interactive cli-no-banner log /tmp/vpp.log coredump-size unlimited full-coredump gid vpp cli-listen /run/vpp/cli.sock startup-config /tmp/vpp-startup.conf } cpu { main-core 0 workers 5 } api-trace { on } socksvr { default } statseg { default } buffers { buffers-per-numa 30720 } plugins { path /home/chopps/w-share/vpp/build-root/install-vpp-native/vpp/lib/vpp_plugins } dpdk { proc-type primary log-level pmd,debug no-pci no-multi-seg no-tx-checksum-offload vdev eth_af_packet0,iface=eth1 vdev eth_af_packet1,iface=eth2 vdev crypto_aesni_gcm0,max_nb_queue_pairs=48,socket_id=0 } punt { socket /tmp/punt-server.sock }
+  # $DPDK_DEVS vdev crypto_aesni_gcm0,max_nb_queue_pairs=48,socket_id=0 }
+  - name: vpp
+    image: labn/vpp
+    cmd: |
+      pwd
+      ls
+      ip addr
+      NETH=$(ls -d /sys/class/net/eth* | wc -l)
+      DPDK_DEVS=""
+      for ((i=0; i<$NETH; i++)); do
+          sysctl -w net.ipv6.conf.eth$i.autoconf=0
+          sysctl -w net.ipv6.conf.eth$i.disable_ipv6=1
+          ip address flush dev eth$i
+          DPDK_DEVS+="vdev eth_af_packet${i},iface=eth${i} "
+      done
+      vpp unix { interactive cli-no-banner log /tmp/vpp.log gid vpp cli-listen /run/vpp/cli.sock startup-config /tmp/vpp-startup.conf } \
+          api-trace { on } socksvr { default } statseg { default } \
+          plugins { path /usr/lib/x86_64-linux-gnu/vpp_plugins } \
+          dpdk { proc-type primary log-level pmd,debug no-pci no-multi-seg no-tx-checksum-offload \
+              $DPDK_DEVS vdev crypto_aesni_mb0,max_nb_queue_pairs=48,socket_id=0 }
+      tail -f /dev/null
+    volumes:
+      - "%NAME%-vpp.conf:/tmp/vpp-startup.conf"
+  - name: host
+    cmd: |
+      pwd
+      ls
+      ip addr
+      NETH=$(ls -d /sys/class/net/eth* | wc -l)
+      TAPS=""
+      for ((i=0; i<$NETH; i++)); do
+          sysctl -w net.ipv6.conf.eth$i.autoconf=0
+          sysctl -w net.ipv6.conf.eth$i.disable_ipv6=1
+      done
+      tail -f /dev/null
+  - name: linux
+    cmd: |
+      # disable ipv6 for now
+      NETH=$(ls -d /sys/class/net/eth* | wc -l)
+      TAPS=""
+      for ((i=0; i<$NETH; i++)); do
+          sysctl -w net.ipv6.conf.eth$i.autoconf=0
+          sysctl -w net.ipv6.conf.eth$i.disable_ipv6=1
+          ip tuntap add tap$i mode tap
+          sysctl -w net.ipv6.conf.tap$i.autoconf=0
+          sysctl -w net.ipv6.conf.tap$i.disable_ipv6=1
+          BRIP=$(ip -o address show eth$i | awk 'match($0,/[0-9]+: ([^ \t]+) +inet ([0-9\.]+)\//,ary){print ary[2];}')
+          IFS='.' read -ra IPQ <<< "$BRIP"
+          echo ${IPQ[*]}
+          BRIP=${IPQ[0]}.${IPQ[1]}.${IPQ[2]}.$((IPQ[3] + 200))
+          echo ${BRIP}
+          ip address flush dev eth$i
+          ip link add name br$i type bridge
+          ip link set dev eth$i master br$i
+          ip link set dev tap$i master br$i
+          ip address add $BRIP/24 dev br$i
+          ip link set dev br$i up
+          sysctl -w net.ipv6.conf.br$i.autoconf=0
+          sysctl -w net.ipv6.conf.br$i.disable_ipv6=1
+          TAPS+="-nic tap,model=virtio-net-pci,mac=02:00:0a:00:0$i:0${MUNET_NODENAME#r},ifname=tap$i "
+      done
+      qemu-system-x86_64 \
+        -boot c \
+        -m 2049M \
+        -kernel /home/chopps/w/ltfs/linux/arch/x86/boot/bzImage \
+        -initrd /home/chopps/w/ltfs/buildroot/output/images/rootfs.ext2 \
+        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
+        $TAPS \
+        -serial stdio \
+        -serial unix:/tmp/qemu-sock/console,server,nowait \
+        -serial unix:/tmp/qemu-sock/console2,server,nowait \
+        -serial unix:/tmp/qemu-sock/replcon,server,nowait \
+        -monitor unix:/tmp/qemu-sock/monitor,server,nowait \
+        -gdb unix:/tmp/qemu-sock/gdbserver,server,nowait \
+        -nographic
+    volumes:
+      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+
+cli:
+  commands:
+    - name: con
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/console2"
+      format: "con HOST [HOST ...]"
+      help: "open console on given hosts, * for all"
+      new-window: true

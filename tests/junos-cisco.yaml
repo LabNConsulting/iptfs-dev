@@ -1,0 +1,109 @@
+cli:
+  commands:
+    - name: fastdump
+      exec: "tcpdump -s 1508 -i {0} -w tcpdump-{0}.pcap"
+      format: "fastdump INTERFACE"
+      help: "capture packets on a given network interface"
+      top-level: true
+      new-window: true
+
+topology:
+  networks-autonumber: true
+  dns: "mgmt0"
+  networks:
+    - name: mgmt0
+      ip: 10.0.1.254/24
+      nat: true
+
+  nodes:
+    - name: r1
+      kind: qemu-linux
+      connections:
+        # ip address 10.0.1.1/24
+        - to: mgmt0
+
+    - name: j1
+      kind: qemu-junos
+      connections:
+        # ip address 10.0.1.11/24
+        - to: mgmt0
+
+    - name: c1
+      kind: qemu-cisco
+      connections:
+        # ip address 10.0.1.31/24
+        - to: mgmt0
+
+
+kinds:
+  - name: qemu-linux
+    volumes:
+      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+    cmd: |
+      ip addr
+      ip tuntap add tap0 mode tap
+      ip add flush dev eth0
+      brctl addbr br0
+      brctl addif br0 eth0
+      brctl addif br0 tap0
+      ip link set br0 up
+      qemu-system-x86_64 \
+        -boot c \
+        -m 2049M \
+        -kernel /home/chopps/w/ltfs/linux/arch/x86/boot/bzImage \
+        -initrd /home/chopps/w/ltfs/buildroot/output/images/rootfs.ext2 \
+        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 acpi=off nokaslr" \
+        -nic tap,model=virtio-net-pci,mac=02:00:0a:00:01:0${MUNET_NODENAME#r},ifname=tap0 \
+        -serial stdio \
+        -serial unix:/tmp/qemu-sock/console,server,nowait \
+        -serial unix:/tmp/qemu-sock/console2,server,nowait \
+        -monitor unix:/tmp/qemu-sock/monitor,server,nowait \
+        -gdb unix:/tmp/qemu-sock/gdbserver,server,nowait \
+        -nographic
+
+  - name: qemu-junos
+    volumes:
+      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+    cmd: |
+      ip addr
+      ip tuntap add tap0 mode tap
+      ip add flush dev eth0
+      brctl addbr br0
+      brctl addif br0 eth0
+      brctl addif br0 tap0
+      ip link set br0 up
+      qemu-system-x86_64 \
+        -enable-kvm \
+        -smp 2 \
+        -boot once=c,menu=off \
+        -m 4096M \
+        -hda /home/chopps/w/ltfs/j${MUNET_NODENAME#j}-root.qcow2 \
+        -nic tap,model=virtio-net-pci,mac=02:00:0b:00:01:0${MUNET_NODENAME#j},ifname=tap0 \
+        -serial unix:/tmp/qemu-sock/console,server,nowait \
+        -serial unix:/tmp/qemu-sock/console2,server,nowait \
+        -monitor unix:/tmp/qemu-sock/monitor,server,nowait \
+        -nographic
+
+  - name: qemu-cisco
+    volumes:
+      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+    cmd: |
+      ip addr
+      ip tuntap add tap0 mode tap
+      ip add flush dev eth0
+      brctl addbr br0
+      brctl addif br0 eth0
+      brctl addif br0 tap0
+      ip link set br0 up
+      qemu-system-x86_64 \
+        -enable-kvm \
+        -smp 2 \
+        -boot once=d,menu=off \
+        -m 4096M \
+        -cdrom /home/chopps/w/ltfs/cisco-rom.iso \
+        -hda /home/chopps/w/ltfs/c${MUNET_NODENAME#c}-root.qcow2 \
+        -nic tap,model=virtio-net-pci,mac=02:00:0c:00:01:0${MUNET_NODENAME#c},ifname=tap0 \
+        -serial unix:/tmp/qemu-sock/console,server,nowait \
+        -serial unix:/tmp/qemu-sock/console2,server,nowait \
+        -monitor unix:/tmp/qemu-sock/monitor,server,nowait \
+        -nographic
