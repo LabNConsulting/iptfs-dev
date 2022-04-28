@@ -1,0 +1,13 @@
+*~
+*.pyc
+*.qcow2
+/buildroot/
+/iproute2/
+/linux/
+__pycache__/
+/linux-torvalds/
+/tests/trex
+/tests/trex_stl_lib
+/tests/podman-trex-extract/
+/.ccls-cache/
+/root-key*
