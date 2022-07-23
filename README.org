@@ -2,7 +2,72 @@
 
 * Linux TFS development environment
 There's a Makefile that will git clone the needed repos.
+
 ** Usage Notes
+*** Launching a "Host <-> Router <-> Router <-> Host" setup.
+You can use the tests to bring up a working iptfs ipsec tunnel. You'll need to
+have installed ~qemu~, ~socat~, ~python~ and optional but highly recommended
+~tmux~, additionally you'll need to install the python requirements,
+
+#+begin_src bash
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install -r python-requirements.txt
+#+end_src
+
+Then run a test adding the `--pause` flag, and it will pause before running the first
+test, but after having configured the hosts (h1, h2) and routers (r1, r2).
+
+NOTE: If your `sudo` command forces a restricted PATH (~secure_path~) then the
+python virtual environment may not work. In this case `sudo bash` and then
+activate the virtual environment as root.
+
+NOTE: SUDO: For best results add the following to your ~/etc/sudoers~ config.
+This will allow tmux to continue to work inside the sudo environment.
+
+#+begin_src shell
+  Defaults env_keep += "TMUX"
+  Defaults env_keep += "TMUX_PANE"
+#+end_src
+
+#+begin_src shell
+  $ sudo -E pytest -s -v tests/simplenet --pause
+  [...]
+  == PAUSING: before test 'tests/simplenet/test_simplenet.py::test_net_up' ==
+#+end_src
+
+or
+
+#+begin_src shell
+  $ sudo -E bash
+  # tmux # optional but highly useful
+  # source venv/bin/activate
+  # pytest -s -v tests/simplenet --pause
+  [...]
+  == PAUSING: before test 'tests/simplenet/test_simplenet.py::test_net_up' ==
+#+end_src
+
+
+You can now log into the running setup in another terminal. Use ~socat~ to log
+into the console of the running qemu'd linux.
+
+#+begin_src shell
+  $ sudo socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 \
+      unix-connect:/tmp/unet-test/tests.simplenet.test_simplenet/r1/s/console2
+#+end_src
+
+You can use ~mucmd~ to simply enter the namespace of the running node (e.g., to
+ping from ~h1~ to ~h2~ over the iptfs tunnel use the following command).
+
+#+begin_src shell
+  $ sudo mucmd -d /tmp/unet-test/tests.simplenet.test_simplenet h1 ping 10.0.2.4
+  PING 10.0.2.4 (10.0.2.4) 56(84) bytes of data.
+  64 bytes from 10.0.2.4: icmp_seq=1 ttl=62 time=1.22 ms
+  64 bytes from 10.0.2.4: icmp_seq=2 ttl=62 time=1.40 ms
+  64 bytes from 10.0.2.4: icmp_seq=3 ttl=62 time=1.25 ms
+  ...
+#+end_src
+
 *** Qemu
 **** consoles
 2 serial consoles are created using unix sockets '/tmp/qemu-sock/console' and
