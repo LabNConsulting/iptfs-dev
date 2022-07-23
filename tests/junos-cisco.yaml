@@ -50,8 +50,8 @@ kinds:
       qemu-system-x86_64 \
         -boot c \
         -m 2049M \
-        -kernel /home/chopps/w/ltfs/linux/arch/x86/boot/bzImage \
-        -initrd /home/chopps/w/ltfs/buildroot/output/images/rootfs.ext2 \
+        -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
+        -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
         -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 acpi=off nokaslr" \
         -nic tap,model=virtio-net-pci,mac=02:00:0a:00:01:0${MUNET_NODENAME#r},ifname=tap0 \
         -serial stdio \
@@ -77,7 +77,7 @@ kinds:
         -smp 2 \
         -boot once=c,menu=off \
         -m 4096M \
-        -hda /home/chopps/w/ltfs/j${MUNET_NODENAME#j}-root.qcow2 \
+        -hda %CONFIGDIR%/../../j${MUNET_NODENAME#j}-root.qcow2 \
         -nic tap,model=virtio-net-pci,mac=02:00:0b:00:01:0${MUNET_NODENAME#j},ifname=tap0 \
         -serial unix:/tmp/qemu-sock/console,server,nowait \
         -serial unix:/tmp/qemu-sock/console2,server,nowait \
@@ -100,8 +100,8 @@ kinds:
         -smp 2 \
         -boot once=d,menu=off \
         -m 4096M \
-        -cdrom /home/chopps/w/ltfs/cisco-rom.iso \
-        -hda /home/chopps/w/ltfs/c${MUNET_NODENAME#c}-root.qcow2 \
+        -cdrom %CONFIGDIR%/../../cisco-rom.iso \
+        -hda %CONFIGDIR%/../../c${MUNET_NODENAME#c}-root.qcow2 \
         -nic tap,model=virtio-net-pci,mac=02:00:0c:00:01:0${MUNET_NODENAME#c},ifname=tap0 \
         -serial unix:/tmp/qemu-sock/console,server,nowait \
         -serial unix:/tmp/qemu-sock/console2,server,nowait \

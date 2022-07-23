@@ -38,8 +38,8 @@ kinds:
       qemu-system-x86_64 \
         -boot c \
         -m 2049M \
-        -kernel /home/chopps/w/ltfs/linux/arch/x86/boot/bzImage \
-        -initrd /home/chopps/w/ltfs/buildroot/output/images/rootfs.ext2 \
+        -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
+        -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
         -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 acpi=off nokaslr" \
         -nic tap,model=virtio-net-pci,mac=02:00:0a:00:01:0${MUNET_NODENAME#r},ifname=tap0 \
         -serial stdio \
@@ -50,7 +50,7 @@ kinds:
         -nographic
         # -nic tap,model=virtio-net-pci,mac=02:00:0a:00:01:01,ifname=tap0 \
         # -S :: wait for gdb to connect
-        # -drive file=/home/chopps/w/ltfs/buildroot/output/images/rootfs.ext4,format=raw,index=0,media=disk \
+        # -drive file=%CONFIGDIR%/../../buildroot/output/images/rootfs.ext4,format=raw,index=0,media=disk \
         # -net nic,model=virtio,macaddr=02:00:0a:00:01:01 -net tap,ifname=tap0 \
         # -serial stdio -display none
         # -serial stdio -display none

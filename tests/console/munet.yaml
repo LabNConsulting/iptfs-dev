@@ -14,8 +14,8 @@ kinds:
       qemu-system-x86_64 \
         -boot c \
         -m 2049M \
-        -kernel /home/chopps/w/ltfs/linux/arch/x86/boot/bzImage \
-        -initrd /home/chopps/w/ltfs/buildroot/output/images/rootfs.ext2 \
+        -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
+        -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
         -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
         -serial stdio \
         -serial unix:/tmp/qemu-sock/console,server,nowait \
