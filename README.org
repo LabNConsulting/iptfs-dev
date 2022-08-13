@@ -102,6 +102,8 @@ If your ~socat~ doesn't support ~rawer~ option replace with ~raw,echo=0,icanon=0
 
   target remote /tmp/unet-test/tests.errors.test_errors/r2/s/gdbserver
   target remote /tmp/unet-test/tests.simplenet.test_simplenet/r2/s/gdbserver
+
+  target remote /tmp/unet-test/tests.phynic.test_simplenet/r1/s/gdbserver
 #+end_src
 ** Design Notes
 *** From Steffen's Mail
@@ -127,3 +129,31 @@ net/xfrm/xfrm_input.c
 - xfrmi_rcv_cb is looking up xfrm_state from our newly created skb from decaping
   iptfs, but it has not xfrm_state so we panic
   - Need to associate the xfrm_state with new skbs too.. is there a refcnt for this?
+
+
+* Sandbox
+
+** Sample PPS and packet send times for 1500B IP packets
+#+begin_src C :includes <stdio.h> :includes <stdint.h>
+#include <stdio.h>
+#define ENET_OHEAD (14 + 4 + 8 + 12)
+#define _1GE_PPS(iptfs_ip_mtu) ((1e9 / 8) / ((iptfs_ip_mtu) + ENET_OHEAD))
+#define _10GE_PPS(iptfs_ip_mtu) ((1e10 / 8) / ((iptfs_ip_mtu) + ENET_OHEAD))
+#define _40GE_PPS(iptfs_ip_mtu) ((4e10 / 8) / ((iptfs_ip_mtu) + ENET_OHEAD))
+#define _100GE_PPS(iptfs_ip_mtu) ((1e11 / 8) / ((iptfs_ip_mtu) + ENET_OHEAD))
+#define _1GE_PP_NANOS(iptfs_ip_mtu) (1e9 / _1GE_PPS(iptfs_ip_mtu))
+#define _10GE_PP_NANOS(iptfs_ip_mtu) (1e9 / _10GE_PPS(iptfs_ip_mtu))
+#define _40GE_PP_NANOS(iptfs_ip_mtu) (1e9 / _40GE_PPS(iptfs_ip_mtu))
+#define _100GE_PP_NANOS(iptfs_ip_mtu) (1e9 / _100GE_PPS(iptfs_ip_mtu))
+
+int mtu = 64;
+
+printf("+ 1GE 10GE 40GE 100GE\n");
+printf("PPS %lu %lu %lu %lu\n", (uint64_t)_1GE_PPS(mtu),(uint64_t)_10GE_PPS(mtu),(uint64_t)_40GE_PPS(mtu),(uint64_t)_100GE_PPS(mtu));
+printf("packet-time %luns %luns %luns %luns\n", (uint64_t)_1GE_PP_NANOS(mtu),(uint64_t)_10GE_PP_NANOS(mtu),(uint64_t)_40GE_PP_NANOS(mtu),(uint64_t)_100GE_PP_NANOS(mtu));
+#+end_src
+
+#+RESULTS:
+| +           | 1GE     | 10GE     | 40GE     | 100GE     |
+| PPS         | 1225490 | 12254901 | 49019607 | 122549019 |
+| packet-time | 816ns   | 81ns     | 20ns     | 8ns       |

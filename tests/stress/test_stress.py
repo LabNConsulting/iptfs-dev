@@ -376,7 +376,9 @@ async def test_policy_small_pkt(unet, r1repl, r2repl, astepf):
 async def test_policy_imix(unet, r1repl, r2repl, astepf):
     await setup_policy_tun(unet, r1repl, r2repl)
 
-    args = testutil.Args(rate=convert_number("100K"), old_imix=True)
+    args = testutil.Args(
+        rate=convert_number("100K"), old_imix=True, unidirectional=True
+    )
 
     # Some TREX test
     trex_ip = unet.hosts["trex"].intf_addrs["mgmt0"].ip

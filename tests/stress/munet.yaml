@@ -77,7 +77,7 @@ kinds:
         -m 2049M \
         -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
         -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
-        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
+        -append "root=/dev/ram0 rw loglevel=8 ignore_loglevel=1 console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
         $TAPS \
         -serial stdio \
         -serial unix:/tmp/qemu-sock/console,server,nowait \
