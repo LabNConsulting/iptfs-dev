@@ -18,14 +18,14 @@ topology:
         - to: mgmt0
         - to: net0
     - name: r1
-      kind: linux
+      kind: linux-phy
       connections:
         - to: mgmt0
         - to: net0
         - to: net1
           name: eth2
     - name: r2
-      kind: linux
+      kind: linux-phy
       connections:
         - to: mgmt0
           name: eth0
@@ -46,8 +46,9 @@ kinds:
       ls
       ip addr
       tail -f /dev/null
-  - name: linux
+  - name: linux-phy
     cmd: |
+      set -x
       # rename eth2 to unused so it's not
       ip link set eth2 down
       ip address flush dev eth2
@@ -72,25 +73,45 @@ kinds:
           TAPS+="-nic tap,model=virtio-net-pci,mac=02:00:0a:00:0$i:0${MUNET_NODENAME#r},ifname=tap$i "
       done
 
-      # map physical PCI interfaces into Qemu
-      VENDORID=8086
-      DEVCODE=154c
-      DRIVER=iavf
-      # PCIDEVFULL=0000:d8:00.0
-      # DEVCODE=1583
-      # DRIVER=i40e
+      modprobe vfio-pci
+
       if [[ ${MUNET_NODENAME} == r1 ]]; then
-        PCIDEVFULL=0000:1b:02.0
+        PCIDEVFULL=0000:5e:00.0
       else
-        PCIDEVFULL=0000:1b:02.2
+        PCIDEVFULL=0000:5e:00.1
       fi
 
-      modprobe vfio-pci
-      if [[ -e /sys/bus/pci/drivers/$DRIVER/$PCIDEVFULL ]]; then
-          echo $PCIDEVFULL > /sys/bus/pci/drivers/$DRIVER/unbind
+      declare _devcode=$(lspci -n -s $PCIDEVFULL | cut -d\  -f3)
+      MANUF=${_devcode%%:*}
+      DEVID=${_devcode##*:}
+      echo "MANUF:DEVID = $MANUF:$DEVID"
+
+      if [[ -e /sys/bus/pci/devices/$PCIDEVFULL/driver ]]; then
+          DRIVER=$(basename $(readlink /sys/bus/pci/devices/$PCIDEVFULL/driver))
+          if [[ $DRIVER != vfio-pci && -e /sys/bus/pci/drivers/$DRIVER/$PCIDEVFULL ]]; then
+              echo "Unbinding $PCIDEVFULL from $DRIVER"
+              echo $PCIDEVFULL > /sys/bus/pci/drivers/$DRIVER/unbind
+          fi
+      fi
+      if [[ -n $MANUF ]] && [[ -n $DEVID ]]; then
+          if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/$PCIDEVFULL" ]]; then
+              echo "Trying vfio-pci new_id for $MANUF:$DEVID"
+              if ! echo "$MANUF $DEVID" > /sys/bus/pci/drivers/vfio-pci/new_id; then
+                  echo "new_id for vfio-pci failed"
+              fi
+              if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/$PCIDEVFULL" ]]; then
+                  echo "Binding $PCIDEVFULL to vfio-pci"
+                  if ! echo $PCIDEVFULL > /sys/bus/pci/drivers/vfio-pci/bind; then
+                      echo "Binding $PCIDEVFULL to vfio-pci failed"
+                  fi
+              fi
+          fi
+      else
+          echo "Couldn't determine Manufacturer and Device ID for $PCIDEVFULL"
       fi
       if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/$PCIDEVFULL" ]]; then
-          echo "$VENDORID $DEVCODE" > /sys/bus/pci/drivers/vfio-pci/new_id || echo $PCIDEVFULL > /sys/bus/pci/drivers/vfio-pci/bind
+          echo "$PCIDEVFULL not present under vfio-pci, exiting"
+          exit 1
       fi
 
       qemu-system-x86_64 \
@@ -98,7 +119,7 @@ kinds:
         -m 2049M \
         -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
         -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
-        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
+        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off iommu=pt amd_iommu=on nokaslr" \
         $TAPS \
         -device vfio-pci,host=$PCIDEVFULL \
         -serial stdio \
@@ -109,10 +130,52 @@ kinds:
         -gdb unix:/tmp/qemu-sock/gdbserver,server,nowait \
         -nographic
 
-        echo 1 > /sys/bus/pci/devices/$PCIDEVFULL/remove || true
-        echo 1 > /sys/bus/pci/rescan || true
+        echo "DONE: $?"
+        #echo 1 > /sys/bus/pci/devices/$PCIDEVFULL/remove || true
+        #echo 1 > /sys/bus/pci/rescan || true
     volumes:
-
+      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+  - name: linux
+    cmd: |
+      # disable ipv6 for now
+      NETH=$(ls -d /sys/class/net/eth* | wc -l)
+      TAPS=""
+      for ((i=0; i<$NETH; i++)); do
+          sysctl -w net.ipv6.conf.eth$i.autoconf=0
+          sysctl -w net.ipv6.conf.eth$i.disable_ipv6=1
+          ip tuntap add tap$i mode tap
+          sysctl -w net.ipv6.conf.tap$i.autoconf=0
+          sysctl -w net.ipv6.conf.tap$i.disable_ipv6=1
+          BRIP=$(ip -o address show eth$i | awk 'match($0,/[0-9]+: ([^ \t]+) +inet ([0-9\.]+)\//,ary){print ary[2];}')
+          IFS='.' read -ra IPQ <<< "$BRIP"
+          echo ${IPQ[*]}
+          BRIP=${IPQ[0]}.${IPQ[1]}.${IPQ[2]}.$((IPQ[3] + 200))
+          echo ${BRIP}
+          ip address flush dev eth$i
+          ip link add name br$i type bridge
+          ip link set dev eth$i master br$i
+          ip link set dev tap$i master br$i
+          ip address add $BRIP/24 dev br$i
+          ip link set dev br$i up
+          sysctl -w net.ipv6.conf.br$i.autoconf=0
+          sysctl -w net.ipv6.conf.br$i.disable_ipv6=1
+          TAPS+="-nic tap,model=virtio-net-pci,mac=02:00:0a:00:0$i:0${MUNET_NODENAME#r},ifname=tap$i "
+      done
+      qemu-system-x86_64 \
+        -boot c \
+        -m 2049M \
+        -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
+        -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
+        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
+        $TAPS \
+        -serial stdio \
+        -serial unix:/tmp/qemu-sock/console,server,nowait \
+        -serial unix:/tmp/qemu-sock/console2,server,nowait \
+        -serial unix:/tmp/qemu-sock/replcon,server,nowait \
+        -monitor unix:/tmp/qemu-sock/monitor,server,nowait \
+        -gdb unix:/tmp/qemu-sock/gdbserver,server,nowait \
+        -nographic
+    volumes:
       - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
 
 cli:
