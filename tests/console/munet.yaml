@@ -14,8 +14,8 @@ kinds:
       qemu-system-x86_64 \
         -boot c \
         -m 2049M \
-        -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
-        -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
+        -kernel %CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage \
+        -initrd %CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz \
         -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
         -serial stdio \
         -serial unix:/tmp/qemu-sock/console,server,nowait \
@@ -25,7 +25,7 @@ kinds:
         -gdb unix:/tmp/qemu-sock/gdbserver,server,nowait \
         -nographic
     volumes:
-      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+      - "%RUNDIR%/s:/tmp/qemu-sock"
 
 cli:
   commands:

@@ -26,12 +26,27 @@ import ipaddress
 import logging
 
 # from trex_stl_lib.api import STLVM
-from trex_stl_lib.api import (ICMP, IP, UDP, CTRexVmInsFixHwCs, Dot1Q, Ether,
-                              ICMPv6EchoRequest, IPv6, STLFlowStats,
-                              STLPktBuilder, STLScVmRaw, STLStream, STLTXCont,
-                              STLTXSingleBurst, STLVmFixChecksumHw,
-                              STLVmFixIpv4, STLVmFlowVar, STLVmTrimPktSize,
-                              STLVmWrFlowVar)
+from trex_stl_lib.api import (
+    ICMP,
+    IP,
+    UDP,
+    CTRexVmInsFixHwCs,
+    Dot1Q,
+    Ether,
+    ICMPv6EchoRequest,
+    IPv6,
+    STLFlowStats,
+    STLPktBuilder,
+    STLScVmRaw,
+    STLStream,
+    STLTXCont,
+    STLTXSingleBurst,
+    STLVmFixChecksumHw,
+    STLVmFixIpv4,
+    STLVmFlowVar,
+    STLVmTrimPktSize,
+    STLVmWrFlowVar,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +162,8 @@ def _get_dynamic_streams(
     ops = []
 
     # fv_walk is in ethernet sizes.
-    # We are counting on being able to set this below 60 octets below to create small UDP packets,
+    # We are counting on being able to set this below 60 octets below to create small
+    # UDP packets,
     # XXX Need to double check what TREX is actually putting out there! :)
 
     if value_list is not None:
@@ -458,9 +474,12 @@ def get_static_streams(
                     ),
                     STLVmWrFlowVar(fv_name=f"src-{i}", pkt_offset="IP.src"),
                     STLVmWrFlowVar(fv_name=f"dst-{i}", pkt_offset="IP.dst"),
-                    # Only works with HW support, may need to make optional
+                    # # Only works with HW support, may need to make optional
                     # STLVmFixChecksumHw(
-                    #    l3_offset="IP", l4_offset="UDP", l4_type=CTRexVmInsFixHwCs.L4_TYPE_UDP),
+                    #     l3_offset="IP",
+                    #     l4_offset="UDP",
+                    #     l4_type=CTRexVmInsFixHwCs.L4_TYPE_UDP,
+                    # ),
                     STLVmFixIpv4(offset="IP"),  # fix checksum
                 ],
                 # split_by_field="ip_src",
@@ -483,8 +502,9 @@ def get_static_streams(
             s = STLStream(
                 isg=x["isg"] if "isg" in x else 0,
                 packet=create_udp_pkt_builder(vm, x["size"], vlan=vlan, ipv6=ipv6),
-                # packet=create_udp_pkt_builder(vm if "pg_id" not in x or direction else None,
-                #                              x["size"]),
+                # packet=create_udp_pkt_builder(
+                #     vm if "pg_id" not in x or direction else None, x["size"]
+                # ),
                 mode=modeclass(**modeargs(x)),
                 flow_stats=statsclass(x["pg_id"] + vmi * 100)
                 if ("pg_id" in x) and (not direction)
@@ -526,7 +546,7 @@ def get_static_streams_seqnum(
     vms = []
 
     if ipv6:
-        XXX
+        assert False, "ipv6 not supported yet"
     else:
         for i in range(nstreams):
             vms.append(
@@ -564,8 +584,8 @@ def get_static_streams_seqnum(
                     impdur = x["duration"] / (impulses * 2)
                     x["total_pkts"] = int(x["pps"] * impdur)
 
-                # XXX We probably want to offset each stream for each connection to allow for
-                # impulses on all streams
+                # XXX We probably want to offset each stream for each connection to
+                # allow for impulses on all streams
 
                 # If we do impulses on a single stream and idle the others.
                 # if not vmi:
@@ -613,9 +633,9 @@ def get_static_streams_seqnum(
                         )
                     )
 
-                    # The next stream starts immediately after sending the last packet from the
-                    # previous stream, so instead of trying to calculate the correct
-                    # inter-stream-gap, just add an extra packet to the delay.
+                    # The next stream starts immediately after sending the last packet
+                    # from the previous stream, so instead of trying to calculate the
+                    # correct inter-stream-gap, just add an extra packet to the delay.
                     if isinstance(impulses, collections.Iterable):
                         x["total_pkts"] = int(impulses[1]) + 1
                     else:

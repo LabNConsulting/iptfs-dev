@@ -14,6 +14,7 @@ import socket
 import sys
 from subprocess import check_output
 
+from common import iptfs
 from scapy.arch import get_if_addr, get_if_hwaddr
 from scapy.config import conf
 from scapy.layers.inet import ICMP, IP
@@ -23,12 +24,12 @@ from scapy.layers.l2 import ARP, Ether
 from scapy.packet import Raw
 from scapy.sendrecv import sendp, srp
 
-import iptfs
 
 USE_GCM = True
 
 
-# 3: eth1@if11: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+# 3: eth1@if11: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500
+#         qdisc noqueue state UP mode DEFAULT group default qlen 1000
 #     link/ether 6a:a1:3f:28:7b:fb brd ff:ff:ff:ff:ff:ff link-netnsid 0
 #     RX:  bytes packets errors dropped  missed   mcast
 #        1015906     895      0       0       0       0
@@ -269,7 +270,7 @@ def run(params, tun_if, args):
         nrxs, ntxs, rxerr, txerr = get_intf_stats(args.iface)
         assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
         assert max(txerr) == 0, f"txerr not 0, is {max(txerr)}"
-        logging.info(f"STATS for {args.iface}: RX %s TX %s", nrxs - rxs, ntxs - txs)
+        logging.info("STATS for %s: RX %s TX %s", args.iface, nrxs - rxs, ntxs - txs)
 
         decpkts = []
         for ippkt in ippkts:
@@ -321,7 +322,7 @@ def main(*args):
     # So we need to do arp.
     print("STARTING")
 
-    # t = AsyncSniffer(iface="eth1", prn=lambda x: x.summary())
+    # t = AsyncSniffer(iface=args.iface, prn=lambda x: x.summary())
     # t.start()
     # # ... do stuff
     # pkts = t.stop(join=True)

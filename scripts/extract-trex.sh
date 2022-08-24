@@ -43,18 +43,24 @@ fi
 # fi
 
 
-trex_image=$(sed -e '/image: quay.io\/labn\/trex.*/!d;s/.*image: *//' $TESTSDIR/stress/munet.yaml)
+trex_image=$(sed -e '/image: quay.io\/chopps\/trex.*/!d;s/.*image: *//' $TESTSDIR/stress/munet.yaml)
 trex_version=${trex_image#*trex:}
 tdir=$extract_dir/$trex_version
 libdir=$tdir/automation/trex_control_plane/interactive
+
+if [[ ! $trex_version ]] || [[ ! $trex_image ]]; then
+    echo "can't locate image in stress/munet.yaml"
+    exit 1
+fi
 
 symlink1=$TESTSDIR/trex_stl_lib
 symlink2=$TESTSDIR/trex
 
 for symdir in trex trex_stl_lib; do
-    symlink=$AUTOVPP/$symdir
+    symlink=$TESTSDIR/$symdir
     if [[ -h $symlink ]]; then
-        if [[ "$(realpath $symlink)" == "$(realpath $libdir/$symdir)" ]]; then
+        rpath="$(realpath $symlink)"
+        if [[ -n $rpath ]] && [[ "$rpath" == "$(realpath $libdir/$symdir)" ]]; then
             exit 0
         fi
         echo "Symlink to wrong version will extract and update"

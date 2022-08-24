@@ -5,207 +5,59 @@ topology:
     - name: mgmt0
       ip: 192.168.0.254/24
       nat: true
-    - name: net0
-      ip: 10.0.0.254/24
-    - name: net1
-      ip: 10.0.1.254/24
-    - name: net2
-      ip: 10.0.2.254/24
   nodes:
     - name: h1
-      kind: host
       connections:
         - to: mgmt0
-        - to: net0
+        - to: r1
+          hostintf: "enp27s0f0"
+          ip: 10.0.0.1/24
     - name: r1
       kind: linux
       connections:
         - to: mgmt0
-        - to: net0
-        - to: net1
-          name: eth2
+        - to: r2
+          physical: "0000:5e:10.0"
+          ip: 10.0.1.2/24
+        - to: h1
+          physical: "0000:d8:02.0"
+          ip: 10.0.0.2/24
     - name: r2
       kind: linux
       connections:
         - to: mgmt0
-          name: eth0
-        - to: net2
-          name: eth1
-        - to: net1
-          name: eth2
+        - to: r1
+          physical: "0000:5e:10.1"
+          ip: 10.0.1.3/24
+        - to: h2
+          physical: "0000:d8:0a.0"
+          ip: 10.0.2.3/24
     - name: h2
-      kind: host
       connections:
         - to: mgmt0
-        - to: net2
+        - to: r2
+          hostintf: "enp27s0f1"
+          ip: 10.0.2.4/24
 
 kinds:
-  - name: host
-    cmd: |
-      pwd
-      ls
-      ip addr
-      tail -f /dev/null
   - name: linux
-    cmd: |
-      # rename eth2 to unused so it's not
-      ip link set eth2 down
-      ip address flush dev eth2
-      ip link set eth2 name unused0
-      ip link
-      # Tap the existing eth*
-      NETH=$(ls -d /sys/class/net/eth* | wc -l)
-      TAPS=""
-      for ((i=0; i<$NETH; i++)); do
-          ip tuntap add tap$i mode tap
-          BRIP=$(ip -o address show eth$i | awk 'match($0,/[0-9]+: ([^ \t]+) +inet ([0-9\.]+)\//,ary){print ary[2];}')
-          IFS='.' read -ra IPQ <<< "$BRIP"
-          echo ${IPQ[*]}
-          BRIP=${IPQ[0]}.${IPQ[1]}.${IPQ[2]}.$((IPQ[3] + 200))
-          echo ${BRIP}
-          ip address flush dev eth$i
-          ip link add name br$i type bridge
-          ip link set dev eth$i master br$i
-          ip link set dev tap$i master br$i
-          ip address add $BRIP/24 dev br$i
-          ip link set dev br$i up
-          TAPS+="-nic tap,model=virtio-net-pci,mac=02:00:0a:00:0$i:0${MUNET_NODENAME#r},ifname=tap$i "
-      done
-
-      # map physical PCI interfaces into Qemu
-      VENDORID=8086
-      DEVCODE=154c
-      DRIVER=iavf
-      # PCIDEVFULL=0000:d8:00.0
-      # DEVCODE=1583
-      # DRIVER=i40e
-      if [[ ${MUNET_NODENAME} == r1 ]]; then
-        PCIDEVFULL=0000:1b:02.0
-      else
-        PCIDEVFULL=0000:1b:02.2
-      fi
-
-      modprobe vfio-pci
-      if [[ -e /sys/bus/pci/drivers/$DRIVER/$PCIDEVFULL ]]; then
-          echo $PCIDEVFULL > /sys/bus/pci/drivers/$DRIVER/unbind
-      fi
-      if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/$PCIDEVFULL" ]]; then
-          echo "$VENDORID $DEVCODE" > /sys/bus/pci/drivers/vfio-pci/new_id || echo $PCIDEVFULL > /sys/bus/pci/drivers/vfio-pci/bind
-      fi
-
-      qemu-system-x86_64 \
-        -boot c \
-        -m 2049M \
-        -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
-        -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
-        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
-        $TAPS \
-        -device vfio-pci,host=$PCIDEVFULL \
-        -serial stdio \
-        -serial unix:/tmp/qemu-sock/console,server,nowait \
-        -serial unix:/tmp/qemu-sock/console2,server,nowait \
-        -serial unix:/tmp/qemu-sock/replcon,server,nowait \
-        -monitor unix:/tmp/qemu-sock/monitor,server,nowait \
-        -gdb unix:/tmp/qemu-sock/gdbserver,server,nowait \
-        -nographic
-
-        echo 1 > /sys/bus/pci/devices/$PCIDEVFULL/remove || true
-        echo 1 > /sys/bus/pci/rescan || true
-    volumes:
-
-      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+    qemu:
+      kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
+      initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
+      cmdline-extra: "acpi=off nokaslr"
+      memory: "2048M"
+      kvm: true
+      ncpu: 4
 
 cli:
   commands:
     - name: con
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/console2"
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/console"
       format: "con HOST [HOST ...]"
       help: "open console on given hosts, * for all"
       new-window: true
-
-
-      # -device vfio-pci,host=0000:d8:00.0,id=hostdev2,bus=pci.9,addr=0x0
-      # -device vfio-pci,host=0000:1b:02.0,id=hostdev3,bus=pci.10,addr=0x0
-      # -device vfio-pci,host=0000:1a:02.0,id=hostdev0,bus=pci.1,addr=0x0
-      # -device vfio-pci,host=0000:1a:03.0,id=hostdev1,bus=pci.6,addr=0x0
-
-
-      # /usr/bin/qemu-system-x86_64
-      # -name guest=lake,debug-threads=on
-      # -S
-      # -object {"qom-type":"secret","id":"masterKey0","format":"raw","file":"/var/lib/libvirt/qemu/domain-7-lake/master-key.aes"}
-      # -machine pc-q35-5.0,usb=off,vmport=off,dump-guest-core=off,memory-backend=pc.ram
-      # -accel kvm
-      # -cpu Cascadelake-Server,ss=on,vmx=on,pdcm=on,hypervisor=on,tsc-adjust=on,umip=on,pku=on,md-clear=on,stibp=on,arch-capabilities=on,xsaves=on,ibpb=on,ibrs=on,amd-stibp=on,amd-ssbd=on,rdctl-no=on,ibrs-all=on,skip-l1dfl-vmentry=on,mds-no=on,pschange-mc-no=on,tsx-ctrl=on,hle=off,rtm=off
-      # -m 65536
-      # -object {"qom-type":"memory-backend-ram","id":"pc.ram","size":68719476736}
-      # -overcommit mem-lock=off
-      # -smp 24,sockets=24,cores=1,threads=1
-      # -uuid 0bcd3f26-4248-4856-ad82-71d2f7f6bd94
-      # -no-user-config
-      # -nodefaults
-      # -chardev socket,id=charmonitor,fd=33,server=on,wait=off
-      # -mon chardev=charmonitor,id=monitor,mode=control
-      # -rtc base=utc,driftfix=slew
-      # -global kvm-pit.lost_tick_policy=delay
-      # -no-hpet
-      # -no-shutdown
-      # -global ICH9-LPC.disable_s3=1
-      # -global ICH9-LPC.disable_s4=1
-      # -boot strict=on
-      # -device pcie-root-port,port=16,chassis=1,id=pci.1,bus=pcie.0,multifunction=on,addr=0x2
-      # -device pcie-root-port,port=17,chassis=2,id=pci.2,bus=pcie.0,addr=0x2.0x1
-      # -device pcie-root-port,port=18,chassis=3,id=pci.3,bus=pcie.0,addr=0x2.0x2
-      # -device pcie-root-port,port=19,chassis=4,id=pci.4,bus=pcie.0,addr=0x2.0x3
-      # -device pcie-root-port,port=20,chassis=5,id=pci.5,bus=pcie.0,addr=0x2.0x4
-      # -device pcie-root-port,port=21,chassis=6,id=pci.6,bus=pcie.0,addr=0x2.0x5
-      # -device pcie-root-port,port=22,chassis=7,id=pci.7,bus=pcie.0,addr=0x2.0x6
-      # -device pcie-root-port,port=23,chassis=8,id=pci.8,bus=pcie.0,addr=0x2.0x7
-      # -device pcie-root-port,port=24,chassis=9,id=pci.9,bus=pcie.0,multifunction=on,addr=0x3
-      # -device pcie-root-port,port=25,chassis=10,id=pci.10,bus=pcie.0,addr=0x3.0x1
-
-      # -device ich9-usb-ehci1,id=usb,bus=pcie.0,addr=0x1d.0x7
-      # -device ich9-usb-uhci1,masterbus=usb.0,firstport=0,bus=pcie.0,multifunction=on,addr=0x1d
-      # -device ich9-usb-uhci2,masterbus=usb.0,firstport=2,bus=pcie.0,addr=0x1d.0x1
-      # -device ich9-usb-uhci3,masterbus=usb.0,firstport=4,bus=pcie.0,addr=0x1d.0x2
-
-      # -device virtio-scsi-pci,id=scsi0,bus=pci.7,addr=0x0
-      # -device virtio-serial-pci,id=virtio-serial0,bus=pci.2,addr=0x0
-
-      # -blockdev {"driver":"file","filename":"/var/lib/libvirt/images/lake.qcow2","node-name":"libvirt-2-storage","auto-read-only":true,"discard":"unmap"}
-      # -blockdev {"node-name":"libvirt-2-format","read-only":false,"driver":"qcow2","file":"libvirt-2-storage","backing":null}
-      # -device virtio-blk-pci,bus=pci.3,addr=0x0,drive=libvirt-2-format,id=virtio-disk0,bootindex=1
-      # -blockdev {"driver":"file","filename":"/var/lib/libvirt/images/lake-docker.qcow2","node-name":"libvirt-1-storage","auto-read-only":true,"discard":"unmap"}
-      # -blockdev {"node-name":"libvirt-1-format","read-only":false,"driver":"qcow2","file":"libvirt-1-storage","backing":null}
-      # -device virtio-blk-pci,bus=pci.8,addr=0x0,drive=libvirt-1-format,id=virtio-disk1
-
-      # -chardev pty,id=charserial0
-      # -device isa-serial,chardev=charserial0,id=serial0
-      # -chardev socket,id=charchannel0,fd=31,server=on,wait=off
-      # -device virtserialport,bus=virtio-serial0.0,nr=1,chardev=charchannel0,id=channel0,name=org.qemu.guest_agent.0
-
-      # -chardev spicevmc,id=charchannel1,name=vdagent
-      # -device virtserialport,bus=virtio-serial0.0,nr=2,chardev=charchannel1,id=channel1,name=com.redhat.spice.0
-      # -device usb-tablet,id=input0,bus=usb.0,port=1
-      # -audiodev {"id":"audio1","driver":"spice"}
-      # -spice port=5900,addr=127.0.0.1,disable-ticketing=on,image-compression=off,seamless-migration=on
-      # -device qxl-vga,id=video0,ram_size=67108864,vram_size=67108864,vram64_size_mb=0,vgamem_mb=16,max_outputs=1,bus=pcie.0,addr=0x1
-
-      # -device ich9-intel-hda,id=sound0,bus=pcie.0,addr=0x1b
-      # -device hda-duplex,id=sound0-codec0,bus=sound0.0,cad=0,audiodev=audio1
-      # -chardev spicevmc,id=charredir0,name=usbredir
-      # -device usb-redir,chardev=charredir0,id=redir0,bus=usb.0,port=2
-      # -chardev spicevmc,id=charredir1,name=usbredir
-      # -device usb-redir,chardev=charredir1,id=redir1,bus=usb.0,port=3
-
-      # -device vfio-pci,host=0000:d8:00.0,id=hostdev2,bus=pci.9,addr=0x0
-      # -device vfio-pci,host=0000:1b:02.0,id=hostdev3,bus=pci.10,addr=0x0
-      # -device vfio-pci,host=0000:1a:02.0,id=hostdev0,bus=pci.1,addr=0x0
-      # -device vfio-pci,host=0000:1a:03.0,id=hostdev1,bus=pci.6,addr=0x0
-
-      # -device virtio-balloon-pci,id=balloon0,bus=pci.4,addr=0x0
-
-      # -object {"qom-type":"rng-random","id":"objrng0","filename":"/dev/urandom"}
-      # -device virtio-rng-pci,rng=objrng0,id=rng0,bus=pci.5,addr=0x0
-      # -sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny
-      # -msg timestamp=on
+    - name: mon
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
+      format: "mon HOST [HOST ...]"
+      help: "open monitor on given hosts, * for all"
+      new-window: true

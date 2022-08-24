@@ -18,7 +18,7 @@
 # with this program; see the file COPYING; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
-"Stress test using virtual ethernet interfaces."
+"Stress test using physical ethernet interfaces."
 import logging
 import os
 
@@ -52,7 +52,7 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture(scope="module", name="unet")
 async def _unet(rundir_module, pytestconfig):
-    async for x in _unet_impl(rundir_module, pytestconfig, "munet"):
+    async for x in _unet_impl(rundir_module, pytestconfig, "munet_phy"):
         yield x
 
 
@@ -66,26 +66,17 @@ async def test_net_up(unet):
     r2 = unet.hosts["r2"]
     # r1 (qemu side) pings r2 (qemu side)
     logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
-    # r1 (qemu side) pings trex
-    logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 11.0.0.1"))
-    # r1 (qemu side) pings r2 (trex side)
-    logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 12.0.0.3"))
-    # r1 (qemu side) pings trex using routing
-    logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 12.0.0.1"))
 
     # r2 (qemu side) pings r1 (qemu side)
     logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-    # r2 (qemu side) pings trex
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 12.0.0.1"))
-    # r2 (qemu side) pings r1 (trex side)
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 11.0.0.2"))
-    # r2 (qemu side) pings trex
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 11.0.0.1"))
+
+    # Unfortunately TREX with physical interfaces does not reply to PINGs
+    # so we cannot ping test those ports
 
 
 async def test_policy_small_pkt(unet):
-    await _test_policy_small_pkt(unet, convert_number("20M"))
+    await _test_policy_small_pkt(unet, convert_number("500M"))
 
 
 async def test_policy_imix(unet):
-    await _test_policy_imix(unet, convert_number("20M"))
+    await _test_policy_imix(unet, convert_number("500M"))

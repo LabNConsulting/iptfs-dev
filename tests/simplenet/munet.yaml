@@ -48,50 +48,25 @@ kinds:
       ip addr
       tail -f /dev/null
   - name: linux
-    # repl_shell:
-    #   connect: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/replcon"
-    #   user: "root"
-    #   setup: |
-    #     set +o emacs
-    cmd: |
-      NETH=$(ls -d /sys/class/net/eth* | wc -l)
-      TAPS=""
-      for ((i=0; i<$NETH; i++)); do
-          ip tuntap add tap$i mode tap
-          BRIP=$(ip -o address show eth$i | awk 'match($0,/[0-9]+: ([^ \t]+) +inet ([0-9\.]+)\//,ary){print ary[2];}')
-          IFS='.' read -ra IPQ <<< "$BRIP"
-          echo ${IPQ[*]}
-          BRIP=${IPQ[0]}.${IPQ[1]}.${IPQ[2]}.$((IPQ[3] + 200))
-          echo ${BRIP}
-          ip address flush dev eth$i
-          ip link add name br$i type bridge
-          ip link set dev eth$i master br$i
-          ip link set dev tap$i master br$i
-          ip address add $BRIP/24 dev br$i
-          ip link set dev br$i up
-          TAPS+="-nic tap,model=virtio-net-pci,mac=02:00:0a:00:0$i:0${MUNET_NODENAME#r},ifname=tap$i "
-      done
-      qemu-system-x86_64 \
-        -boot c \
-        -m 2049M \
-        -kernel %CONFIGDIR%/../../linux/arch/x86/boot/bzImage \
-        -initrd %CONFIGDIR%/../../buildroot/output/images/rootfs.ext2 \
-        -append "root=/dev/ram0 rw console=ttyS0 console=ttyS1 console=ttyS2 console=ttyS3 acpi=off nokaslr" \
-        $TAPS \
-        -serial stdio \
-        -serial unix:/tmp/qemu-sock/console,server,nowait \
-        -serial unix:/tmp/qemu-sock/console2,server,nowait \
-        -serial unix:/tmp/qemu-sock/replcon,server,nowait \
-        -monitor unix:/tmp/qemu-sock/monitor,server,nowait \
-        -gdb unix:/tmp/qemu-sock/gdbserver,server,nowait \
-        -nographic
+    qemu:
+      kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
+      initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
+      cmdline-extra: "acpi=off nokaslr"
+      memory: "2048M"
+      kvm: true
+      ncpu: 4
     volumes:
-      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+      - "%RUNDIR%/s:/tmp/qemu-sock"
 
 cli:
   commands:
     - name: con
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/console2"
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/vcon0"
       format: "con HOST [HOST ...]"
       help: "open console on given hosts, * for all"
+      new-window: true
+    - name: mon
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
+      format: "mon HOST [HOST ...]"
+      help: "open monitor on given hosts, * for all"
       new-window: true

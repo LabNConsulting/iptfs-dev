@@ -38,7 +38,7 @@ topology:
 kinds:
   - name: qemu-linux
     volumes:
-      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+      - "%RUNDIR%/s:/tmp/qemu-sock"
     cmd: |
       ip addr
       ip tuntap add tap0 mode tap
@@ -63,7 +63,7 @@ kinds:
 
   - name: qemu-junos
     volumes:
-      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+      - "%RUNDIR%/s:/tmp/qemu-sock"
     cmd: |
       ip addr
       ip tuntap add tap0 mode tap
@@ -86,7 +86,7 @@ kinds:
 
   - name: qemu-cisco
     volumes:
-      - "%RUNDIR%/%NAME%/s:/tmp/qemu-sock"
+      - "%RUNDIR%/s:/tmp/qemu-sock"
     cmd: |
       ip addr
       ip tuntap add tap0 mode tap

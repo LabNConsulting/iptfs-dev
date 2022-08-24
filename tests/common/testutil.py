@@ -20,14 +20,9 @@
 #
 import asyncio
 import datetime
-import json
 import logging
-import os
-import pdb
 import pprint
-import re
 import time
-from collections import defaultdict
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -137,6 +132,7 @@ def line_rate_to_etfs_encap_pps(
     tunnel_etfs_mtu,  # size of ethernet payload (== etfs encap framesize)
     macsec_enabled,
 ):  # true/false
+    del macsec_enabled
 
     uf_eth_size = uf_ip_size + 14
 
@@ -275,6 +271,7 @@ def update_table_with_rate(
 
 
 def get_udp_spread_table(args, c):
+    del c
     assert args.user_packet_size
 
     if args.ipv6_traffic:
@@ -294,8 +291,9 @@ def get_udp_spread_table(args, c):
     #     if pps > max_pps:
     #         max_speed_float = max_speed / 1e9
     #         capacity = 100 * max_pps / pps
-    #         logger.warning("%s", (f"Lowering pps from {pps} to {max_pps} due to client max speed"
-    #                               f"{max_speed_float}GBps ({capacity:.1f}% of tunnel capacity)"))
+    #         logger.warning("%s",
+    #           (f"Lowering pps from {pps} to {max_pps} due to client max speed"
+    #            f"{max_speed_float}GBps ({capacity:.1f}% of tunnel capacity)"))
     #         pps = max_pps
 
     table = [
@@ -387,7 +385,10 @@ def get_imix_table(args, c, max_imix_size=1500):
 
 
 def clear_stats(c):
-    """Clear all statistics (and pcap drop capture if configured) in trex and vpp hosts"""
+    """Clear all statistics.
+
+    CLear all stats (and pcap drop capture if configured) in trex and vpp hosts
+    """
     if c is not None:
         c.clear_stats()
 
@@ -454,7 +455,7 @@ def wait_for_test_done(
                 assert nextbeat > newnow
 
         # Need to make sure we don't abort b/c of gdb.
-        if any([not x.args.gdb and not check_running(x) for x in dutlist]):
+        if any(not x.args.gdb and not check_running(x) for x in dutlist):
             logger.info("A VPP has exited")
             logger.info("Stopping traffic on TREX")
             if c:
@@ -493,6 +494,7 @@ async def run_trex_cont_test(
     modeclass=None,
     statsclass=None,
 ):
+    del extended_stats
     # create two streams
     mult = str(mult)
     duration = float(args.duration) if args.duration is not None else 10
@@ -532,21 +534,22 @@ async def run_trex_cont_test(
     #     args.dispatch_trace if not c else None,
     # )
 
-    # Try sending a short burst of the test to prime the pump.
-    if False:  # c:
-        if args.encap_ipv6:
-            prime_duration = 1
-        else:
-            prime_duration = 0.1
-        logger.info(
-            "Pre-starting TREX: to prime the pump: mult: %s duration: %s",
-            str(mult),
-            str(prime_duration),
-        )
-        c.start(ports=check_ports, mult=mult, duration=prime_duration)
-        c.wait_on_traffic(rx_delay_ms=100)
-        # clear_stats(c, dutlist, extended_stats, args.capture_drops, args.dispatch_trace)
-        clear_stats(c)
+    # # Try sending a short burst of the test to prime the pump.
+    # if c:
+    #     if args.encap_ipv6:
+    #         prime_duration = 1
+    #     else:
+    #         prime_duration = 0.1
+    #     logger.info(
+    #         "Pre-starting TREX: to prime the pump: mult: %s duration: %s",
+    #         str(mult),
+    #         str(prime_duration),
+    #     )
+    #     c.start(ports=check_ports, mult=mult, duration=prime_duration)
+    #     c.wait_on_traffic(rx_delay_ms=100)
+    #     # clear_stats(c, dutlist, extended_stats,
+    #                   args.capture_drops, args.dispatch_trace)
+    #     clear_stats(c)
 
     # # Start any capture
     pcap_servers = []
@@ -612,19 +615,18 @@ async def run_trex_cont_test(
         # # Terminate the capture now.
         # for server in pcap_servers:
         #     server.stop()
-        pass
+        del x
 
     await asyncio.gather(*[stop_disruptive(x) for x in active_dutlist])
 
-    #
-    # Get pcap captures
-    #
-    async def pcap_server_done(x):
-        x.close()
-        drops = x.count_drops()
-        if drops:
-            logger.warning("%s", f"{x.name} dropped {drops} packets")
-
+    # #
+    # # Get pcap captures
+    # #
+    # async def pcap_server_done(x):
+    #     x.close()
+    #     drops = x.count_drops()
+    #     if drops:
+    #         logger.warning("%s", f"{x.name} dropped {drops} packets")
     # if pcap_servers:
     #     await asyncio.gather(*[pcap_server_done(server) for server in pcap_servers])
 
@@ -667,7 +669,9 @@ async def run_trex_cont_test(
         #     with open(f"{pcapfile}", "wb") as pcapf:
         #         pcapf.write(pcap)
         #     pcap_files[x.host] = pcapfile
-        # if x.host in dispatch_cap_offs and "No packets" not in dispatch_cap_offs[x.host]:
+        # if (
+        # x.host in dispatch_cap_offs and "No packets" not in dispatch_cap_offs[x.host]
+        # ):
         #     # Grab the pcap file. XXX should go to file named for this test.
         #     pcap = x.get_remote_file("/tmp/dispatch.pcap")
         #     pcapfile = os.path.join(g_logdir, f"{x.host}-pcap-dispatch.pcap")
@@ -676,7 +680,7 @@ async def run_trex_cont_test(
         #     dispatch_pcap_files[x.host] = pcapfile
         # if x.args.event_log_size:
         #     x.save_event_log()
-        pass
+        del x
 
     # for r in asyncio.as_completed([collect_disruptive(vpp) for vpp in dutlist]):
     #     await r
@@ -688,8 +692,8 @@ async def run_trex_cont_test(
         await result
 
     #
-    # Now that we've captured any packets and saved any event logs we safely raise an exception if
-    # we had cores/exits
+    # Now that we've captured any packets and saved any event logs we safely raise an
+    # exception if we had cores/exits
     #
     check_active_dut(dutlist)
 
@@ -709,7 +713,8 @@ async def run_trex_cont_test(
     #     pcapfile = pcap_files[host]
     #     logger.warning("%s", f"Have some dropped packets to read {result}")
     #     logger.warning("%s", f"Decoding: {result}")
-    #     logger.warning("%s", run_cmd(f"tcpdump -n -s9014 -vvv -ttttt -e -XX -r {pcapfile}"))
+    #     logger.warning("%s",
+    #         run_cmd(f"tcpdump -n -s9014 -vvv -ttttt -e -XX -r {pcapfile}"))
 
     return stats, vstats, pcap_servers
 
@@ -718,12 +723,13 @@ def fail_test(args, reason, trex_stats, vstats, dutlist=None):
     """Fail the test passing the given reason. If stats are passed in then print the
     stats first.
     """
+    del vstats
     logger.info("FAILURE DIAGS:")
     if dutlist is None:
         dutlist = []
     if trex_stats:
         pprint.pprint(trex_stats, indent=4)
-    for index, vpp in enumerate(dutlist):
+    for _, vpp in enumerate(dutlist):
         logger.info("%s", f"VPP HOST: {vpp.host}:")
         # We do not want bogus way late stats reported!
         # logger.info(vpp.vppctl("show errors"))
@@ -733,7 +739,7 @@ def fail_test(args, reason, trex_stats, vstats, dutlist=None):
         logger.info("%s", f"Pausing after {reason}")
         result = input('Pausing with testbed UP, RETURN to continue, "p" for PDB: ')
         if result.strip().lower() == "p":
-            pdb.set_trace()
+            breakpoint()
     raise Exception(reason)
 
 
@@ -754,7 +760,8 @@ def check_missed(args, trex_stats, vstats, dutlist):
     #
     # Verify trex received all VPP sent.
     #
-    # This doesn't work for docker trex and ipsec right now b/c we still get arps apparently?
+    # This doesn't work for docker trex and ipsec right now b/c we still get arps
+    # apparently?
     #
     if args.is_docker and args.dont_use_tfs:
         return
@@ -769,8 +776,7 @@ def check_missed(args, trex_stats, vstats, dutlist):
 
 def log_packet_counts(dutlist, trex_stats, vstats):
     assert not dutlist or len(dutlist) == 2
-    for i, dut in enumerate(dutlist):
-        vpp = dutlist[i]
+    for i, vpp in enumerate(dutlist):
         oi = (i + 1) % 2
         missed = trex_stats[i]["rx-missed"]
         pct = trex_stats[i]["rx-missed-pct"]
@@ -790,26 +796,29 @@ def log_packet_counts(dutlist, trex_stats, vstats):
         missed = tx - rx
         if missed:
             pct = abs((missed / tx) * 100)
-            mstr = "missed" if missed > 0 else "extra"
+            # mstr = "missed" if missed > 0 else "extra"
             missed = abs(missed)
             logging.info(
                 "%s",
-                f"TEST INFO VPP->TREX: {i} tx: {tx} rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
+                f"TEST INFO VPP->TREX: {i} tx: {tx} "
+                "rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
             )
         tx = trex_stats[i]["opackets"]
         rx = vstats[i][vpp.USER_IFINDEX]["/if/rx"]
         missed = tx - rx
         if missed:
             pct = abs((missed / tx) * 100)
-            mstr = "missed" if missed > 0 else "extra"
+            # mstr = "missed" if missed > 0 else "extra"
             missed = abs(missed)
             logging.info(
                 "%s",
-                f"TEST INFO VPP->TREX: {i} tx: {tx} rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
+                f"TEST INFO VPP->TREX: {i} tx: {tx} "
+                "rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
             )
 
 
 def finish_test(module_name, args, dutlist, trex, trex_stats, vstats):
+    del module_name
     # save_stats(module_name, "trex-stats", trex_stats)
     # save_stats(module_name, "vpp-stats", vstats)
 

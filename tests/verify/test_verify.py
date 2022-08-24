@@ -25,6 +25,7 @@ import subprocess
 import time
 
 import pytest
+from common.config import setup_policy_tun, toggle_ipv6
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
@@ -58,6 +59,8 @@ async def network_up(unet, r1repl):
     h2 = unet.hosts["h2"]
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
+
+    toggle_ipv6(unet, enable=False)
 
     for i in range(0, 3):
         unet.cmd_raises(f"sysctl -w net.ipv6.conf.net{i}.autoconf=0")
@@ -175,7 +178,7 @@ def vppctl_raises(r, cmd, ok_output=""):
         error = subprocess.CalledProcessError(s, cmd)
         error.stdout = o
         error.stderr = e
-        raise (error)
+        raise error
 
 
 USE_GCM = True
@@ -195,22 +198,23 @@ def setup_vpp_ipsec(unet):
         else:
             rspi = f"{0xAAAA}"
             lspi = f"{0xBBBB}"
-            # sa_auth = "integ-key 0123456789ABCDEF0123456789ABCDEF integ-alg sha-256-128 "
+            # "integ-key 4339314b55523947594d6d3547666b45764e6a58 integ-alg sha1-96 "
             sa_auth = (
-                "integ-key 4339314b55523947594d6d3547666b45764e6a58 integ-alg sha1-96 "
+                "integ-key 0123456789ABCDEF0123456789ABCDEF integ-alg sha-256-128 "
             )
             # sa_auth = "integ-alg none"
             sa_enc = "crypto-alg none"
     else:
-        rspi = f"{0xAA}"
-        lspi = f"{0xBB}"
+        rspi = f"{0xAAA}"
+        lspi = f"{0xBBB}"
         sa_auth = ""
         sa_enc = (
             "crypto-key 4a506a794f574265564551694d653768 "
             "crypto-alg aes-gcm-128 salt 0x1A2B1A2B "
         )
         # sa_enc = (
-        #     "crypto-key 4a506a794f574265564551694d6537684a506a794f574265564551694d653768 "
+        #     "crypto-key 4a506a794f574265564551694d653768"
+        #     "4a506a794f574265564551694d653768 "
         #     "crypto-alg aes-gcm-256 salt 0x1A2B1A2B "
         # )
 
@@ -242,91 +246,94 @@ async def _vpp_setup(unet):
     return setup_vpp_ipsec(unet)
 
 
-async def test_policy_tun_up(unet, r1repl, astepf, vpp_setup):
+async def test_policy_tun_up(unet, astepf, vpp_setup):
     del vpp_setup
-    r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"]
+    # r1 = unet.hosts["r1"]
+    # r2 = unet.hosts["r2"]
     h1 = unet.hosts["h1"]
 
-    # for r, repl in [(r1, r1repl), (r2, r2repl)]:
-    #     repl.cmd_raises("ip link set lo up")
-    #     repl.cmd_raises("ip link set eth0 up")
-    #     repl.cmd_status(f"""ip addr add {r.intf_addrs["eth0"]} dev eth0""")
+    setup_policy_tun(unet, r1only=True)
 
-    if not USE_GCM:
-        if USE_NULLNULL:
-            rspi = 0xAAAAAA
-            lspi = 0xBBBBBB
-            sa_auth = 'auth digest_null ""'
-            # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
-            # sa_auth = 'auth digest_null ""'
-            sa_enc = 'enc cipher_null ""'
-        else:
-            rspi = 0xAAAA
-            lspi = 0xBBBB
-            sa_auth = "auth sha1 0x4339314b55523947594d6d3547666b45764e6a58"
-            # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
-            # sa_auth = 'auth digest_null ""'
-            sa_enc = 'enc cipher_null ""'
-    else:
-        rspi = 0xAA
-        lspi = 0xBB
-        sa_auth = ""
-        sa_enc = (
-            'aead "rfc4106(gcm(aes))" '
-            "0x4a506a794f574265564551694d6537681A2B1A2B "
-            "128"
-            # "0x4a506a794f574265564551694d6537684a506a794f574265564551694d6537681A2B1A2B "
-            # "256"
-        )
+    #     # for r, repl in [(r1, r1repl), (r2, r2repl)]:
+    #     #     repl.cmd_raises("ip link set lo up")
+    #     #     repl.cmd_raises("ip link set eth0 up")
+    #     #     repl.cmd_status(f"""ip addr add {r.intf_addrs["eth0"]} dev eth0""")
 
-    r1ipp = r1.intf_addrs["eth2"]
-    r1ip = r1ipp.ip
-    r1ipp = r1ipp.network
+    #     if not USE_GCM:
+    #         if USE_NULLNULL:
+    #             rspi = 0xAAAAAA
+    #             lspi = 0xBBBBBB
+    #             sa_auth = 'auth digest_null ""'
+    #             # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
+    #             # sa_auth = 'auth digest_null ""'
+    #             sa_enc = 'enc cipher_null ""'
+    #         else:
+    #             rspi = 0xAAAA
+    #             lspi = 0xBBBB
+    #             sa_auth = "auth sha1 0x4339314b55523947594d6d3547666b45764e6a58"
+    #             # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
+    #             # sa_auth = 'auth digest_null ""'
+    #             sa_enc = 'enc cipher_null ""'
+    #     else:
+    #         rspi = 0xAA
+    #         lspi = 0xBB
+    #         sa_auth = ""
+    #         sa_enc = (
+    #             'aead "rfc4106(gcm(aes))" '
+    #             "0x4a506a794f574265564551694d6537681A2B1A2B "
+    #             "128"
+    #             # "0x4a506a794f574265564551694d653768"
+    #             # "4a506a794f574265564551694d6537681A2B1A2B "
+    #             # "256"
+    #         )
 
-    r2ipp = r2.intf_addrs["eth2"]
-    r2ip = r2ipp.ip
-    r2ipp = r2ipp.network
+    #     r1ipp = r1.intf_addrs["eth2"]
+    #     r1ip = r1ipp.ip
+    #     r1ipp = r1ipp.network
 
-    #
-    # SAs
-    #
-    r1repl.cmd_raises(
-        f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
-        f"spi {rspi} mode tunnel {sa_auth} {sa_enc} "
-        f"reqid 0x10"
-    )
-    r1repl.cmd_raises(
-        f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
-        f"spi {lspi} mode tunnel {sa_auth} {sa_enc} "
-        f"reqid 0x11"
-    )
+    #     r2ipp = r2.intf_addrs["eth2"]
+    #     r2ip = r2ipp.ip
+    #     r2ipp = r2ipp.network
 
-    #
-    # Policy
-    #
-    for x1ipp, x2ipp in [
-        ("10.0.0.0/24", "10.0.1.0/24"),  # host to router
-        # ("10.0.1.0/24", "10.0.1.0/24"),  # router to router
-        # ("10.0.1.0/24", "10.0.2.0/24"),  # host to router
-        ("10.0.0.0/24", "10.0.2.0/24"),  # host to host
-    ]:
-        direction = "dir out"
-        r1repl.cmd_raises(
-            f"ip xfrm policy add src {x1ipp} dst {x2ipp} {direction} "
-            f"tmpl src {r1ip} dst {r2ip} proto esp mode tunnel "
-            f"reqid 0x10",
-            # " spi {rspi} "
-        )
-        for direction in ["dir fwd", "dir in"]:
-            r1repl.cmd_raises(
-                f"ip xfrm policy add src {x2ipp} dst {x1ipp} {direction} "
-                f"tmpl src {r2ip} dst {r1ip} proto esp mode tunnel "
-                f"reqid 0x11",
-                # " spi {lspi} "
-            )
+    #     #
+    #     # SAs
+    #     #
+    #     r1repl.cmd_raises(
+    #         f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
+    #         f"spi {rspi} mode tunnel {sa_auth} {sa_enc} "
+    #         f"reqid 0x10"
+    #     )
+    #     r1repl.cmd_raises(
+    #         f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
+    #         f"spi {lspi} mode tunnel {sa_auth} {sa_enc} "
+    #         f"reqid 0x11"
+    #     )
 
-    # Need to count ESP packets somehow to verify these were encrypted
+    #     #
+    #     # Policy
+    #     #
+    #     for x1ipp, x2ipp in [
+    #         ("10.0.0.0/24", "10.0.1.0/24"),  # host to router
+    #         # ("10.0.1.0/24", "10.0.1.0/24"),  # router to router
+    #         # ("10.0.1.0/24", "10.0.2.0/24"),  # host to router
+    #         ("10.0.0.0/24", "10.0.2.0/24"),  # host to host
+    #     ]:
+    #         direction = "dir out"
+    #         r1repl.cmd_raises(
+    #             f"ip xfrm policy add src {x1ipp} dst {x2ipp} {direction} "
+    #             f"tmpl src {r1ip} dst {r2ip} proto esp mode tunnel "
+    #             f"reqid 0x10",
+    #             # " spi {rspi} "
+    #         )
+    #         for direction in ["dir fwd", "dir in"]:
+    #             r1repl.cmd_raises(
+    #                 f"ip xfrm policy add src {x2ipp} dst {x1ipp} {direction} "
+    #                 f"tmpl src {r2ip} dst {r1ip} proto esp mode tunnel "
+    #                 f"reqid 0x11",
+    #                 # " spi {lspi} "
+    #             )
+
+    #     # Need to count ESP packets somehow to verify these were encrypted
 
     # logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
     # logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.2.3"))
@@ -345,11 +352,12 @@ async def test_policy_tun_up(unet, r1repl, astepf, vpp_setup):
     # await async_cli(unet)
 
 
-async def test_iptfs_policy_tun_up(unet, r1repl, astepf, vpp_setup):
+async def test_iptfs_policy_tun_up(unet, astepf, vpp_setup):
     del vpp_setup
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
     h1 = unet.hosts["h1"]
+    r1repl = r1.conrepl
 
     # for r, repl in [(r1, r1repl), (r2, r2repl)]:
     #     repl.cmd_raises("ip link set lo up")
@@ -379,7 +387,8 @@ async def test_iptfs_policy_tun_up(unet, r1repl, astepf, vpp_setup):
             'aead "rfc4106(gcm(aes))" '
             "0x4a506a794f574265564551694d6537681A2B1A2B "
             "128"
-            # "0x4a506a794f574265564551694d6537684a506a794f574265564551694d6537681A2B1A2B "
+            # "0x4a506a794f574265564551694d653768"
+            # "4a506a794f574265564551694d6537681A2B1A2B "
             # "256"
         )
 
@@ -398,8 +407,8 @@ async def test_iptfs_policy_tun_up(unet, r1repl, astepf, vpp_setup):
     # | r1 | <-- ipsec ---  | r2 |
     # +----+                +----+
     #
-    r1repl.cmd_status(f"ip x s deleteall")
-    r1repl.cmd_status(f"ip x p deleteall")
+    r1repl.cmd_status("ip x s deleteall")
+    r1repl.cmd_status("ip x p deleteall")
 
     r1repl.cmd_raises(
         f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "

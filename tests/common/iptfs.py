@@ -26,8 +26,13 @@ from functools import partial
 from scapy.compat import orb, raw
 from scapy.config import conf
 from scapy.data import IP_PROTOS
-from scapy.fields import (FlagsField, PacketListField, ShortField, StrLenField,
-                          XByteField)
+from scapy.fields import (
+    FlagsField,
+    PacketListField,
+    ShortField,
+    StrLenField,
+    XByteField,
+)
 from scapy.layers import ipsec
 from scapy.layers.inet import ICMP, IP
 from scapy.layers.inet6 import IPv6
@@ -78,7 +83,7 @@ class IPTFSFrag(Packet):
         if "fraglen" in kwargs:
             self.fraglen = kwargs["fraglen"]
             del kwargs["fraglen"]
-        super(IPTFSFrag, self).__init__(*args, **kwargs)
+        super().__init__(self, *args, **kwargs)
 
     def default_payload_class(self, payload):
         # Return padding here so PacketFieldList re-uses it.
@@ -310,7 +315,8 @@ def decap_frag_stream(pkts):
         ipkts = epkt.packets
         if first and epkt.block_offset:
             logger.warning(
-                "decap_frag_stream: first packet in stream starts with in progress fragment -- skipping"
+                "decap_frag_stream: first packet in stream "
+                "starts with in progress fragment -- skipping"
             )
             ipkt = ipkts[0][IPTFSFrag]
             ipkts = ipkts[1:]
@@ -328,7 +334,8 @@ def decap_frag_stream(pkts):
             if IP in ipkt or IPv6 in ipkt:
                 if fdata:
                     logger.warning(
-                        "decap_frag_stream: in progress fragment terminated by real packet"
+                        "decap_frag_stream: "
+                        "in progress fragment terminated by real packet"
                     )
                     fdata = b""
                     flen = None
@@ -370,15 +377,16 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False):
         payload = Raw(pkt).load
         if dontfrag and (emptylen + len(payload) > payloadsize):
             raise ValueError(
-                f"dont frag with input packet size {len(payload)} larger than payload size {payloadsize-emptylen}"
+                f"dont frag with input packet size {len(payload)}"
+                f" larger than payload size {payloadsize-emptylen}"
             )
         while again:
             clen = len(tunpkts[-1])
             if clen + len(payload) > payloadsize and dontfrag:
                 # Try not padding just pack the packet
-                if False:
-                    # Pad out get a new packet.
-                    tunpkts[-1][Raw].load += b"\x00" * (payloadsize - clen)
+                # if False:
+                #     # Pad out get a new packet.
+                #     tunpkts[-1][Raw].load += b"\x00" * (payloadsize - clen)
 
                 tunpkts.append(IPTFSHeader() / Raw())
                 continue
@@ -411,6 +419,7 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False):
 def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R0913
     sa, sw_intf, mtu, pkts, dontfrag=False
 ):
+    del sw_intf
 
     # for pkt in pkts:
     #     self.logger.debug(" XXX: len: {} pkt: {}".format(
@@ -492,7 +501,7 @@ class SecurityAssociation(ipsec.SecurityAssociation):
         if "mtu" in kwargs:
             self.mtu = kwargs["mtu"]
             del kwargs["mtu"]
-        super(SecurityAssociation, self).__init__(*args, **kwargs)
+        super().__init__(self, *args, **kwargs)
         self.ipsec_overhead = self._get_ipsec_overhead()
 
     def get_ipsec_overhead(self):
@@ -622,9 +631,10 @@ class SecurityAssociation(ipsec.SecurityAssociation):
                 pkt.nh = esp.nh
             cls = pkt.guess_payload_class(esp.data)
 
-        # This swap is required b/c PacketFieldList only considers layers of this type in a packet
-        # to be actually part of the next packet. We probably want to figure out how to get
-        # IPTFSFrag to have the extra remaining data added as Padding instead of Raw.
+        # This swap is required b/c PacketFieldList only considers layers of this type
+        # in a packet to be actually part of the next packet. We probably want to figure
+        # out how to get IPTFSFrag to have the extra remaining data added as Padding
+        # instead of Raw.
 
         # Aaand this doesn't work b/c test IP packets lose their payloads.
 

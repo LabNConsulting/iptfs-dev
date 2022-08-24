@@ -30,11 +30,11 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
-async def _test_console(unet, cmd, use_pty, noecho=False):
+async def _test_console(unet, cmd, use_pty, will_echo=False):
     r1 = unet.hosts["r1"]
     time.sleep(1)
     repl = await r1.console(
-        cmd, user="root", use_pty=use_pty, trace=True, noecho=noecho
+        cmd, user="root", use_pty=use_pty, trace=True, will_echo=will_echo
     )
     return repl
 
@@ -46,7 +46,7 @@ async def test_console_pty(unet):
         "/dev/stdin,rawer,echo=0,icanon=0",
         "unix-connect:/tmp/qemu-sock/console",
     ]
-    repl = await _test_console(unet, cmd, use_pty=True)
+    repl = await _test_console(unet, cmd, use_pty=True, will_echo=True)
 
     output = repl.cmd_raises("ls --color=never -1 /sys")
     logging.debug("'ls /sys' output: '%s'", output)
@@ -73,7 +73,7 @@ async def test_console_pty(unet):
 async def test_console_piped(unet):
     "Test inside the VM"
     cmd = ["socat", "-", "unix-connect:/tmp/qemu-sock/console"]
-    repl = await _test_console(unet, cmd, use_pty=False)
+    repl = await _test_console(unet, cmd, use_pty=False, will_echo=True)
 
     output = repl.cmd_raises("ls -1 --color=never /sys")
     logging.debug("'ls /sys' output: '%s'", output)
@@ -93,48 +93,5 @@ async def test_console_piped(unet):
     )
     assert output == expect_ls
 
-    output = repl.cmd_raises("echo $?")
-    logging.debug("'echo $?' output: %s", output)
-
-
-async def test_console_namespace_piped(unet):
-    "Test inside the namespace but not in the VM"
-    repl = await _test_console(unet, ["/bin/sh", "-si"], use_pty=False, noecho=True)
-    output = repl.cmd_raises("ls --color=never -1 s")
-    expect_ls = "\n".join(
-        [
-            "console",
-            "console2",
-            "gdbserver",
-            "monitor",
-            "replcon",
-        ]
-    )
-    logging.debug("'ls' output: %s", output)
-    logging.debug("'ls' expected output: %s", expect_ls)
-    assert output == expect_ls
-
-    output = repl.cmd_raises("env")
-    logging.debug("'env' output: %s", output)
-
-    output = repl.cmd_raises("echo $?")
-    logging.debug("'echo $?' output: %s", output)
-
-
-async def test_console_namespace_pty(unet):
-    "Test pty inside the namespace but not in the VM"
-    repl = await _test_console(unet, ["/bin/sh"], use_pty=True, noecho=True)
-    output = repl.cmd_raises("ls --color=never -1 s")
-    logging.debug("'ls' output: %s", output)
-    expect_ls = "\n".join(
-        [
-            "console",
-            "console2",
-            "gdbserver",
-            "monitor",
-            "replcon",
-        ]
-    )
-    assert output == expect_ls
     output = repl.cmd_raises("echo $?")
     logging.debug("'echo $?' output: %s", output)

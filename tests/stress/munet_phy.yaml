@@ -14,9 +14,11 @@ topology:
           name: mgmt0
         - to: r1
           name: eth0
+          physical: "0000:1b:02.0"
           ip: 11.0.0.1/24
         - to: r2
           name: eth1
+          physical: "0000:1b:0a.0"
           ip: 12.0.0.1/24
     - name: r1
       kind: linux
@@ -24,9 +26,11 @@ topology:
         - to: mgmt0
           name: eth0
         - to: r2
+          physical: "0000:5e:10.0"
           ip: 10.0.1.2/24
           name: eth1
         - to: trex
+          physical: "0000:d8:02.0"
           ip: 11.0.0.2/24
           name: eth2
     - name: r2
@@ -35,9 +39,11 @@ topology:
         - to: mgmt0
           name: eth0
         - to: r1
+          physical: "0000:5e:10.1"
           ip: 10.0.1.3/24
           name: eth1
         - to: trex
+          physical: "0000:d8:0a.0"
           ip: 12.0.0.3/24
           name: eth2
 
@@ -55,13 +61,15 @@ kinds:
 
   - name: trex
     # image: quay.io/chopps/trex:v2.98
+    # privileged: true
+    # cap_add:
+    #   - ALL
+    # podman:
+    #   extra-args:
+    #     - --sysctl=net.ipv6.conf.all.disable_ipv6=1
+    #     - --sysctl=net.ipv6.conf.all.forwarding=0
+    #     - --sysctl=net.ipv6.conf.default.forwarding=0
     cmd: |
-      ip addr
-      NETH=$(ls -d /sys/class/net/eth* | wc -l)
-      TAPS=""
-      for ((i=0; i<$NETH; i++)); do
-          ip addr flush dev eth$i
-      done
       cd /opt/trex/current
       ./t-rex-64 --cfg /etc/trex_cfg.yaml -v 3 --no-termio --no-scapy-server --iom 0 -i
       tail -f /dev/null
@@ -70,8 +78,10 @@ kinds:
       - 4500:4500
       - 4501:4501
     volumes:
-      - ./trex_cfg.yaml:/etc/trex_cfg.yaml
+      - ./trex_cfg_phy.yaml:/etc/trex_cfg.yaml
       - ../common:/common
+      # - /dev/hugepages:/dev/hugepages
+      # - /var/run/systemd/journal/socket:/var/run/systemd/journal/socket
     merge: ["volumes"]
 
 cli:
