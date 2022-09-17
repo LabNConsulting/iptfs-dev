@@ -1,0 +1,25 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: true
+
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Checkout repos
+        run: make setup SHALLOW_CLONE=1
+
+      - name: Build Kernel
+        run: make kernel
+
+      - name: Build Rootfs
+        run: make rootfs
+
+      # - name: Run tests
+      #   run: make test
