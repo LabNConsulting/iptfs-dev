@@ -12,14 +12,54 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: Install build depencies
+        run: sudo apt-get install -y  device-tree-compiler libelf-dev
+
       - name: Checkout repos
         run: make setup SHALLOW_CLONE=1
 
+      - name: Kernel Build Cache
+        id: linux-cache
+        uses: actions/cache@v3
+        with:
+          path: output-linux
+          key: ${{ runner.os }}-${{ hashFiles('linux.config') }}
+
       - name: Build Kernel
-        run: make kernel
+        run: |
+          mkdir -p output-linux
+          cp linux.config output-linux/.config
+          cd linux
+          make -j4 O=../output-linux
+
+      # - name: Build buildroot toolchain
+      #   run: |
+      #     mkdir -p output-br-tc
+      #     cp buildroot-tc.config output-br-tc/.config
+      #     cd buildroot
+      #     make -j4 O=../outptu-br-tc sdk
+
+      # - name: Build Rootfs
+      #   run: |
+      #     mkdir -p output-br
+      #     cp buildroot-br.config output-br/.config
+      #     sed -i -e "s,%TARBALL-PREFIX%,$(pwd)," output-br/.config
+      #     cd buildroot
+      #     make -j4 O=../output-br
+
+      - name: Buildroot Build Cache
+        id: buildroot-cache
+        uses: actions/cache@v3
+        with:
+          path: output-br
+          key: ${{ runner.os }}-${{ hashFiles('buildroot.config') }}
 
       - name: Build Rootfs
-        run: make rootfs
-
-      # - name: Run tests
-      #   run: make test
+        run: |
+          if ! cmp buildroot.config output-br/.config 2>/dev/null; then
+            rm -rf output-br
+            mkdir output-br
+            cp buildroot.config output-br/.config
+          fi
+          cd buildroot
+          make -j4 O=../output-br
