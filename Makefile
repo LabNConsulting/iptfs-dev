@@ -10,18 +10,32 @@ setup:
 	([ -d iproute2 ] || [ -h iproute2 ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-iproute2.git iproute2 -b iptfs
 	([ -d linux ] || [ -h linux ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
-kernel: arch/x86/boot/bzImage
+kernel: output-linux/arch/x86/boot/bzImage
 
-rootfs: buildroot/output/images/rootfs.ext2
+rootfs: output-buildroot/images/rootfs.cpio.gz
 
 # These aren't phoney but we always want to descend to check them with make
-.PHONY: arch/x86/boot/bzImage buildroot/output/images/rootfs.ext2
+.PHONY: output-linux/arch/x86/boot/bzImage output-buildroot/images/rootfs.cpio.gz
 
-arch/x86/boot/bzImage:
-	make -C linux -j$(shell nproc)
+output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
+	mkdir -p output-linux
+	make -C linux -j$(shell nproc) O=../output-linux
 
-buildroot/output/images/rootfs.ext2:
-	make -C buildroot -j$(shell nproc)
+output-buildroot/images/rootfs.cpio.gz: output-buildroot output-buildroot/.config
+	mkdir -p output-buildroot
+	make -C buildroot -j$(shell nproc) O=../output-buildroot
+
+output-linux/.config: linux.config
+	cp -p $< $@
+
+output-buildroot/.config: buildroot.config
+	cp -p $< $@
+
+output-buildroot:
+	mkdir -p $@
+
+output-linux:
+	mkdir -p $@
 
 tests/trex:
 	scripts/extract-trex.sh
