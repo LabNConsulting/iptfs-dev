@@ -30,22 +30,29 @@ TARGET=$1; shift
 
 ifile=$TARGET/etc/inittab
 
-echo "$0: enabling 3 serial console gettys"
-for ((i=0; i<3; i++)); do
+echo "$0: enabling 4 serial console gettys"
+for ((i=0; i<4; i++)); do
     if ! grep "#SERCON$i" $ifile &> /dev/null; then
-        if (( i == 2 )); then
+        if (( i >= 2 )); then
             echo "ttyS$i::respawn:/sbin/getty -n -l /bin/sh -L ttyS$i 115200 vt100 #SERCON$i" >> $ifile
-            # echo "ttyS$i::respawn:/sbin/getty -L ttyS$i 115200 vt100 #SERCON$i" >> $ifile
         else
             echo "ttyS$i::respawn:/sbin/getty -L ttyS$i 115200 vt100 #SERCON$i" >> $ifile
         fi
     else
-        if (( i == 2 )); then
+        if (( i >= 2 )); then
             sed -i -e "/#SERCON$i/c\\ttyS$i::respawn:/sbin/getty -n -l /bin/sh -L ttyS$i 115200 vt100 #SERCON$i" $ifile
-            # sed -i -e "/#SERCON$i/c\\ttyS$i::respawn:/sbin/getty -L ttyS$i 115200 vt100 #SERCON$i" $ifile
         else
             sed -i -e "/#SERCON$i/c\\ttyS$i::respawn:/sbin/getty -L ttyS$i 115200 vt100 #SERCON$i" $ifile
         fi
+    fi
+done
+
+echo "$0: enabling 2 password-less virtual console gettys"
+for ((i=0; i<2; i++)); do
+    if ! grep "#VIRTCON$i" $ifile &> /dev/null; then
+        echo "hvc$i::respawn:/sbin/getty -n -l /bin/sh -L hvc$i 0 vt100 #VIRTCON$i" >> $ifile
+    else
+        sed -i -e "/#VIRTCON$i/c\\hvc$i::respawn:/sbin/getty -n -l /bin/sh -L hvc$i 0 vt100 #SERCON$i" $ifile
     fi
 done
 
