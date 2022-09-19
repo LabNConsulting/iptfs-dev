@@ -92,18 +92,21 @@ If your ~socat~ doesn't support ~rawer~ option replace with ~raw,echo=0,icanon=0
   ...
 
   or
-  (gdb) target remote /tmp/unet-test/tests.simplenet.test_simplenet/r1/s/gdbserver
-
+  (gdb)
   target remote /tmp/unet-test/tests.simplenet.test_simplenet/r1/s/gdbserver
-  target remote /tmp/unet-test/tests.verify.test_verify/r1/s/gdbserver
-  target remote /tmp/unet-test/tests.errors.test_errors/r1/s/gdbserver
-  target remote /tmp/unet-test/tests.utpkt.test_utpkt/r1/s/gdbserver
-  target remote /tmp/unet-test/tests.stress.test_stress/r2/s/gdbserver
-
-  target remote /tmp/unet-test/tests.errors.test_errors/r2/s/gdbserver
   target remote /tmp/unet-test/tests.simplenet.test_simplenet/r2/s/gdbserver
 
+  target remote /tmp/unet-test/tests.errors.test_errors/r1/s/gdbserver
+  target remote /tmp/unet-test/tests.errors.test_errors/r2/s/gdbserver
+
   target remote /tmp/unet-test/tests.phynic.test_simplenet/r1/s/gdbserver
+
+  target remote /tmp/unet-test/tests.stress.test_stress/r2/s/gdbserver
+
+  target remote /tmp/unet-test/tests.utpkt.test_utpkt/r1/s/gdbserver
+
+  target remote /tmp/unet-test/tests.verify.test_verify/r1/s/gdbserver
+
 #+end_src
 ** Design Notes
 *** From Steffen's Mail
@@ -157,3 +160,23 @@ printf("packet-time %luns %luns %luns %luns\n", (uint64_t)_1GE_PP_NANOS(mtu),(ui
 | +           | 1GE     | 10GE     | 40GE     | 100GE     |
 | PPS         | 1225490 | 12254901 | 49019607 | 122549019 |
 | packet-time | 816ns   | 81ns     | 20ns     | 8ns       |
+
+
+** Performance Triaging
+Testing done on a single server with 3 networks cards using munet and wiring the
+ports to each other. Performance is nowhere near line rate even for routed packets.
+[h1] - [r1] - [r2] - [h2]
+       ===========
+
+*** Qemu emulated - single socket/core
+- Routed from h1 to h2 iperf bidir:              ~2000 Mbps
+- IPsec [r1,r2] tunnel, from h1 to h2 iperf bidir ~120 Mbps
+- IPTFS [r1,r2] tunnel, from h1 to h2 iperf bidir   ~2 Mbps
+*** Qemu -accel kvm - single socket/core
+- Routed from h1 to h2 iperf bidir:              ~9400 Mbps
+- IPsec [r1,r2] tunnel, from h1 to h2 iperf bidir ~920 Mbps
+- IPTFS [r1,r2] tunnel, from h1 to h2 iperf bidir   ~2 Mbps
+*** Qemu -accel kvm - 4 sockets
+- Routed from h1 to h2 iperf bidir:               ~9400 Mbps
+- IPsec [r1,r2] tunnel, from h1 to h2 iperf bidir ~7200 Mbps
+- IPTFS [r1,r2] tunnel, from h1 to h2 iperf bidir     700Kbps-3.87Mbps
