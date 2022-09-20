@@ -2,12 +2,16 @@
 *.pyc
 *.qcow2
 /buildroot/
+/output-buildroot/
 /iproute2/
 /linux/
+/output-linux/
 __pycache__/
 /linux-torvalds/
+/linux-stk/
 /tests/trex
 /tests/trex_stl_lib
 /tests/podman-trex-extract/
 /.ccls-cache/
 /root-key*
+/exec-pytest.log
