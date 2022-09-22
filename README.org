@@ -108,6 +108,22 @@ If your ~socat~ doesn't support ~rawer~ option replace with ~raw,echo=0,icanon=0
   target remote /tmp/unet-test/tests.verify.test_verify/r1/s/gdbserver
 
 #+end_src
+
+** Building/Editing Notes
+*** CCLS
+I like to use ccls with LSP mode in emacs, which will allow you to jump to all
+references with semantics (i.e., it's not just a tag search) as well as
+displaying documentation and tab completion of symbols etc..
+
+In order for this to work seemlessly you need to do 2 things:
+
+  1. run `scripts/clang-tools/gen_compile_commands.py`
+  2. printf "%compile_commands.json\n-D__IN_CCLS__\n" > .ccls
+
+#2 isn't technically needed but I have conditionally wrapped a few couple low
+level `asm` things on __IN_CCLS__ in the iptfs branch to keep WARN/BUG macros
+from being highlighted as "bad code".
+
 ** Design Notes
 *** From Steffen's Mail
 [...] look at:
