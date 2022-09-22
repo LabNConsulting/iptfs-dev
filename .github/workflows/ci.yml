@@ -106,7 +106,7 @@ jobs:
       - name: Install test depencies
         run: |
           sudo apt-get install -y qemu-system-x86 socat
-          sudo python3 -m pip install -U munet pytest pytest-asyncio
+          sudo python3 -m pip install -U munet pytest pytest-asyncio scapy
 
       - name: Archive kernel bzImage
         uses: actions/download-artifact@v3
@@ -118,13 +118,21 @@ jobs:
         with:
           name: rootfs-compressed-cpio
 
-      - name: Simple test
+      - name: Prep tests
         run: |
           mkdir -p output-linux/arch/x86/boot/
           mv bzImage output-linux/arch/x86/boot/
           mkdir -p output-buildroot/images/
           mv rootfs.cpio.gz output-buildroot/images/
-          sudo python3 -m pytest -v -s tests/simplenet
+
+      - name: Errors test
+        run: sudo python3 -m pytest -v -s tests/errors
+
+      - name: Simple test
+        run: sudo python3 -m pytest -v -s tests/simplenet
+
+      - name: UT packet test
+        run: sudo python3 -m pytest -v -s tests/utpkt
 
       - name: Collect test logs
         if: ${{ always() }}
