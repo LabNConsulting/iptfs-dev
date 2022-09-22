@@ -25,7 +25,7 @@ from munet.testing.hooks import *  # noqa
 from munet.testing.hooks import pytest_addoption as _pytest_addoption
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser):  # pylint: disable=E0102
     parser.addoption(
         "--enable-physical",
         action="store_true",
