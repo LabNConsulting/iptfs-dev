@@ -22,7 +22,7 @@ import logging
 import os
 
 import pytest
-from common.config import setup_policy_tun, setup_routed_tun
+from common.config import setup_policy_tun, setup_routed_tun, toggle_ipv6
 from common.tests import _test_net_up
 
 
@@ -42,17 +42,22 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @pytest.fixture(scope="module", autouse=True)
+async def checkrun(pytestconfig):
+    if not pytestconfig.option.enable_physical:
+        pytest.skip(
+            "Physical interface test being skipped, pass --enable-physical",
+            allow_module_level=True,
+        )
+
+
+@pytest.fixture(scope="module", autouse=True)
 async def network_up(unet):
     h1 = unet.hosts["h1"]
     h2 = unet.hosts["h2"]
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
-    for r in (r1, r2):
-        repl = r.conrepl
-        repl.cmd_raises("sysctl -w net.ipv6.conf.all.autoconf=0")
-        repl.cmd_raises("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
-        repl.cmd_raises("sysctl -w net.ipv4.ip_forward=1")
-        repl.cmd_raises("ip link set lo up")
+
+    await toggle_ipv6(unet, enable=False)
 
     h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
     h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")

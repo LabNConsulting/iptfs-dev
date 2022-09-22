@@ -59,12 +59,12 @@ async def toggle_ipv6(unet, enable=False):
             node.cmd_raises("sysctl -w net.ipv6.conf.all.autoconf=1")
             node.cmd_raises("sysctl -w net.ipv6.conf.all.disable_ipv6=0")
             node.cmd_raises("sysctl -w net.ipv6.conf.all.forwarding=1")
-            node.cmd_raises("sysctl -w net.ipv6.conf.all.mc_forwarding=1")
+            # node.cmd_raises("sysctl -w net.ipv6.conf.all.mc_forwarding=1")
         else:
             node.cmd_raises("sysctl -w net.ipv6.conf.all.autoconf=0")
             node.cmd_raises("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
             node.cmd_raises("sysctl -w net.ipv6.conf.all.forwarding=0")
-            node.cmd_raises("sysctl -w net.ipv6.conf.all.mc_forwarding=0")
+            # node.cmd_raises("sysctl -w net.ipv6.conf.all.mc_forwarding=0")
 
 
 def get_sa_values(use_gcm=True, use_nullnull=False, enc_null=False):

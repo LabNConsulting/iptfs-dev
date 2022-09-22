@@ -60,7 +60,7 @@ async def network_up(unet, r1repl):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
 
-    toggle_ipv6(unet, enable=False)
+    await toggle_ipv6(unet, enable=False)
 
     for i in range(0, 3):
         unet.cmd_raises(f"sysctl -w net.ipv6.conf.net{i}.autoconf=0")

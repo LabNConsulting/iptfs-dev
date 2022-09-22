@@ -35,6 +35,7 @@ from munet.testing.fixtures import _unet_impl
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
 
+
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 #                    192.168.0.0/24
@@ -48,6 +49,15 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 #   |    | ---- p2p ----------------------------+
 #   |    | .1          12.0.0.0/24
 #   +----+
+
+
+@pytest.fixture(scope="module", autouse=True)
+async def checkrun(pytestconfig):
+    if not pytestconfig.option.enable_physical:
+        pytest.skip(
+            "Physical interface test being skipped, pass --enable-physical",
+            allow_module_level=True,
+        )
 
 
 @pytest.fixture(scope="module", name="unet")

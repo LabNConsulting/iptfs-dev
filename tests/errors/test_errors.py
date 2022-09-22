@@ -40,7 +40,7 @@ async def network_up(unet):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
 
-    toggle_ipv6(unet, enable=False)
+    await toggle_ipv6(unet, enable=False)
 
     h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
     h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")

@@ -25,7 +25,7 @@ import time
 
 import pytest
 from common import testutil, trexlib
-from common.config import setup_policy_tun
+from common.config import setup_policy_tun, toggle_ipv6
 from trex_stl_lib.api import STLClient
 
 # from munet.testing.util import async_pause_test
@@ -54,11 +54,8 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 async def _network_up(unet):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
-    for r in (r1, r2):
-        r.conrepl.cmd_raises("sysctl -w net.ipv6.conf.all.autoconf=0")
-        r.conrepl.cmd_raises("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
-        r.conrepl.cmd_raises("sysctl -w net.ipv4.ip_forward=1")
-        r.conrepl.cmd_raises("ip link set lo up")
+
+    await toggle_ipv6(unet, enable=False)
 
     r1.conrepl.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
     r2.conrepl.cmd_raises("ip route add 11.0.0.0/24 via 10.0.1.2")

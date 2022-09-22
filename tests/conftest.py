@@ -22,3 +22,13 @@
 # pylint: disable=wildcard-import,unused-wildcard-import
 from munet.testing.fixtures import *  # noqa
 from munet.testing.hooks import *  # noqa
+from munet.testing.hooks import pytest_addoption as _pytest_addoption
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--enable-physical",
+        action="store_true",
+        help="Enable the physical interface based tests",
+    )
+    return _pytest_addoption(parser)

@@ -25,7 +25,7 @@ import subprocess
 from datetime import datetime, timedelta
 
 import pytest
-from common.config import setup_policy_tun
+from common.config import setup_policy_tun, toggle_ipv6
 from munet.base import comm_error
 
 # from munet.cli import async_cli
@@ -43,10 +43,7 @@ async def network_up(unet):
     r2 = unet.hosts["r2"]
     r1repl = r1.conrepl
 
-    # Need to configure inside qemu now
-    r1repl.cmd_raises("sysctl -w net.ipv6.conf.all.autoconf=0")
-    r1repl.cmd_raises("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
-    r1repl.cmd_raises("sysctl -w net.ipv4.ip_forward=1")
+    await toggle_ipv6(unet, enable=False)
 
     h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
     h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")
