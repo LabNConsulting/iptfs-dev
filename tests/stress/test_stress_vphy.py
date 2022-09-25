@@ -62,7 +62,7 @@ async def checkrun(pytestconfig):
 
 @pytest.fixture(scope="module", name="unet")
 async def _unet(rundir_module, pytestconfig):
-    async for x in _unet_impl(rundir_module, pytestconfig, "munet_phy"):
+    async for x in _unet_impl(rundir_module, pytestconfig, "munet_vphy"):
         yield x
 
 
@@ -85,16 +85,8 @@ async def test_net_up(unet):
 
 
 async def test_policy_small_pkt(unet):
-    connections = 1
-    rate = convert_number("1G") / connections
-    await _test_policy_small_pkt(
-        unet, rate, mode="iptfs", duration=10, connections=connections
-    )
+    await _test_policy_small_pkt(unet, convert_number("10M"), duration=10000)
 
 
 async def test_policy_imix(unet):
-    connections = 1
-    rate = convert_number("2G") / connections
-    await _test_policy_imix(
-        unet, rate, mode="iptfs", duration=10, connections=connections
-    )
+    await _test_policy_imix(unet, convert_number("500M"))

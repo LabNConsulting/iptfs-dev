@@ -66,6 +66,35 @@ def get_human_readable(v):
     return "%3.1f%s" % (v, "T")
 
 
+def convert_number(value):
+    """Convert a number value with a possible suffix to an integer.
+
+    >>> convert_number("100k") == 100 * 1024
+    True
+    >>> convert_number("100M") == 100 * 1000 * 1000
+    True
+    >>> convert_number("100Gi") == 100 * 1024 * 1024 * 1024
+    True
+    >>> convert_number("55") == 55
+    True
+    """
+    if value is None:
+        return None
+    rate = str(value)
+    base = 1000
+    if rate[-1] == "i":
+        base = 1024
+        rate = rate[:-1]
+    suffix = "KMGTPEZY"
+    index = suffix.find(rate[-1])
+    if index == -1:
+        base = 1024
+        index = suffix.lower().find(rate[-1])
+    if index != -1:
+        rate = rate[:-1]
+    return int(rate) * base ** (index + 1)
+
+
 def line_rate_to_ip_pps(l1_rate, ipmtu):
     """Convert an L1 ethernet rate to number of IP packets of ipmtu size per second."""
     # Each IP packet requires 8b l1-preamble 14b l2-hdr 4b l2-crc and 12b l1-gap
@@ -236,6 +265,8 @@ def get_max_client_rate(c):
         info = stl_port.get_formatted_info()
         if "supp_speeds" in info and info["supp_speeds"]:
             max_port_speed = max(info["supp_speeds"]) * 1000000
+        elif "speed" in info:
+            max_port_speed = int(float(info["speed"]) * 1e9)
         else:
             # 10M
             max_port_speed = 10000000
@@ -314,20 +345,27 @@ def get_imix_table(args, c, max_imix_size=1500):
         if args.percentage:
             pps = pps * (args.percentage / 100)
 
+        capacity = 0
         if c:
             max_speed = get_max_client_rate(c)
             max_pps = line_rate_to_ip_pps(max_speed, ipsize)
+            if max_speed > 1e9:
+                max_speed_float = f"{max_speed / 1e9}Gbps"
+            elif max_speed > 1e6:
+                max_speed_float = f"{max_speed / 1e6}Mbps"
+            else:
+                max_speed_float = f"{max_speed / 1e3}Kbps"
+            capacity = 100 * pps / max_pps
             if pps > max_pps:
-                max_speed_float = max_speed / 1e9
-                capacity = 100 * max_pps / pps
                 logger.warning(
                     "%s",
                     (
                         f"Lowering pps from {pps} to {max_pps} due to client max speed"
-                        f"{max_speed_float}GBps ({capacity:.1f}% of tunnel capacity)"
+                        f" {max_speed_float} ({capacity:.1f}% of tunnel capacity)"
                     ),
                 )
                 pps = max_pps
+                capacity = 100.0
 
         imix_table = [
             {
@@ -336,7 +374,10 @@ def get_imix_table(args, c, max_imix_size=1500):
                 "pg_id": 1,
             }
         ]
-        desc = f"static IP size {ipsize}@{get_human_readable(pps)}pps"
+        desc = (
+            f"static IP size {ipsize}@{get_human_readable(pps)}pps"
+            f" {capacity:.1f}% of capacity"
+        )
         avg_ipsize = ipsize
     else:
         if args.old_imix:
@@ -379,7 +420,15 @@ def get_imix_table(args, c, max_imix_size=1500):
         pps, avg_ipsize, _ = update_table_with_rate(
             args, imix_table, args.rate, args.iptfs_packet_size, args.percentage, True
         )
-        desc = f"imix (avg: {avg_ipsize})@{get_human_readable(pps)}pps"
+        capacity = 0
+        if c:
+            max_speed = get_max_client_rate(c)
+            max_pps = line_rate_to_ip_pps(max_speed, avg_ipsize)
+            capacity = 100 * pps / max_pps
+        desc = (
+            f"imix (avg: {avg_ipsize})@{get_human_readable(pps)}pps "
+            f" {capacity:.1f}% of capacity"
+        )
 
     return imix_table, pps, avg_ipsize, desc
 

@@ -47,6 +47,10 @@ async def cleanup_config(unet, r1only=False):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
 
+    r1.conrepl.cmd_nostatus(f"ip link del ipsec0")
+    if not r1only:
+        r2.conrepl.cmd_nostatus(f"ip link del ipsec0")
+
     r1.conrepl.cmd_nostatus("ip route del 10.0.2.0/24 dev ipsec0")
     r1.conrepl.cmd_nostatus("ip route del 12.0.0.0/24 dev ipsec0")
     r1.conrepl.cmd_nostatus("ip route del 48.0.0.0/8 dev ipsec0")
