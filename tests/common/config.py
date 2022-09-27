@@ -133,6 +133,7 @@ async def setup_policy_tun(
     trex=False,
     r1only=False,
     ipsec_intf="eth2",
+    iptfs_opts="",
 ):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
@@ -158,14 +159,20 @@ async def setup_policy_tun(
         # SAs
         #
         repl.cmd_raises(
-            f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
-            f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-            f"reqid {reqid_1to2}"
+            (
+                f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
+                f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
+                f"reqid {reqid_1to2} "
+            )
+            + iptfs_opts
         )
         repl.cmd_raises(
-            f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
-            f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-            f"reqid {reqid_2to1}"
+            (
+                f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
+                f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
+                f"reqid {reqid_2to1} "
+            )
+            + iptfs_opts
         )
 
         #
@@ -223,6 +230,7 @@ async def setup_routed_tun(
     trex=False,
     r1only=False,
     ipsec_intf="eth2",
+    iptfs_opts="",
 ):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
@@ -257,14 +265,20 @@ async def setup_routed_tun(
             rip = r1ip
 
         repl.cmd_raises(
-            f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
-            f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-            f"if_id 55 reqid {reqid_1to2}"
+            (
+                f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
+                f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
+                f"if_id 55 reqid {reqid_1to2} "
+            )
+            + iptfs_opts
         )
         repl.cmd_raises(
-            f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
-            f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-            f"if_id 55 reqid {reqid_2to1}"
+            (
+                f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
+                f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
+                f"if_id 55 reqid {reqid_2to1} "
+            )
+            + iptfs_opts
         )
 
         # repl.cmd_raises(f"ip add vti0 local {lip} remote {rip} mode vti key 55")
