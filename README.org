@@ -144,6 +144,7 @@ way to go at a first glance. The modes are implemented in:
 net/xfrm/xfrm_output.c
 net/xfrm/xfrm_input.c
 
+
 ** Bugs
 - xfrmi_rcv_cb is looking up xfrm_state from our newly created skb from decaping
   iptfs, but it has not xfrm_state so we panic
@@ -196,3 +197,425 @@ ports to each other. Performance is nowhere near line rate even for routed packe
 - Routed from h1 to h2 iperf bidir:               ~9400 Mbps
 - IPsec [r1,r2] tunnel, from h1 to h2 iperf bidir ~7200 Mbps
 - IPTFS [r1,r2] tunnel, from h1 to h2 iperf bidir     700Kbps-3.87Mbps
+
+  
+* Examples
+** These are single Core
+*** tests/stress/trex_stress_phy.py::test_policy_imix
+**** mode == tunnel (i.e., normal ipsec) (50%/50%)
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.83 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 3.93 Gbps
+cpu_util.    : 6.52% @ 2 cores (2 per dual port)          total_rx     : 3.04 Gbps
+rx_cpu_util. : 8.26% / 0 pps                              total_pps    : 645.97 Kpps
+async_util.  : 0% / 30.41 bps                             drop_rate    : 792.36 Mbps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |             6.52% |             6.52% |
+--         |                   |                   |
+Tx bps L2  |         1.92 Gbps |         1.91 Gbps |         3.83 Gbps
+Tx bps L1  |         1.97 Gbps |         1.96 Gbps |         3.93 Gbps
+Tx pps     |       323.81 Kpps |       322.16 Kpps |       645.97 Kpps
+Line Util. |            4.93 % |             4.9 % |
+---        |                   |                   |
+Rx bps     |         1.52 Gbps |         1.51 Gbps |         3.04 Gbps
+Rx pps     |       256.81 Kpps |        255.5 Kpps |       512.31 Kpps
+----       |                   |                   |
+opackets   |           7479318 |           7511222 |          14990540
+ipackets   |           5941015 |           5965888 |          11906903
+obytes     |        5542174638 |        5565815502 |       11107990140
+ibytes     |        4402286022 |        4421020888 |        8823306910
+tx-pkts    |        7.48 Mpkts |        7.51 Mpkts |       14.99 Mpkts
+rx-pkts    |        5.94 Mpkts |        5.97 Mpkts |       11.91 Mpkts
+tx-bytes   |           5.54 GB |           5.57 GB |          11.11 GB
+rx-bytes   |            4.4 GB |           4.42 GB |           8.82 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  /
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+
+**** mode == iptfs (imix new 50%/50%)
+
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.84 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 3.94 Gbps
+cpu_util.    : 6.39% @ 2 cores (2 per dual port)          total_rx     : 2.9 Gbps
+rx_cpu_util. : 6.74% / 0 pps                              total_pps    : 647.42 Kpps
+async_util.  : 0% / 34.3 bps                              drop_rate    : 942.81 Mbps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |             6.39% |             6.39% |
+--         |                   |                   |
+Tx bps L2  |         1.92 Gbps |         1.92 Gbps |         3.84 Gbps
+Tx bps L1  |         1.97 Gbps |         1.97 Gbps |         3.94 Gbps
+Tx pps     |       323.87 Kpps |       324.12 Kpps |       647.99 Kpps
+Line Util. |            4.93 % |            4.93 % |
+---        |                   |                   |
+Rx bps     |         1.45 Gbps |         1.45 Gbps |          2.9 Gbps
+Rx pps     |       244.29 Kpps |       244.59 Kpps |       488.88 Kpps
+----       |                   |                   |
+opackets   |           6113860 |           6158922 |          12272782
+ipackets   |           4643520 |           4678016 |           9321536
+obytes     |        4530370260 |        4563761202 |        9094131462
+ibytes     |        3440826656 |        3466377360 |        6907204016
+tx-pkts    |        6.11 Mpkts |        6.16 Mpkts |       12.27 Mpkts
+rx-pkts    |        4.64 Mpkts |        4.68 Mpkts |        9.32 Mpkts
+tx-bytes   |           4.53 GB |           4.56 GB |           9.09 GB
+rx-bytes   |           3.44 GB |           3.47 GB |           6.91 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  /
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+
+**** mode == iptfs (imix legacy/firewall 7,4,1)
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.98 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 4.2 Gbps
+cpu_util.    : 12.07% @ 2 cores (2 per dual port)         total_rx     : 2.02 Gbps
+rx_cpu_util. : 9.33% / 0 pps                              total_pps    : 1.41 Mpps
+async_util.  : 0% / 36.53 bps                             drop_rate    : 1.95 Gbps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |            12.07% |            12.07% |
+--         |                   |                   |
+Tx bps L2  |            2 Gbps |         1.98 Gbps |         3.98 Gbps
+Tx bps L1  |         2.11 Gbps |         2.09 Gbps |          4.2 Gbps
+Tx pps     |       706.35 Kpps |       700.51 Kpps |         1.41 Mpps
+Line Util. |            5.28 % |            5.23 % |
+---        |                   |                   |
+Rx bps     |         1.02 Gbps |         1.01 Gbps |         2.02 Gbps
+Rx pps     |       359.91 Kpps |       356.86 Kpps |       716.76 Kpps
+----       |                   |                   |
+opackets   |          10937602 |          10984861 |          21922463
+ipackets   |           5620736 |           5645504 |          11266240
+obytes     |        3866441526 |        3883148074 |        7749589600
+ibytes     |        1985575700 |        1995323444 |        3980899144
+tx-pkts    |       10.94 Mpkts |       10.98 Mpkts |       21.92 Mpkts
+rx-pkts    |        5.62 Mpkts |        5.65 Mpkts |       11.27 Mpkts
+tx-bytes   |           3.87 GB |           3.88 GB |           7.75 GB
+rx-bytes   |           1.99 GB |              2 GB |           3.98 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  \
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+
+
+**** mode == tunnel (i.e., normal ipsec) (imix legacy 7,4,1)
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.94 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 4.16 Gbps
+cpu_util.    : 11.57% @ 2 cores (2 per dual port)         total_rx     : 1.5 Gbps
+rx_cpu_util. : 8.49% / 0 pps                              total_pps    : 1.39 Mpps
+async_util.  : 0% / 0 bps                                 drop_rate    : 2.43 Gbps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |            11.57% |            11.57% |
+--         |                   |                   |
+Tx bps L2  |         1.97 Gbps |         1.97 Gbps |         3.94 Gbps
+Tx bps L1  |         2.08 Gbps |         2.08 Gbps |         4.16 Gbps
+Tx pps     |       694.97 Kpps |       697.46 Kpps |         1.39 Mpps
+Line Util. |            5.19 % |            5.21 % |
+---        |                   |                   |
+Rx bps     |       750.55 Mbps |       754.34 Mbps |          1.5 Gbps
+Rx pps     |       265.62 Kpps |       266.53 Kpps |       532.14 Kpps
+----       |                   |                   |
+opackets   |         313742270 |         313798138 |         627540408
+ipackets   |         120083200 |         120102542 |         240185742
+obytes     |      110907888436 |      110927643186 |      221835531622
+ibytes     |       42428351448 |       42428427258 |       84856778706
+tx-pkts    |      313.74 Mpkts |       313.8 Mpkts |      627.54 Mpkts
+rx-pkts    |      120.08 Mpkts |       120.1 Mpkts |      240.19 Mpkts
+tx-bytes   |         110.91 GB |         110.93 GB |         221.84 GB
+rx-bytes   |          42.43 GB |          42.43 GB |          84.86 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  \
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+
+** These are 3 core
+NOTE: for Qemu if multiple cores are used ipsec/iptfs seems to only use 1 thread
+(core). If multple *sockets* are used then multiple threads (sockets) are utilized.
+*** tests/stress/trex_stress_phy.py::test_policy_imix
+**** New IMIX (50/50)
+***** mode == tunnel (i.e., normal ipsec) (50%/50%)
+===== 0 DROP May go faster =====
+
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.87 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 3.98 Gbps
+cpu_util.    : 7.67% @ 2 cores (2 per dual port)          total_rx     : 3.87 Gbps
+rx_cpu_util. : 10.18% / 0.12 pps                          total_pps    : 653.14 Kpps
+async_util.  : 0% / 0 bps                                 drop_rate    : 0 bps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |             7.67% |             7.67% |
+--         |                   |                   |
+Tx bps L2  |         1.95 Gbps |         1.92 Gbps |         3.87 Gbps
+Tx bps L1  |            2 Gbps |         1.97 Gbps |         3.98 Gbps
+Tx pps     |       328.91 Kpps |       324.28 Kpps |       653.19 Kpps
+Line Util. |            5.01 % |            4.94 % |
+---        |                   |                   |
+Rx bps     |         1.95 Gbps |         1.92 Gbps |         3.87 Gbps
+Rx pps     |       328.91 Kpps |       324.25 Kpps |       653.16 Kpps
+----       |                   |                   |
+opackets   |          37006482 |          37035660 |          74042142
+ipackets   |          37006464 |          37035618 |          74042082
+obytes     |       27421803162 |       27443424060 |       54865227222
+ibytes     |       27421789824 |       27443391520 |       54865181344
+tx-pkts    |       37.01 Mpkts |       37.04 Mpkts |       74.04 Mpkts
+rx-pkts    |       37.01 Mpkts |       37.04 Mpkts |       74.04 Mpkts
+tx-bytes   |          27.42 GB |          27.44 GB |          54.87 GB
+rx-bytes   |          27.42 GB |          27.44 GB |          54.87 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  /
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+***** mode == iptfs (imix new 50%/50%)
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.85 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 3.95 Gbps
+cpu_util.    : 6.35% @ 2 cores (2 per dual port)          total_rx     : 2.7 Gbps
+rx_cpu_util. : 6.64% / 0 pps                              total_pps    : 649 Kpps
+async_util.  : 0% / 33.17 bps                             drop_rate    : 1.14 Gbps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |             6.35% |             6.35% |
+--         |                   |                   |
+Tx bps L2  |         1.93 Gbps |         1.93 Gbps |         3.86 Gbps
+Tx bps L1  |         1.98 Gbps |         1.99 Gbps |         3.97 Gbps
+Tx pps     |       325.41 Kpps |       326.34 Kpps |       651.75 Kpps
+Line Util. |            4.95 % |            4.97 % |
+---        |                   |                   |
+Rx bps     |         1.35 Gbps |         1.36 Gbps |         2.71 Gbps
+Rx pps     |       228.17 Kpps |       228.88 Kpps |       457.05 Kpps
+----       |                   |                   |
+opackets   |           7075748 |           7094883 |          14170631
+ipackets   |           5048896 |           5062638 |          10111534
+obytes     |        5243129268 |        5257307626 |       10500436894
+ibytes     |        3741435036 |        3751414630 |        7492849666
+tx-pkts    |        7.08 Mpkts |        7.09 Mpkts |       14.17 Mpkts
+rx-pkts    |        5.05 Mpkts |        5.06 Mpkts |       10.11 Mpkts
+tx-bytes   |           5.24 GB |           5.26 GB |           10.5 GB
+rx-bytes   |           3.74 GB |           3.75 GB |           7.49 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  \
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+
+**** Old Imix 7,4,1
+***** mode == iptfs (imix legacy/firewall 7,4,1)
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.93 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 4.16 Gbps
+cpu_util.    : 14.76% @ 2 cores (2 per dual port)         total_rx     : 3.56 Gbps
+rx_cpu_util. : 18.21% / 0 pps                             total_pps    : 1.39 Mpps
+async_util.  : 0% / 30.14 bps                             drop_rate    : 0 bps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |            14.76% |            14.76% |
+--         |                   |                   |
+Tx bps L2  |         1.97 Gbps |         1.97 Gbps |         3.94 Gbps
+Tx bps L1  |         2.08 Gbps |         2.09 Gbps |         4.17 Gbps
+Tx pps     |       696.39 Kpps |       697.98 Kpps |         1.39 Mpps
+Line Util. |             5.2 % |            5.21 % |
+---        |                   |                   |
+Rx bps     |         1.86 Gbps |         1.71 Gbps |         3.58 Gbps
+Rx pps     |       658.15 Kpps |       606.26 Kpps |         1.26 Mpps
+----       |                   |                   |
+opackets   |          14995714 |          15099834 |          30095548
+ipackets   |          14231296 |          13124265 |          27355561
+obytes     |        5300982114 |        5337789222 |       10638771336
+ibytes     |        5030619874 |        4638994972 |        9669614846
+tx-pkts    |          15 Mpkts |        15.1 Mpkts |        30.1 Mpkts
+rx-pkts    |       14.23 Mpkts |       13.12 Mpkts |       27.36 Mpkts
+tx-bytes   |            5.3 GB |           5.34 GB |          10.64 GB
+rx-bytes   |           5.03 GB |           4.64 GB |           9.67 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  \
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+***** mode == tunnel (i.e., normal ipsec) (imix legacy 7,4,1)
+
+Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3.95 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 4.17 Gbps
+cpu_util.    : 10.12% @ 2 cores (2 per dual port)         total_rx     : 1.41 Gbps
+rx_cpu_util. : 5.47% / 0 pps                              total_pps    : 1.4 Mpps
+async_util.  : 0% / 34.58 bps                             drop_rate    : 2.54 Gbps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |            10.12% |            10.12% |
+--         |                   |                   |
+Tx bps L2  |         1.97 Gbps |         1.98 Gbps |         3.95 Gbps
+Tx bps L1  |         2.08 Gbps |         2.09 Gbps |         4.17 Gbps
+Tx pps     |       697.28 Kpps |       698.79 Kpps |          1.4 Mpps
+Line Util. |            5.21 % |            5.22 % |
+---        |                   |                   |
+Rx bps     |       704.24 Mbps |       703.04 Mbps |         1.41 Gbps
+Rx pps     |       247.81 Kpps |       248.36 Kpps |       496.17 Kpps
+----       |                   |                   |
+opackets   |          11321860 |          11419036 |          22740896
+ipackets   |           4065024 |           4100397 |           8165421
+obytes     |        4002278236 |        4036629952 |        8038908188
+ibytes     |        1453675184 |        1455668512 |        2909343696
+tx-pkts    |       11.32 Mpkts |       11.42 Mpkts |       22.74 Mpkts
+rx-pkts    |        4.07 Mpkts |         4.1 Mpkts |        8.17 Mpkts
+tx-bytes   |              4 GB |           4.04 GB |           8.04 GB
+rx-bytes   |           1.45 GB |           1.46 GB |           2.91 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  \
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+
+
+***** mode == iptfs (i.e., normal ipsec) 1G 40 octet packet
+***** mode == tunnel (i.e., normal ipsec) 1G 40 octet packet
+- tunnel 1G 40b pkt
+- Global Statistics
+
+connection   : localhost, Port 4501                       total_tx_L2  : 3 Gbps
+version      : STL @ v2.98                                total_tx_L1  : 3.94 Gbps
+cpu_util.    : 36.57% @ 2 cores (2 per dual port)         total_rx     : 494 Mbps
+rx_cpu_util. : 13.65% / 0 pps                             total_pps    : 5.86 Mpps
+async_util.  : 0% / 35.1 bps                              drop_rate    : 2.51 Gbps
+total_cps.   : 0 cps                                      queue_full   : 0 pkts
+
+Port Statistics
+
+   port    |         0         |         1         |       total
+-----------+-------------------+-------------------+------------------
+owner      |              root |              root |
+link       |                UP |                UP |
+state      |      TRANSMITTING |      TRANSMITTING |
+speed      |           40 Gb/s |           40 Gb/s |
+CPU util.  |            36.57% |            36.57% |
+--         |                   |                   |
+Tx bps L2  |          1.5 Gbps |          1.5 Gbps |            3 Gbps
+Tx bps L1  |         1.97 Gbps |         1.97 Gbps |         3.94 Gbps
+Tx pps     |         2.93 Mpps |         2.93 Mpps |         5.86 Mpps
+Line Util. |            4.93 % |            4.92 % |
+---        |                   |                   |
+Rx bps     |       250.51 Mbps |       243.49 Mbps |          494 Mbps
+Rx pps     |       489.27 Kpps |       475.57 Kpps |       964.84 Kpps
+----       |                   |                   |
+opackets   |          89007203 |          89443956 |         178451159
+ipackets   |          14835660 |          14522048 |          29357708
+obytes     |        5696460992 |        5724413184 |       11420874176
+ibytes     |         949482112 |         929411072 |        1878893184
+tx-pkts    |       89.01 Mpkts |       89.44 Mpkts |      178.45 Mpkts
+rx-pkts    |       14.84 Mpkts |       14.52 Mpkts |       29.36 Mpkts
+tx-bytes   |            5.7 GB |           5.72 GB |          11.42 GB
+rx-bytes   |         949.48 MB |         929.41 MB |           1.88 GB
+-----      |                   |                   |
+oerrors    |                 0 |                 0 |                 0
+ierrors    |                 0 |                 0 |                 0
+
+status:  |
+
+browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
+dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
+
