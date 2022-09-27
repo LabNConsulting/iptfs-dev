@@ -125,6 +125,9 @@ jobs:
           mkdir -p output-buildroot/images/
           mv rootfs.cpio.gz output-buildroot/images/
 
+      - name: Config test
+        run: sudo python3 -m pytest -v -s tests/config
+
       - name: Errors test
         run: sudo python3 -m pytest -v -s tests/errors
 
