@@ -133,28 +133,35 @@ def convert_number(value):
     return int(rate) * base ** (index + 1)
 
 
-async def _test_policy_small_pkt(unet, rate):
-    await setup_policy_tun(unet, trex=True)
+async def _test_policy_small_pkt(unet, rate, mode="iptfs", duration=10, connections=1):
+    await setup_policy_tun(unet, ipsec_intf="eth1", mode=mode, trex=True)
 
     # await async_pause_test("after policy setup")
 
-    args = testutil.Args(rate=rate, user_packet_size=40)
+    args = testutil.Args(
+        rate=rate, user_packet_size=40, duration=duration, connections=connections
+    )
 
     # Some TREX test
     trex_ip = unet.hosts["trex"].intf_addrs["mgmt0"].ip
     c = STLClient(server=trex_ip, sync_timeout=10, async_timeout=10)
     c.connect()
 
-    def get_streams(direction, imix_table, modeclass=None, statsclass=None, ipv6=False):
+    def get_streams(
+        direction, imix_table, modeclass=None, statsclass=None, ipv6=False, nstreams=1
+    ):
         del ipv6
         # return trexlib.get_dynamic_imix_stream(direction, imix_table)
-        return trexlib.get_static_streams(
-            direction, imix_table, modeclass, statsclass, nstreams=args.connections
+        # return trexlib.get_static_streams_seqnum(
+        #     direction, imix_table, modeclass, statsclass, nstreams=nstreams
+        # )
+        return trexlib.get_static_streams_simple(
+            direction, imix_table, modeclass, statsclass, nstreams=nstreams
         )
 
     dutlist = []
     imix_table, pps, avg_ipsize, imix_desc = testutil.get_imix_table(args, c)
-    logging.info("pps: %s av_ipsize: %s imix_desc: %s", pps, avg_ipsize, imix_desc)
+    logging.info("pps: %s av_ipsize: %s desc: %s", pps, avg_ipsize, imix_desc)
     trex_stats, vstats, _ = await testutil.run_trex_cont_test(
         args,
         c,
@@ -169,28 +176,35 @@ async def _test_policy_small_pkt(unet, rate):
     # await async_cli(unet)
 
 
-async def _test_policy_imix(unet, rate):
-    await setup_policy_tun(unet, trex=True)
+async def _test_policy_imix(unet, rate, mode="iptfs", duration=10, connections=1):
+    await setup_policy_tun(unet, ipsec_intf="eth1", mode=mode, trex=True)
 
-    args = testutil.Args(rate=rate, old_imix=True)
+    args = testutil.Args(
+        rate=rate, old_imix=True, duration=duration, connections=connections
+    )
 
     # Some TREX test
     trex_ip = unet.hosts["trex"].intf_addrs["mgmt0"].ip
     c = STLClient(server=trex_ip, sync_timeout=10, async_timeout=10)
     c.connect()
 
-    def get_streams(direction, imix_table, modeclass=None, statsclass=None, ipv6=False):
+    def get_streams(
+        direction, imix_table, modeclass=None, statsclass=None, ipv6=False, nstreams=1
+    ):
         del ipv6
         # return trexlib.get_dynamic_imix_stream(direction, imix_table)
-        return trexlib.get_static_streams(
-            direction, imix_table, modeclass, statsclass, nstreams=args.connections
+        # return trexlib.get_static_streams_seqnum(
+        #     direction, imix_table, modeclass, statsclass, nstreams=nstreams
+        # )
+        return trexlib.get_static_streams_simple(
+            direction, imix_table, modeclass, statsclass, nstreams=nstreams
         )
 
     dutlist = []
     imix_table, pps, avg_ipsize, imix_desc = testutil.get_imix_table(
-        args, c, max_imix_size=1436
+        args, c, max_imix_size=1400
     )
-    logging.info("pps: %s av_ipsize: %s imix_desc: %s", pps, avg_ipsize, imix_desc)
+    logging.info("pps: %s av_ipsize: %s desc: %s", pps, avg_ipsize, imix_desc)
     trex_stats, vstats, _ = await testutil.run_trex_cont_test(
         args,
         c,

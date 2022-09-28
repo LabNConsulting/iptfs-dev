@@ -22,10 +22,10 @@
 import logging
 import os
 import subprocess
-import time
 
 import pytest
 from common.config import setup_policy_tun, toggle_ipv6
+from common.tests import _test_net_up
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
@@ -33,51 +33,32 @@ pytestmark = pytest.mark.asyncio
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 
-async def console(unet, rtr):
-    # cmd = ["socat", "-,rawer,echo=0,icanon=0", "unix-connect:/tmp/qemu-sock/console"]
-    cmd = ["socat", "-", "unix-connect:/tmp/qemu-sock/console"]
-    # cmd = [
-    #     "socat",
-    #     "/dev/stdin,rawer,echo=0,icanon=0",
-    #     "unix-connect:/tmp/qemu-sock/console",
-    # ]
-    rtr = unet.hosts[rtr] if isinstance(rtr, str) else rtr
-    time.sleep(1)
-    repl = await rtr.console(cmd, user="root", use_pty=False, trace=True)
-    repl.cmd_status("set +o emacs")
-    return repl
-
-
-@pytest.fixture(scope="module", name="r1repl")
-async def r1repl_(unet):
-    return await console(unet, unet.hosts["r1"])
-
-
 @pytest.fixture(scope="module", autouse=True)
-async def network_up(unet, r1repl):
+async def network_up(unet):
     h1 = unet.hosts["h1"]
     h2 = unet.hosts["h2"]
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
+    r1repl = r1.conrepl
 
     await toggle_ipv6(unet, enable=False)
 
-    for i in range(0, 3):
-        unet.cmd_raises(f"sysctl -w net.ipv6.conf.net{i}.autoconf=0")
-        unet.cmd_raises(f"sysctl -w net.ipv6.conf.net{i}.disable_ipv6=1")
+    # for i in range(0, 3):
+    #     unet.cmd_raises(f"sysctl -w net.ipv6.conf.net{i}.autoconf=0")
+    #     unet.cmd_raises(f"sysctl -w net.ipv6.conf.net{i}.disable_ipv6=1")
 
-    #
-    # R1 - Linux
-    #
-    r1repl.cmd_raises("sysctl -w net.ipv4.ip_forward=1")
-    r1repl.cmd_raises("ip link set lo up")
+    # #
+    # # R1 - Linux
+    # #
+    # r1repl.cmd_raises("sysctl -w net.ipv4.ip_forward=1")
+    # r1repl.cmd_raises("ip link set lo up")
 
-    for i in range(0, 3):
-        r1repl.cmd_raises(f"sysctl -w net.ipv6.conf.eth{i}.autoconf=0")
-        r1repl.cmd_raises(f"sysctl -w net.ipv6.conf.eth{i}.disable_ipv6=1")
-        # r1repl.cmd_raises(f"ip addr flush dev eth{i}")
-        r1repl.cmd_raises(f"ip link set eth{i} up")
-        r1repl.cmd_raises(f"ip addr add {r1.intf_addrs[f'eth{i}']} dev eth{i}")
+    # for i in range(0, 3):
+    #     r1repl.cmd_raises(f"sysctl -w net.ipv6.conf.eth{i}.autoconf=0")
+    #     r1repl.cmd_raises(f"sysctl -w net.ipv6.conf.eth{i}.disable_ipv6=1")
+    #     # r1repl.cmd_raises(f"ip addr flush dev eth{i}")
+    #     r1repl.cmd_raises(f"ip link set eth{i} up")
+    #     r1repl.cmd_raises(f"ip addr add {r1.intf_addrs[f'eth{i}']} dev eth{i}")
 
     r1repl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
 
@@ -116,45 +97,12 @@ async def network_up(unet, r1repl):
 #          10.0.0.0/24         10.0.1.0/24         10.0.2.0/24
 
 
-async def test_net_up(unet, r1repl):
-    h1 = unet.hosts["h1"]
-    h2 = unet.hosts["h1"]
+async def test_net_up(unet):
     r2 = unet.hosts["r2"]
 
     r2.cmd_raises("vppctl ip route add 10.0.0.0/24 via 10.0.1.2")
 
-    # pings mgmt0 bridge
-    logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 192.168.0.254"))
-    # h1 pings r1 (qemu side)
-    logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.0.2"))
-    # h1 pings r1 (namespace side)
-    logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.0.202"))
-    # h1 pings r1 (other side)
-    logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-    # h1 pings r2
-    logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
-    # h1 pings h2
-    logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.2.4"))
-
-    # r1 (qemu side) pings mgmt0 brige
-    logging.debug(r1repl.cmd_raises("ping -w1 -i.2 -c1 192.168.0.254"))
-    # r1 (qemu side) pings h1
-    logging.debug(r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.0.1"))
-    # r1 (qemu side) pings r1 (namespace side)
-    logging.debug(r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.202"))
-    # r1 (qemu side) pings r2 (qemu side)
-    logging.debug(r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
-
-    # h2 pings mgmt0 bridge
-    logging.debug(h2.cmd_raises("ping -w1 -i.2 -c1 192.168.0.254"))
-    # h2 pings r2 (local side)
-    logging.debug(h2.cmd_raises("ping -w1 -i.2 -c1 10.0.2.3"))
-    # h2 pings r2 (other side)
-    logging.debug(h2.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
-    # h2 pings r1
-    logging.debug(h2.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-    # h2 pings h1
-    logging.debug(h2.cmd_raises("ping -w1 -i.2 -c1 10.0.0.1"))
+    await _test_net_up(unet)
 
     r2.cmd_raises("vppctl ip route del 10.0.0.0/24 via 10.0.1.2")
 

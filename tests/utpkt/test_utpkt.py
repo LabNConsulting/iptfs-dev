@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 eval: (blacken-mode 1) -*-
 #
 # February 9 2022, Christian Hopps <chopps@labn.net>

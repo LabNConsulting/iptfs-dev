@@ -1,4 +1,7 @@
 *~
+*.decode
+*.log
+*.pcap
 *.pyc
 *.qcow2
 /buildroot/

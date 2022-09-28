@@ -14,11 +14,11 @@ topology:
           name: mgmt0
         - to: r1
           name: eth0
-          physical: "0000:1b:02.0"
+          hostintf: "enp27s0f0v0"
           ip: 11.0.0.1/24
         - to: r2
           name: eth1
-          physical: "0000:1b:0a.0"
+          hostintf: "enp27s0f1v0"
           ip: 12.0.0.1/24
     - name: r1
       kind: linux
@@ -78,7 +78,7 @@ kinds:
       - 4500:4500
       - 4501:4501
     volumes:
-      - ./trex_cfg_phy.yaml:/etc/trex_cfg.yaml
+      - ./trex_cfg.yaml:/etc/trex_cfg.yaml
       - ../common:/common
       # - /dev/hugepages:/dev/hugepages
       # - /var/run/systemd/journal/socket:/var/run/systemd/journal/socket
@@ -87,30 +87,15 @@ kinds:
 cli:
   commands:
     - name: con
-      exec-kind:
-        - kind: linux
-          exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/vcon0"
-        - kind: trex
-          exec: "cd /opt/trex/current && ./trex-console -r"
-      format: "con HOST|TREX [HOST|TREX ...]"
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/vcon0"
+      format: "con HOST [HOST ...]"
       help: "open console on given hosts, * for all"
       new-window: true
     - name: mon
-      exec-kind:
-        - kind: linux
-          exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
-        - kind: trex
-          exec: "cd /opt/trex/current && ./trex-console -r -t"
-      format: "mon HOST|TREX [HOST|TREX ...]"
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
+      format: "mon HOST [HOST ...]"
       help: "open monitor on given hosts, * for all"
       new-window: true
-    - name: xmon
-      exec-kind:
-        - kind: trex
-          exec: "cd /opt/trex/current && ./trex-console -r -x"
-      format: "xmon TREX [TREX ...]"
-      help: "open trex monitor using X11"
-      new-window: false
     - name: ssh
       exec: "ssh -i ../../root-key -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' {host.intf_addrs['eth0'].ip}"
       format: "ssh HOST [HOST ...]"

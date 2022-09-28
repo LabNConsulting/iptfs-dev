@@ -23,7 +23,8 @@ import logging
 import os
 
 import pytest
-from common.config import setup_policy_tun, setup_routed_tun
+from common.config import _network_up, setup_policy_tun, setup_routed_tun
+from common.tests import _test_net_up
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
@@ -33,24 +34,7 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture(scope="module", autouse=True)
 async def network_up(unet):
-    h1 = unet.hosts["h1"]
-    h2 = unet.hosts["h2"]
-    r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"]
-    for _, repl in [(r1, r1.conrepl), (r2, r2.conrepl)]:
-        repl.cmd_raises("sysctl -w net.ipv6.conf.all.autoconf=0")
-        repl.cmd_raises("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
-        repl.cmd_raises("sysctl -w net.ipv4.ip_forward=1")
-        repl.cmd_raises("ip link set lo up")
-
-    h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
-    h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")
-
-    r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
-    r2.conrepl.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
-
-    h2.cmd_raises("ip route add 10.0.1.0/24 via 10.0.2.3")
-    h2.cmd_raises("ip route add 10.0.0.0/24 via 10.0.2.3")
+    await _network_up(unet)
 
 
 #                             192.168.0.0/24
@@ -63,49 +47,7 @@ async def network_up(unet):
 
 
 async def test_net_up(unet):
-    r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"]
-    # pings mgmt0 bridge
-    logging.debug(unet.hosts["h1"].cmd_raises("ping -w1 -i.2 -c1 192.168.0.254"))
-    # h1 pings r1 (qemu side)
-    logging.debug(unet.hosts["h1"].cmd_raises("ping -w1 -i.2 -c1 10.0.0.2"))
-    # h1 pings r1 (other side)
-    logging.debug(unet.hosts["h1"].cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-    # h1 pings r2
-    logging.debug(unet.hosts["h1"].cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
-    # h1 pings h2
-    logging.debug(unet.hosts["h1"].cmd_raises("ping -w1 -i.2 -c1 10.0.2.4"))
-    # r1 (qemu side) pings mgmt0 brige
-    logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 192.168.0.254"))
-    # r1 (qemu side) pings h1
-    logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.0.1"))
-    # logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-    # r1 (qemu side) pings r2 (qemu side)
-    logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
-
-    # r2 (qemu side) pings all mgmt0
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 192.168.0.254"))
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 192.168.0.1"))
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 192.168.0.2"))
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 192.168.0.3"))
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 192.168.0.4"))
-
-    # r2 (qemu side) pings r1 (qemu side)
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-    # logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.2.3"))
-    # r2 (qemu side) pings h2
-    logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.2.4"))
-
-    # h2 pings mgmt0 bridge
-    logging.debug(unet.hosts["h2"].cmd_raises("ping -w1 -i.2 -c1 192.168.0.254"))
-    # h2 pings r2 (qemu side)
-    logging.debug(unet.hosts["h2"].cmd_raises("ping -w1 -i.2 -c1 10.0.2.3"))
-    # h2 pings r2 (other side)
-    logging.debug(unet.hosts["h2"].cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
-    # h2 pings r1
-    logging.debug(unet.hosts["h2"].cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-    # h2 pings h1
-    logging.debug(unet.hosts["h2"].cmd_raises("ping -w1 -i.2 -c1 10.0.0.1"))
+    await _test_net_up(unet)
 
 
 async def no_test_user_step(unet, astepf):

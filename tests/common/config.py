@@ -21,9 +21,35 @@
 "Common code for configuring tests."
 
 
+async def _network_up(unet, r1only=False):
+    h1 = unet.hosts["h1"] if "h1" in unet.hosts else None
+    h2 = unet.hosts["h2"] if "h2" in unet.hosts else None
+    r1 = unet.hosts["r1"]
+    r2 = unet.hosts["r2"] if not r1only else None
+
+    await toggle_ipv6(unet, enable=False)
+
+    if h1:
+        h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
+        h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")
+
+    r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
+
+    if r2:
+        r2.conrepl.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
+
+    if h2:
+        h2.cmd_raises("ip route add 10.0.1.0/24 via 10.0.2.3")
+        h2.cmd_raises("ip route add 10.0.0.0/24 via 10.0.2.3")
+
+
 async def cleanup_config(unet, r1only=False):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
+
+    r1.conrepl.cmd_nostatus(f"ip link del ipsec0")
+    if not r1only:
+        r2.conrepl.cmd_nostatus(f"ip link del ipsec0")
 
     r1.conrepl.cmd_nostatus("ip route del 10.0.2.0/24 dev ipsec0")
     r1.conrepl.cmd_nostatus("ip route del 12.0.0.0/24 dev ipsec0")
@@ -107,6 +133,7 @@ async def setup_policy_tun(
     trex=False,
     r1only=False,
     ipsec_intf="eth2",
+    iptfs_opts="",
 ):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
@@ -132,14 +159,20 @@ async def setup_policy_tun(
         # SAs
         #
         repl.cmd_raises(
-            f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
-            f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-            f"reqid {reqid_1to2}"
+            (
+                f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
+                f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
+                f"reqid {reqid_1to2} "
+            )
+            + iptfs_opts
         )
         repl.cmd_raises(
-            f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
-            f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-            f"reqid {reqid_2to1}"
+            (
+                f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
+                f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
+                f"reqid {reqid_2to1} "
+            )
+            + iptfs_opts
         )
 
         #
@@ -197,6 +230,7 @@ async def setup_routed_tun(
     trex=False,
     r1only=False,
     ipsec_intf="eth2",
+    iptfs_opts="",
 ):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
@@ -231,14 +265,20 @@ async def setup_routed_tun(
             rip = r1ip
 
         repl.cmd_raises(
-            f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
-            f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-            f"if_id 55 reqid {reqid_1to2}"
+            (
+                f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
+                f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
+                f"if_id 55 reqid {reqid_1to2} "
+            )
+            + iptfs_opts
         )
         repl.cmd_raises(
-            f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
-            f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-            f"if_id 55 reqid {reqid_2to1}"
+            (
+                f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
+                f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
+                f"if_id 55 reqid {reqid_2to1} "
+            )
+            + iptfs_opts
         )
 
         # repl.cmd_raises(f"ip add vti0 local {lip} remote {rip} mode vti key 55")
