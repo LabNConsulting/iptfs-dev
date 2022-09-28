@@ -21,7 +21,7 @@ jobs:
         with:
           path: output-linux.tar.gz
           # need a glob that doesn't match "stats" or TAG files
-          key: ${{ runner.os }}-${{ hashFiles('output-linux.tar.gz') }}
+          key: ${{ runner.os }}-kernel-${{ hashFiles('output-linux.tar.gz') }}
 
       - name: Build Kernel
         run: |
@@ -51,6 +51,7 @@ jobs:
           cd ..
           echo "Collecting new cache contents"
           tar -czf output-linux.tar.gz output-linux
+          ls -l output-linux.tar.gz
 
       - name: Archive kernel bzImage
         uses: actions/upload-artifact@v3
@@ -76,7 +77,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: output-buildroot
-          key: ${{ runner.os }}-${{ hashFiles('buildroot.config') }}
+          key: ${{ runner.os }}-br-${{ hashFiles('buildroot.config') }}
 
       - name: Build Rootfs
         run: |
@@ -87,6 +88,8 @@ jobs:
             cp buildroot.config output-buildroot/.config
           fi
           cd output-buildroot
+          make -j6 O=$PWD -C ../buildroot
+          make -j6 O=$PWD -C ../buildroot iproute2-rebuild
           make -j6 O=$PWD -C ../buildroot
 
       - name: Archive buildroot rootfs.cpio.gz
