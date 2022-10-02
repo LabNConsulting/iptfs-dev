@@ -50,7 +50,7 @@ kinds:
       ip addr
       NETH=$(ls -d /sys/class/net/eth* | wc -l)
       DPDK_DEVS=""
-      for ((i=0; i<$NEH; i++)); do
+      for ((i=0; i<$NETH; i++)); do
           sysctl -w net.ipv6.conf.eth$i.autoconf=0
           sysctl -w net.ipv6.conf.eth$i.disable_ipv6=1
           ip address flush dev eth$i

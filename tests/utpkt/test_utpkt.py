@@ -41,7 +41,6 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 async def network_up(unet):
     h1 = unet.hosts["h1"]
     r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"]
     r1repl = r1.conrepl
 
     await toggle_ipv6(unet, enable=False)
@@ -51,27 +50,26 @@ async def network_up(unet):
 
     r1repl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
 
-    # Get the arp entry for r2, and make it permanent
+    # Get the arp entry for unet, and make it permanent
     r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3")
     r1repl.cmd_raises(f"ip neigh change 10.0.1.3 dev {r1.net_intfs['net1']}")
 
     # # Remove IP from our scapy node
-    r2.cmd_raises("ip addr del 10.0.1.3/24 dev eth2")
+    unet.cmd_raises("ip addr del 10.0.1.3/24 dev net1")
 
 
 #                             192.168.0.0/24
-#   --+-------------------+------ mgmt0 ------+-------------------+---
-#     | .1                | .2                | .3                | .4
-#   +----+              +----+              +----+              +----+
-#   | h1 | --- net0 --- | r1 | --- net1 --- | r2 | --- net2 --- | r1 |
-#   +----+ .1        .2 +----+ .2        .3 +----+ .3        .4 +----+
-#          10.0.0.0/24         10.0.1.0/24         10.0.2.0/24
+#   --+-------------------+------ mgmt0 -------+----
+#     | .1                | .2                 | .3
+#   +----+              +----+              +------+
+#   | h1 | --- net0 --- | r1 | --- net1 --- | unet |
+#   +----+ .1        .2 +----+ .2        .3 +------+
+#          10.0.0.0/24         10.0.1.0/24
 
 
 async def test_net_up(unet):
     r1repl = unet.hosts["r1"].conrepl
     h1 = unet.hosts["h1"]
-    # r2 = unet.hosts["r2"]
 
     # h1 pings r1 (qemu side)
     logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.0.2"))
@@ -97,99 +95,60 @@ def myreadline(f):
 
 def _wait_output(p, regex, timeout=120):
     retry_until = datetime.now() + timedelta(seconds=timeout)
+    regex = re.compile(regex)
     while datetime.now() < retry_until:
-        # line = p.stdout.readline()
         line = myreadline(p.stdout)
         if not line:
-            assert None, f"Timeout waiting for '{regex}'"
+            assert None, f"EOF waiting for '{regex}'"
         line = line.rstrip()
         if line:
             logging.info("GOT LINE: '%s'", line)
-        m = re.search(regex, line)
+        m = regex.search(line)
         if m:
             return m
     assert None, f"Failed to get output withint {timeout}s"
 
 
+async def gen_pkt_test(unet, astepf, ipsec_expect=None, decap_expect=None, **kwargs):
+    pktbin = os.path.join(SRCDIR, "genpkt.py")
+
+    args = [f"--{x}={y}" for x, y in kwargs.items()]
+    await astepf(f"Running genpkt.py script: {' '.join(args)}")
+    p = unet.popen(
+        [pktbin, "-v", "--iface=net1", *args],
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        _ = _wait_output(p, "STARTING")
+
+        waitfor = r"DECAP (\d+) inner packets from (\d+) ipsec packets"
+        m = _wait_output(p, waitfor)
+        ndecap = int(m.group(1))
+        assert ndecap == 80, f"Wrong number ({ndecap}, expected 80) return IP packets"
+
+        _ = _wait_output(p, "FINISH")
+
+    except Exception:
+        if p:
+            p.terminate()
+            if p.wait():
+                comm_error(p)
+            p = None
+        raise
+    finally:
+        if p:
+            p.terminate()
+            p.wait()
+
+
+async def test_packet_fragmentation(unet, astepf):
+    await astepf("Prior to policy setup")
+    await setup_policy_tun(unet, r1only=True)
+    await astepf("Prior to gen_pkt_test")
+    await gen_pkt_test(unet, astepf, psize=411, mtu=500, pstep=1, count=2)
+
+
 async def test_small_pkt_agg(unet, astepf):
-    r2 = unet.hosts["r2"]
 
     await setup_policy_tun(unet, r1only=True)
-
-    pktbin = os.path.join(SRCDIR, "genpkt.py")
-
-    await astepf("Running genpkt.py script")
-    p = r2.popen(
-        [
-            pktbin,
-            "-v",
-            "--local=10.0.1.3",
-            "--remote=10.0.1.2",
-            "--iface=eth2",
-            "--mtu=1500",
-            "--ping=10.0.0.1",
-            "--count=80",
-            "--psize=1",
-            # "--pstep=1",
-            # "--wrap=1",
-        ],
-        stderr=subprocess.STDOUT,
-    )
-    try:
-        _ = _wait_output(p, "STARTING")
-        waitfor = "FINISH"
-        _ = _wait_output(p, waitfor)
-
-    except Exception:
-        if p:
-            p.terminate()
-            if p.wait():
-                comm_error(p)
-            p = None
-        raise
-    finally:
-        if p:
-            p.terminate()
-            p.wait()
-
-
-async def test_scapy_script(unet, astepf):
-    r2 = unet.hosts["r2"]
-
-    await setup_policy_tun(unet, r1only=True)
-
-    pktbin = os.path.join(SRCDIR, "genpkt.py")
-
-    await astepf("Running genpkt.py script")
-    p = r2.popen(
-        [
-            pktbin,
-            "-v",
-            "--local=10.0.1.3",
-            "--remote=10.0.1.2",
-            "--iface=eth2",
-            "--mtu=1500",
-            "--ping=10.0.0.1",
-            "--count=8",
-            "--psize=64",
-            # "--pstep=1",
-            # "--wrap=1",
-        ],
-        stderr=subprocess.STDOUT,
-    )
-    try:
-        _ = _wait_output(p, "STARTING")
-        waitfor = "FINISH"
-        _ = _wait_output(p, waitfor)
-
-    except Exception:
-        if p:
-            p.terminate()
-            if p.wait():
-                comm_error(p)
-            p = None
-        raise
-    finally:
-        if p:
-            p.terminate()
-            p.wait()
+    await gen_pkt_test(unet, astepf, count=80)

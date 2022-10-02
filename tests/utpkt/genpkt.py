@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 eval: (blacken-mode 1) -*-
 #
 # June 3 2022, Christian Hopps <chopps@labn.net>
@@ -35,7 +35,6 @@ from scapy.layers.ipsec import ESP
 from scapy.layers.l2 import ARP, Ether
 from scapy.packet import Raw
 from scapy.sendrecv import sendp, srp
-
 
 USE_GCM = True
 
@@ -102,8 +101,8 @@ class IPsecIPv4Params:
         self.scapy_tun_sa_id = 0x11
         self.scapy_tun_sa = None
         if USE_GCM:
-            self.linux_tun_spi = 0xAA
-            self.scapy_tun_spi = 0xBB
+            self.linux_tun_spi = 0xAAA
+            self.scapy_tun_spi = 0xBBB
 
             self.crypt_algo = "AES-GCM"  # scapy name
             self.crypt_key = binascii.unhexlify("4a506a794f574265564551694d653768")
@@ -118,7 +117,7 @@ class IPsecIPv4Params:
             self.crypt_key = ""
             self.auth_algo = "HMAC-SHA1-96"  # scapy name
             self.auth_key = binascii.unhexlify(
-                "4339314b55523947594d6d3547666b45764e6a58"
+                "0123456789ABCDEF0123456789ABCDEF01234567"
             )
             self.crypt_salt = ""
             self.salt = None
@@ -218,10 +217,10 @@ def run(params, tun_if, args):
     lsa, rsa = config_tun_params(params, tun_if, mtu=mtu)
     inner_ip_overhead = len(IP() / ICMP(seq=1))
 
-    psize = args.psize
+    psize = max(args.psize, inner_ip_overhead)
     if args.pstep:
         if args.pmax:
-            pmaxsize = args.pmax
+            pmaxsize = max(args.pmax, args.psize)
         else:
             pmaxsize = mtu - inner_ip_overhead - lsa.get_ipsec_overhead()
 
@@ -245,14 +244,16 @@ def run(params, tun_if, args):
     opkts = gen_ippkts(
         tun_if.local_addr,
         args.ping,
-        payload_size=psize,
+        payload_size=psize - inner_ip_overhead,
         payload_spread=pmaxsize,
         inc=args.pstep,
         count=pcount,
     )
-    maxsz = max([len(x) for x in opkts])
+    maxsz = max(len(x) for x in opkts)
     logging.info("GENERATED %s inner packets max size %s", len(opkts), maxsz)
-    encpkts = iptfs.gen_encrypt_pktstream_pkts(lsa, tun_if, mtu, opkts, dontfrag=True)
+    encpkts = iptfs.gen_encrypt_pktstream_pkts(
+        lsa, tun_if, mtu, opkts, dontfrag=args.df
+    )
     encpkts = tun_if.prep_pkts(encpkts)
 
     for chunk in chunkit(encpkts, 10):
@@ -273,38 +274,50 @@ def run(params, tun_if, args):
             nofilter=1,
             iface=args.iface,
         )
-        logging.info("srp returns %s", pkts)
+        logging.info("SRP RETURNS %s", pkts)
 
         rawpkts = [x.answer for x in pkts[0]]
         ippkts = [x[IP] for x in rawpkts if x.haslayer(ESP)]
-        logging.info("RECEIVED %s ipsec packets", len(ippkts))
+        nippkts = len(ippkts)
+        logging.info("RECEIVED %s ipsec packets", nippkts)
 
         nrxs, ntxs, rxerr, txerr = get_intf_stats(args.iface)
         assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
         assert max(txerr) == 0, f"txerr not 0, is {max(txerr)}"
         logging.info("STATS for %s: RX %s TX %s", args.iface, nrxs - rxs, ntxs - txs)
 
-        decpkts = []
-        for ippkt in ippkts:
-            decpkts.append(rsa.decrypt(ippkt))
-        pkts = iptfs.decap_frag_stream(decpkts)
-        logging.info("DECAP %s inner packets", len(pkts))
+        try:
+            decpkts = []
+            for ippkt in ippkts:
+                decpkts.append(rsa.decrypt(ippkt))
+            pkts = iptfs.decap_frag_stream(decpkts)
+            logging.info(
+                "DECAP %s inner packets from %s ipsec packets", len(pkts), nippkts
+            )
+        except Exception as error:
+            logging.info(
+                "Exception decapping received ESP packets: %s", error, exc_info=True
+            )
+            return 1
+
         # for pkt in pkts:
         #     print("inner ICMP seq: {} pkt: {}".format(pkt[ICMP].seq, pkt.summary()))
         #     # pkt.show()
+    return 0
 
 
 def main(*args):
     ap = argparse.ArgumentParser(args)
     ap.add_argument("--count", type=int, help="number of packets to generate")
+    ap.add_argument("--df", action="store_true", help="dont fragment")
     ap.add_argument("--iface", default="eth1", help="interfaec to operate on")
     ap.add_argument("--local", default="10.0.1.3", help="interfaec address")
     ap.add_argument("--mtu", type=int, default=1500, help="size of tunnel packets")
     ap.add_argument("--remote", default="10.0.1.2", help="interfaec address")
     ap.add_argument("--ping", default="10.0.0.1", help="interfaec address")
-    ap.add_argument("--pmax", type=int, help="max payload size for spread")
+    ap.add_argument("--pmax", type=int, help="max inner pkt size for spread")
     ap.add_argument(
-        "--psize", type=int, default=0, help="payload size (start size for spread)"
+        "--psize", type=int, default=0, help="inner pkt size (start size for spread)"
     )
     ap.add_argument("--pstep", type=int, help="amount to step for size spread")
     ap.add_argument("-v", "--verbose", action="store_true", help="be verbose")
@@ -322,7 +335,7 @@ def main(*args):
 
     if args.count and args.wrap:
         logging.error("only one of --count or --wrap allowed")
-        sys.exit(1)
+        sys.exit(2)
 
     conf.iface = args.iface
 
@@ -332,7 +345,7 @@ def main(*args):
 
     # The IP may have been removed from the intf to keep the kernel out of things
     # So we need to do arp.
-    print("STARTING")
+    logging.info("STARTING")
 
     # t = AsyncSniffer(iface=args.iface, prn=lambda x: x.summary())
     # t.start()
@@ -340,11 +353,13 @@ def main(*args):
     # pkts = t.stop(join=True)
 
     try:
-        run(params, tun_if, args)
+        ec = run(params, tun_if, args)
     except Exception as error:
         logging.error("Unexpected exception: %s", error)
+        ec = 255
 
-    print("FINISH")
+    logging.info("FINISH")
+    sys.exit(ec)
 
 
 if __name__ == "__main__":

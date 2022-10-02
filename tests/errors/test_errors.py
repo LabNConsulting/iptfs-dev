@@ -79,7 +79,7 @@ async def test_net_up(unet):
 async def test_policy_mtu(unet, astepf):
     h1 = unet.hosts["h1"]
 
-    setup_policy_tun(unet, mode="tunnel")
+    await setup_policy_tun(unet, mode="tunnel")
 
     await astepf("Send initial small ping")
     logging.info(h1.cmd_raises("ping -c1 10.0.2.4"))
@@ -94,7 +94,7 @@ async def test_policy_mtu(unet, astepf):
 async def test_iptfs_mtu(unet, astepf):
     h1 = unet.hosts["h1"]
 
-    setup_policy_tun(unet, mode="tunnel")
+    await setup_policy_tun(unet, mode="tunnel")
 
     await astepf("Send initial small ping")
     logging.info(h1.cmd_raises("ping -c1 10.0.2.4"))
