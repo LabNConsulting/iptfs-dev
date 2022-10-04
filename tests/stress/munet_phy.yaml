@@ -91,7 +91,7 @@ cli:
         - kind: linux
           exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/vcon0"
         - kind: trex
-          exec: "cd /opt/trex/current && ./trex-console -r"
+          exec: "bash -c 'cd /opt/trex/current && ./trex-console -r'"
       format: "con HOST|TREX [HOST|TREX ...]"
       help: "open console on given hosts, * for all"
       new-window: true
@@ -100,14 +100,14 @@ cli:
         - kind: linux
           exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
         - kind: trex
-          exec: "cd /opt/trex/current && ./trex-console -r -t"
+          exec: "bash -c 'cd /opt/trex/current && ./trex-console -r -t'"
       format: "mon HOST|TREX [HOST|TREX ...]"
       help: "open monitor on given hosts, * for all"
       new-window: true
     - name: xmon
       exec-kind:
         - kind: trex
-          exec: "cd /opt/trex/current && ./trex-console -r -x"
+          exec: "bash -c 'cd /opt/trex/current && ./trex-console -r -x'"
       format: "xmon TREX [TREX ...]"
       help: "open trex monitor using X11"
       new-window: false
