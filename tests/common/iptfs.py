@@ -36,14 +36,17 @@ from scapy.fields import (
 from scapy.layers import ipsec
 from scapy.layers.inet import ICMP, IP
 from scapy.layers.inet6 import IPv6
-from scapy.layers.ipsec import ESP, _ESPPlain, split_for_transport
+from scapy.layers.ipsec import CRYPT_ALGOS, ESP, _ESPPlain, split_for_transport
 from scapy.layers.l2 import Ether
 from scapy.packet import Packet, Raw, bind_layers
 
-IPPROTO_IPTFS = 5
+IPPROTO_IPTFS = 144
 IP_PROTOS["iptfs"] = IPPROTO_IPTFS
 
 logger = logging.getLogger("scapy_iptfs")
+
+# fix bug in scapy
+CRYPT_ALGOS["AES-GCM"].block_size = 1
 
 # This causes NAT and reassembly unit-tests to fail.
 # conf.debug_dissector = True
@@ -426,6 +429,7 @@ def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R091
     #         len(pkt), pkt.show(dump=True)))
 
     ipsec_payload_size = mtu - sa.get_ipsec_overhead()
+    ipsec_payload_size = (ipsec_payload_size // 4) * 4
     tunpkts = [
         # Ether(src=sw_intf.remote_mac, dst=sw_intf.local_mac) /
         sa.encrypt_esp_raw(rawpkt)
@@ -469,6 +473,7 @@ def gen_encrypt_pktstream(  # pylint: disable=W0612  # pylint: disable=R0913,R09
     #         len(pkt), pkt.show(dump=True)))
 
     ipsec_payload_size = mtu - sa.get_ipsec_overhead()
+    ipsec_payload_size = (ipsec_payload_size // 4) * 4
     pstream = raw_iptfs_stream(pstream, ipsec_payload_size, dontfrag)
     # self.logger.debug(" XXXPKT: len: {} pkt: {}".format(
     #     len(pstream[0]),
@@ -496,12 +501,12 @@ class SecurityAssociation(ipsec.SecurityAssociation):
     This class is responsible of "encryption" and "decryption" of IPsec IPTFS packets.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, proto, spi, **kwargs):
         self.mtu = 1500
         if "mtu" in kwargs:
             self.mtu = kwargs["mtu"]
             del kwargs["mtu"]
-        super().__init__(self, *args, **kwargs)
+        super().__init__(proto, spi, **kwargs)
         self.ipsec_overhead = self._get_ipsec_overhead()
 
     def get_ipsec_overhead(self):

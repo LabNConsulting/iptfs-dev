@@ -45,11 +45,11 @@ async def _network_up(unet, r1only=False):
 
 async def cleanup_config(unet, r1only=False):
     r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"]
+    r2 = unet.hosts["r2"] if not r1only else None
 
-    r1.conrepl.cmd_nostatus(f"ip link del ipsec0")
+    r1.conrepl.cmd_nostatus("ip link del ipsec0")
     if not r1only:
-        r2.conrepl.cmd_nostatus(f"ip link del ipsec0")
+        r2.conrepl.cmd_nostatus("ip link del ipsec0")
 
     r1.conrepl.cmd_nostatus("ip route del 10.0.2.0/24 dev ipsec0")
     r1.conrepl.cmd_nostatus("ip route del 12.0.0.0/24 dev ipsec0")
@@ -78,7 +78,10 @@ async def cleanup_config(unet, r1only=False):
 
 
 async def toggle_ipv6(unet, enable=False):
-    for node in unet.hosts.values():
+    nodes = list(unet.hosts.values())
+    if unet.isolated:
+        nodes.append(unet)
+    for node in list(unet.hosts.values()) + [unet]:
         if hasattr(node, "conrepl") and node.conrepl:
             node = node.conrepl
         if enable:
@@ -114,13 +117,19 @@ def get_sa_values(use_gcm=True, use_nullnull=False, enc_null=False):
     elif enc_null:
         spi_1to2 = 0xAAAA
         spi_2to1 = 0xBBBB
-        sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
+        # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
+        # "0123456789ABCDEF0123456789ABCDEF"
+        # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
+        sa_auth = "auth 'hmac(sha1)' 0x0123456789ABCDEF0123456789ABCDEF01234567"
         sa_enc = 'enc cipher_null ""'
     else:
         spi_1to2 = 0xAA
         spi_2to1 = 0xBB
-        sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
-        sa_enc = "enc aes 0xFEDCBA9876543210FEDCBA9876543210"
+        # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
+        # "0123456789ABCDEF0123456789ABCDEF"
+        # sa_auth = "auth sha256 0x0123456789ABCDEF0123456789ABCDEF"
+        sa_auth = "auth 'hmac(sha1)' 0x0123456789ABCDEF0123456789ABCDEF01234567"
+        sa_enc = "enc 'cbc(aes)' 0xFEDCBA9876543210FEDCBA9876543210"
     return spi_1to2, spi_2to1, sa_auth, sa_enc
 
 
@@ -136,7 +145,7 @@ async def setup_policy_tun(
     iptfs_opts="",
 ):
     r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"]
+    r2 = unet.hosts["r2"] if "r2" in unet.hosts else None
 
     reqid_1to2 = 0x10
     reqid_2to1 = 0x11
@@ -146,7 +155,16 @@ async def setup_policy_tun(
     r1ipp = r1.intf_addrs[ipsec_intf]
     r1ip = r1ipp.ip
     r1ipp = r1ipp.network
-    r2ipp = r2.intf_addrs[ipsec_intf]
+    if r2 is not None:
+        r2ipp = r2.intf_addrs[ipsec_intf]
+    else:
+        # The other side is the switch interface
+        net = None
+        for net in r1.net_intfs:
+            if r1.net_intfs[net] == ipsec_intf:
+                break
+        assert net is not None, f"can't find network for {ipsec_intf}"
+        r2ipp = unet.switches[net].ip_interface
     r2ip = r2ipp.ip
     r2ipp = r2ipp.network
 
@@ -233,7 +251,7 @@ async def setup_routed_tun(
     iptfs_opts="",
 ):
     r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"]
+    r2 = unet.hosts["r2"] if "r2" in unet.hosts else None
 
     reqid_1to2 = 8
     reqid_2to1 = 9
@@ -243,7 +261,16 @@ async def setup_routed_tun(
     r1ipp = r1.intf_addrs[ipsec_intf]
     r1ip = r1ipp.ip
     r1ipp = r1ipp.network
-    r2ipp = r2.intf_addrs[ipsec_intf]
+    if r2 is None:
+        # The other side is the switch interface
+        net = None
+        for net in r1.net_intfs:
+            if r1.net_intfs[net] == ipsec_intf:
+                break
+        assert net is not None, f"can't find network for {ipsec_intf}"
+        r2ipp = unet.switches[net].ip_interface
+    else:
+        r2ipp = r2.intf_addrs[ipsec_intf]
     r2ip = r2ipp.ip
     r2ipp = r2ipp.network
 

@@ -23,7 +23,7 @@ output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
 
 output-buildroot/images/rootfs.cpio.gz: output-buildroot output-buildroot/.config
 	mkdir -p output-buildroot
-	make -C buildroot -j$(shell nproc) O=../output-buildroot
+	make -C buildroot -j$(shell nproc) -V=1 O=../output-buildroot
 
 output-linux/.config: linux.config
 	cp -p $< $@
