@@ -78,7 +78,10 @@ async def cleanup_config(unet, r1only=False):
 
 
 async def toggle_ipv6(unet, enable=False):
-    for node in unet.hosts.values():
+    nodes = list(unet.hosts.values())
+    if unet.isolated:
+        nodes.append(unet)
+    for node in list(unet.hosts.values()) + [unet]:
         if hasattr(node, "conrepl") and node.conrepl:
             node = node.conrepl
         if enable:
