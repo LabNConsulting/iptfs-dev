@@ -24,6 +24,7 @@ import logging
 import pprint
 import time
 from dataclasses import dataclass
+from subprocess import check_output
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,23 @@ class Args:
     rate: float = 0.0
     unidirectional: bool = False
     user_packet_size: int = 0
+
+
+def chunkit(lst, chunk):
+    for i in range(0, len(lst), chunk):
+        yield lst[i : i + chunk]
+
+
+def get_intf_stats(intf):
+    try:
+        output = check_output(f"ip -s link show {intf}", shell=True, text=True).strip()
+        lines = output.split("\n")
+        rxstats = [int(x) for x in lines[3].strip().split()]
+        txstats = [int(x) for x in lines[5].strip().split()]
+        return rxstats[1], txstats[1], rxstats[2:-1], txstats[2:-1]
+    except Exception as error:
+        logging.error("Got error getting stats: %s", error)
+        raise
 
 
 def get_human_readable(v):
@@ -281,8 +299,8 @@ def update_table_with_rate(
     def mps(x):
         return 46 if x < 46 else x
 
-    pps_sum = sum([x["pps"] for x in imix_table])
-    avg_ipsize = sum([mps(x["size"]) * x["pps"] for x in imix_table]) / pps_sum
+    pps_sum = sum(x["pps"] for x in imix_table)
+    avg_ipsize = sum(mps(x["size"]) * x["pps"] for x in imix_table) / pps_sum
     pps = line_rate_to_pps(args, l1_rate, avg_ipsize, iptfs_mtu)
     if percentage:
         pps *= percentage / 100
