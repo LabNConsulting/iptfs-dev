@@ -20,17 +20,15 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
 import argparse
-import binascii
 import logging
-import socket
 import sys
 from subprocess import check_output
 
 from common import iptfs
+from common.config import create_scapy_sa_pair
 from scapy.arch import get_if_addr, get_if_hwaddr
 from scapy.config import conf
 from scapy.layers.inet import ICMP, IP
-from scapy.layers.inet6 import IPv6
 from scapy.layers.ipsec import ESP
 from scapy.layers.l2 import ARP, Ether
 from scapy.packet import Raw
@@ -69,7 +67,13 @@ class Interface:
 
         ans = self.send_gratuitous_arp()
         self.remote_mac = ans[0][1][ARP].hwsrc
-        logging.debug("Interface: %s remote mac is %s", remote_addr, self.remote_mac)
+        logging.debug(
+            "Interface: local %s mac %s remote %s mac %s",
+            self.local_addr,
+            self.local_mac,
+            self.remote_addr,
+            self.remote_mac,
+        )
 
     def prep_pkts(self, pkts):
         npkts = []
@@ -84,79 +88,6 @@ class Interface:
         )
         ans, _ = srp(pkt, iface=self.name)
         return ans
-
-
-class IPsecIPv4Params:
-
-    addr_type = socket.AF_INET
-    addr_any = "0.0.0.0"
-    addr_bcast = "255.255.255.255"
-    addr_len = 32
-    is_ipv6 = 0
-
-    def __init__(self):
-        self.remote_tun_if_host = "10.0.1.2"
-        self.linux_tun_sa_id = 0x10
-        self.linux_tun_sa = None
-        self.scapy_tun_sa_id = 0x11
-        self.scapy_tun_sa = None
-        if USE_GCM:
-            self.linux_tun_spi = 0xAAA
-            self.scapy_tun_spi = 0xBBB
-
-            self.crypt_algo = "AES-GCM"  # scapy name
-            self.crypt_key = binascii.unhexlify("4a506a794f574265564551694d653768")
-            self.crypt_salt = binascii.unhexlify("1A2B1A2B")
-            self.auth_algo = None
-            self.auth_key = ""
-            self.salt = 0x1A2B1A2B
-        else:
-            self.linux_tun_spi = 0xAAAA
-            self.scapy_tun_spi = 0xBBBB
-            self.crypt_algo = "NULL"  # scapy name
-            self.crypt_key = ""
-            self.auth_algo = "HMAC-SHA1-96"  # scapy name
-            self.auth_key = binascii.unhexlify(
-                "0123456789ABCDEF0123456789ABCDEF01234567"
-            )
-            self.crypt_salt = ""
-            self.salt = None
-
-        self.flags = 0
-        self.nat_header = None
-
-
-def config_tun_params(p, tun_if, use_esn=False, mtu=1500):
-    ip_class_by_addr_type = {socket.AF_INET: IP, socket.AF_INET6: IPv6}
-    lcl = p.scapy_tun_sa = iptfs.SecurityAssociation(
-        ESP,
-        spi=p.scapy_tun_spi,
-        crypt_algo=p.crypt_algo,
-        crypt_key=p.crypt_key + p.crypt_salt,
-        auth_algo=p.auth_algo,
-        auth_key=p.auth_key,
-        tunnel_header=ip_class_by_addr_type[p.addr_type](
-            src=tun_if.local_addr, dst=tun_if.remote_addr
-        ),
-        nat_t_header=p.nat_header,
-        esn_en=use_esn,
-        mtu=mtu,
-    )
-    rem = p.linux_tun_sa = iptfs.SecurityAssociation(
-        ESP,
-        spi=p.linux_tun_spi,
-        crypt_algo=p.crypt_algo,
-        crypt_key=p.crypt_key + p.crypt_salt,
-        auth_algo=p.auth_algo,
-        auth_key=p.auth_key,
-        tunnel_header=ip_class_by_addr_type[p.addr_type](
-            dst=tun_if.local_addr, src=tun_if.remote_addr
-        ),
-        nat_t_header=p.nat_header,
-        esn_en=use_esn,
-        mtu=mtu,
-    )
-    return lcl, rem
 
 
 def send_gratuitous_arp(ip=None, mac=None, iface=None):
@@ -211,10 +142,12 @@ def chunkit(lst, chunk):
         yield lst[i : i + chunk]
 
 
-def run(params, tun_if, args):
+def run(tun_if, args):
     mtu = args.mtu
 
-    lsa, rsa = config_tun_params(params, tun_if, mtu=mtu)
+    osa, sa = create_scapy_sa_pair(
+        mtu=mtu, addr1=tun_if.remote_addr, addr2=tun_if.local_addr
+    )
     inner_ip_overhead = len(IP() / ICMP(seq=1))
 
     psize = max(args.psize, inner_ip_overhead)
@@ -222,7 +155,7 @@ def run(params, tun_if, args):
         if args.pmax:
             pmaxsize = max(args.pmax, args.psize)
         else:
-            pmaxsize = mtu - inner_ip_overhead - lsa.get_ipsec_overhead()
+            pmaxsize = mtu - inner_ip_overhead - sa.get_ipsec_overhead()
 
         if args.count:
             pcount = args.count
@@ -251,9 +184,7 @@ def run(params, tun_if, args):
     )
     maxsz = max(len(x) for x in opkts)
     logging.info("GENERATED %s inner packets max size %s", len(opkts), maxsz)
-    encpkts = iptfs.gen_encrypt_pktstream_pkts(
-        lsa, tun_if, mtu, opkts, dontfrag=args.df
-    )
+    encpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=args.df)
     encpkts = tun_if.prep_pkts(encpkts)
 
     for chunk in chunkit(encpkts, 10):
@@ -289,7 +220,7 @@ def run(params, tun_if, args):
         try:
             decpkts = []
             for ippkt in ippkts:
-                decpkts.append(rsa.decrypt(ippkt))
+                decpkts.append(osa.decrypt(ippkt))
             pkts = iptfs.decap_frag_stream(decpkts)
             logging.info(
                 "DECAP %s inner packets from %s ipsec packets", len(pkts), nippkts
@@ -338,10 +269,7 @@ def main(*args):
         sys.exit(2)
 
     conf.iface = args.iface
-
     tun_if = Interface(args.iface, local_addr=args.local, remote_addr=args.remote)
-    params = IPsecIPv4Params()
-    params.remote_tun_if_host = tun_if.remote_addr
 
     # The IP may have been removed from the intf to keep the kernel out of things
     # So we need to do arp.
@@ -353,9 +281,9 @@ def main(*args):
     # pkts = t.stop(join=True)
 
     try:
-        ec = run(params, tun_if, args)
+        ec = run(tun_if, args)
     except Exception as error:
-        logging.error("Unexpected exception: %s", error)
+        logging.error("Unexpected exception: %s", error, exc_info=True)
         ec = 255
 
     logging.info("FINISH")

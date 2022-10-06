@@ -59,8 +59,8 @@ async def network_up(unet):
 
 
 #                             192.168.0.0/24
-#   --+-------------------+------ mgmt0 -------+----
-#     | .1                | .2                 | .3
+#   --+-------------------+------ mgmt0 -------+------
+#     | .1                | .2                 | .254
 #   +----+              +----+              +------+
 #   | h1 | --- net0 --- | r1 | --- net1 --- | unet |
 #   +----+ .1        .2 +----+ .2        .3 +------+
@@ -109,7 +109,7 @@ def _wait_output(p, regex, timeout=120):
     assert None, f"Failed to get output withint {timeout}s"
 
 
-async def gen_pkt_test(unet, astepf, ipsec_expect=None, decap_expect=None, **kwargs):
+async def gen_pkt_test(unet, astepf, **kwargs):
     pktbin = os.path.join(SRCDIR, "genpkt.py")
 
     args = [f"--{x}={y}" for x, y in kwargs.items()]
@@ -121,8 +121,7 @@ async def gen_pkt_test(unet, astepf, ipsec_expect=None, decap_expect=None, **kwa
     try:
         _ = _wait_output(p, "STARTING")
 
-        waitfor = r"DECAP (\d+) inner packets from (\d+) ipsec packets"
-        m = _wait_output(p, waitfor)
+        m = _wait_output(p, r"DECAP (\d+) inner packets")
         ndecap = int(m.group(1))
         assert ndecap == 80, f"Wrong number ({ndecap}, expected 80) return IP packets"
 

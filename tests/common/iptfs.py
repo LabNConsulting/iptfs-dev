@@ -420,9 +420,8 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False):
 
 
 def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R0913
-    sa, sw_intf, mtu, pkts, dontfrag=False
+    sa, mtu, pkts, dontfrag=False
 ):
-    del sw_intf
 
     # for pkt in pkts:
     #     self.logger.debug(" XXX: len: {} pkt: {}".format(
@@ -431,7 +430,6 @@ def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R091
     ipsec_payload_size = mtu - sa.get_ipsec_overhead()
     ipsec_payload_size = (ipsec_payload_size // 4) * 4
     tunpkts = [
-        # Ether(src=sw_intf.remote_mac, dst=sw_intf.local_mac) /
         sa.encrypt_esp_raw(rawpkt)
         for rawpkt in raw_iptfs_stream(pkts, ipsec_payload_size, dontfrag)
     ]
@@ -501,12 +499,12 @@ class SecurityAssociation(ipsec.SecurityAssociation):
     This class is responsible of "encryption" and "decryption" of IPsec IPTFS packets.
     """
 
-    def __init__(self, proto, spi, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.mtu = 1500
         if "mtu" in kwargs:
             self.mtu = kwargs["mtu"]
             del kwargs["mtu"]
-        super().__init__(proto, spi, **kwargs)
+        super().__init__(*args, **kwargs)
         self.ipsec_overhead = self._get_ipsec_overhead()
 
     def get_ipsec_overhead(self):

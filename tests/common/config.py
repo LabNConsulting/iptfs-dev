@@ -20,6 +20,12 @@
 #
 "Common code for configuring tests."
 
+import binascii
+import ipaddress as ip
+import shlex
+
+from . import iptfs
+
 
 async def _network_up(unet, r1only=False):
     h1 = unet.hosts["h1"] if "h1" in unet.hosts else None
@@ -352,3 +358,57 @@ async def setup_routed_tun(
         r1.conrepl.cmd_raises("ip route add 48.0.0.0/8 dev ipsec0 src 10.0.1.2")
         if not r1only:
             r2.conrepl.cmd_raises("ip route add 16.0.0.0/8 dev ipsec0 src 10.0.1.3")
+
+
+def create_scapy_sa_pair(
+    mode="iptfs",
+    use_gcm=True,
+    use_nullnull=False,
+    enc_null=False,
+    mtu=1500,
+    addr1="10.0.1.2",
+    addr2="10.0.1.3",
+):
+    from scapy.layers import ipsec
+    from scapy.layers.inet import IP
+    from scapy.layers.inet6 import IPv6
+
+    linux_algo_to_scapy = {
+        "rfc4106(gcm(aes))": "AES-GCM",
+        "cipher_null": "NULL",
+        "cbc(aes)": "AES-CBC",
+        "hmac(sha1)": "HMAC-SHA1-96",
+    }
+
+    def key_str_to_bytes(es):
+        if es.startswith("0x"):
+            es = es[2:]
+        return binascii.unhexlify(es)
+
+    spi_1to2, spi_2to1, sa_auth, sa_enc = get_sa_values(use_gcm, use_nullnull, enc_null)
+    sa_auth = shlex.split(sa_auth)
+    sa_enc = shlex.split(sa_enc)
+
+    kwargs = {
+        "auth_key": key_str_to_bytes(sa_auth[2]) if sa_auth else "",
+        "auth_algo": linux_algo_to_scapy[sa_auth[1]] if sa_auth else None,
+        "crypt_key": key_str_to_bytes(sa_enc[2]),
+        "crypt_algo": linux_algo_to_scapy[sa_enc[1]],
+    }
+    if mode == "iptfs":
+        SA = iptfs.SecurityAssociation
+        kwargs["mtu"] = mtu
+    else:
+        SA = ipsec.SecurityAssociation
+
+    if isinstance(ip.ip_address(addr1), ip.IPv4Address):
+        ip1 = IP(src=addr1, dst=addr2)
+        ip2 = IP(src=addr2, dst=addr1)
+    else:
+        ip1 = IPv6(src=addr1, dst=addr2)
+        ip2 = IPv6(src=addr2, dst=addr1)
+
+    sa_1to2 = SA(ipsec.ESP, spi_1to2, tunnel_header=ip1, **kwargs)
+    sa_2to1 = SA(ipsec.ESP, spi_2to1, tunnel_header=ip2, **kwargs)
+
+    return sa_1to2, sa_2to1
