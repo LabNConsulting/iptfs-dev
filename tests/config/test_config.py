@@ -74,10 +74,10 @@ async def test_config_combo(unet, astepf, psize, qsize, dtime, rewin, idelay, df
 
     # Measure the delay
     m = re.search(r"time=(\d+(.\d+)?) ms", output)
+    # The CI test is experiencing 40ms RTT.. really horrible
     if idelay:
-        assert 99 < float(m.group(1)) < 130.0
+        assert 99 < float(m.group(1)) < 160.0
     else:
-        # The CI test is showing 40ms .. really horrible.
         assert 0 < float(m.group(1)) < 60.0
 
     # # we can only test don't fragment with pkt-size
