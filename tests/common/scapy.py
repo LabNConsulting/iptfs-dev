@@ -32,6 +32,7 @@ from scapy.sendrecv import sendp, srp
 
 class Interface:
     "Interface class for interacting with scapy."
+
     def __init__(self, name, local_addr, remote_addr):
         self.name = name
         self.local_mac = get_if_hwaddr(name)
@@ -57,7 +58,7 @@ class Interface:
     def send_gratuitous_arp(self):
         # result = sr1(ARP(op=ARP.who_has, psrc='192.168.1.2', pdst='192.168.1.1'))
         pkt = Ether(src=self.local_mac, dst="ff:ff:ff:ff:ff:ff") / ARP(
-            psrc=self.local_addr, pdst=self.remote_addr
+            hwsrc=self.local_mac, psrc=self.local_addr, pdst=self.remote_addr
         )
         ans, _ = srp(pkt, iface=self.name)
         return ans

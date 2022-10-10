@@ -59,6 +59,21 @@ class Args:
     user_packet_size: int = 0
 
 
+class Timeout:
+    """An object to passively monitor for timeouts."""
+
+    def __init__(self, delta):
+        self.started_on = datetime.datetime.now()
+        self.expires_on = self.started_on + datetime.timedelta(seconds=delta)
+
+    def elapsed(self):
+        elapsed = datetime.datetime.now() - self.started_on
+        return elapsed.total_seconds()
+
+    def is_expired(self):
+        return datetime.datetime.now() > self.expires_on
+
+
 def chunkit(lst, chunk):
     for i in range(0, len(lst), chunk):
         yield lst[i : i + chunk]

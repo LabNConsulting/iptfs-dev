@@ -303,6 +303,8 @@ def strip_all_pads(pkts):
     return pkts[: dlen - i]
 
 
+# XXX we should refactor this into a loop so we can defrag segments of a stream of
+# packets.
 def decap_frag_stream(pkts):
     """
     Given a list of IPTFS packets, join fragments and strip padding.
