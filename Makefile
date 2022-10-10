@@ -17,13 +17,16 @@ rootfs: output-buildroot/images/rootfs.cpio.gz
 # These aren't phoney but we always want to descend to check them with make
 .PHONY: output-linux/arch/x86/boot/bzImage output-buildroot/images/rootfs.cpio.gz
 
+linux-menuconfig:
+	make -C linux O=../output-linux menuconfig
+
 output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
 	mkdir -p output-linux
 	make -C linux -j$(shell nproc) O=../output-linux
 
 output-buildroot/images/rootfs.cpio.gz: output-buildroot output-buildroot/.config
 	mkdir -p output-buildroot
-	make -C buildroot -j$(shell nproc) -V=1 O=../output-buildroot
+	make -C buildroot -j$(shell nproc) V=1 O=../output-buildroot
 
 output-linux/.config: linux.config
 	cp -p $< $@
