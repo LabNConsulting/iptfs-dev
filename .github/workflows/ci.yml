@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install build depencies
-        run: sudo apt-get install -y ccache device-tree-compiler libelf-dev
+        run: sudo apt-get install -y ccache device-tree-compiler libelf-dev xz-utils
 
       - name: Checkout repos
         run: git clone --depth 1 https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
@@ -19,21 +19,26 @@ jobs:
         id: linux-cache
         uses: actions/cache@v3
         with:
-          path: output-linux.tar.gz
+          path: output-linux.tar.xz
           # need a glob that doesn't match "stats" or TAG files
-          key: ${{ runner.os }}-kernel-${{ hashFiles('output-linux.tar.gz') }}
+          # key: ${{ runner.os }}-kernel-${{ hashFiles('linux.config', 'output-linux.tar.xz') }}
+          # We need a unique key name in order to save new versions
+          key: ${{ runner.os }}-kernel-${{ hashFiles('linux.config', 'output-linux.tar.xz') }}
+          restore-keys: |
+            key: ${{ runner.os }}-kernel-
 
       - name: Build Kernel
         run: |
-          if [ -f output-linux.tar.gz ]; then
+          if [ -f output-linux.tar.xz ]; then
             echo "Cache found, extracting"
-            tar -xpzf output-linux.tar.gz
+            tar -xpJf output-linux.tar.xz
             # If the kernel config is changed just wipe the cache
             if ! diff -q -u1 linux.config output-linux/.config -I '^[ \t]*#' -I '^[ \t]*$' 2>/dev/null; then
               echo "Kernel configs differ erasing cache"
-              rm -rf output-linux output-linux.tar.gz
+              rm -rf output-linux output-linux.tar.xz
             fi
           fi
+
           export CCACHE_DIR=$PWD/output-linux/.ccache
           if [ ! -d output-linux ]; then
             echo "Creating new output directory"
@@ -47,11 +52,12 @@ jobs:
           [ -e arch/x86/boot/bzImage ] && mv arch/x86/boot/bzImage ..
           # Ccache keeps it's own objects
           make clean
+
           # tar up the remaining files including .ccache
           cd ..
           echo "Collecting new cache contents"
-          tar -czf output-linux.tar.gz output-linux
-          ls -l output-linux.tar.gz
+          tar -cf - output-linux | xz -T0 -c > output-linux.tar.xz
+          ls -hl output-linux.tar.xz
 
       - name: Archive kernel bzImage
         uses: actions/upload-artifact@v3
@@ -64,7 +70,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Checkout repos
         run: make setup SHALLOW_CLONE=1
@@ -76,21 +82,40 @@ jobs:
         id: buildroot-cache
         uses: actions/cache@v3
         with:
-          path: output-buildroot
-          key: ${{ runner.os }}-br-${{ hashFiles('buildroot.config') }}
+          path: output-buildroot.tar.xz
+          key: ${{ runner.os }}-br-${{ hashFiles('buildroot.config', 'output-buildroot.tar.xz') }}
+          restore-keys: |
+            key: ${{ runner.os }}-br-
 
       - name: Build Rootfs
         run: |
-          if ! diff -q -u1 buildroot.config output-buildroot/.config -I '^[ \t]*#' -I '^[ \t]*$' 2>/dev/null; then
-            echo "Buildroot configs differ erasing cache"
-            rm -rf output-buildroot
-            mkdir output-buildroot
-            cp buildroot.config output-buildroot/.config
+          if [ -f output-buildroot.tar.xz ]; then
+            echo "Cache found, extracting"
+            tar -xpJf output-buildroot.tar.xz
+            # If the buildroot config is changed just wipe the cache
+            if ! diff -q -u1 buildroot.config output-buildroot/.config -I '^[ \t]*#' -I '^[ \t]*$' 2>/dev/null; then
+              echo "Buildroot configs differ erasing cache"
+              rm -rf output-buildroot
+            fi
           fi
-          cd output-buildroot
+
+          if [ ! -d output-buildroot ]; then
+            echo "Creating new output directory"
+            mkdir -p output-buildroot
+            cp -p buildroot.config output-buildroot/.config
+            cd output-buildroot
+          else
+            cd output-buildroot
+            make -j6 O=$PWD -C ../buildroot iproute2-rebuild
+          fi
           make -j6 O=$PWD -C ../buildroot
-          make -j6 O=$PWD -C ../buildroot iproute2-rebuild
-          make -j6 O=$PWD -C ../buildroot
+
+          # tar up the remaining files including .ccache
+          cd ..
+          echo "Collecting new cache contents: $(date)"
+          tar -cf - output-buildroot | xz -T0 -c > output-buildroot.tar.xz
+          ls -hl output-buildroot.tar.xz
+          echo "Done collecting new cache contents: $(date)"
 
       - name: Archive buildroot rootfs.cpio.gz
         uses: actions/upload-artifact@v3
@@ -104,7 +129,7 @@ jobs:
     needs: ["build-kernel", "build-rootfs"]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install test depencies
         run: |
