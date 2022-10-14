@@ -24,7 +24,7 @@ max-line-length = 88
 
 addopts = "-s"
 asyncio_mode = "auto"
-norecursedirs = "tests/manual/*,tests/podman-trex-extract/*"
+norecursedirs = "tests/manual tests/podman-trex-extract tests/trex*"
 
 testpaths = [
         "tests",

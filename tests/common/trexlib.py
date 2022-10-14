@@ -25,6 +25,14 @@ import collections
 import ipaddress
 import logging
 
+# import scapy.arch
+from scapy.all import conf  # pylint: disable
+
+# from scapy.arch import get_if_addr, get_if_hwaddr
+
+conf.use_dnet = False
+
+
 # from trex_stl_lib.api import STLVM
 from trex_stl_lib.api import (
     ICMP,

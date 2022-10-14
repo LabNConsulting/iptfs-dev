@@ -65,6 +65,10 @@ async def network_up(unet):
     # # Remove IP from our scapy node
     unet.cmd_raises("ip addr del 10.0.1.3/24 dev net1")
 
+    #
+    # Scapy settings
+    #
+
     # Defaults to 64k which leads to lots of packet drops on sniffers
     conf.bufsize = 2**18
 
@@ -231,7 +235,11 @@ def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30):
         _decpkts = process_esp_pkts(_esppkts, -1)
         decpkts.extend(_decpkts)
 
-    inner_pkts = iptfs.decap_frag_stream(decpkts)
+    _pkts = iptfs.decap_frag_stream(decpkts)
+
+    # Greb echo replies.
+    inner_pkts = [x for x in _pkts if x.haslayer(ICMP) and x[ICMP].type == 0]
+    other_inner_pkts = [x for x in _pkts if not x.haslayer(ICMP) or x[ICMP].type != 0]
 
     nrxs, ntxs, rxerr, txerr = get_intf_stats(iface)
     assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
@@ -239,7 +247,10 @@ def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30):
     logging.info("STATS for %s: RX %s TX %s", iface, nrxs - rxs, ntxs - txs)
 
     logging.info(
-        "DECAP %s inner packets from %s ipsec packets", len(inner_pkts), len(outer_pkts)
+        "DECAP %s inner ICMP replies and %s other pkts from %s ipsec pkts",
+        len(inner_pkts),
+        len(other_inner_pkts),
+        len(outer_pkts),
     )
     return inner_pkts, outer_pkts, net0results
 
@@ -256,6 +267,7 @@ async def gen_pkt_test(
     count=0,
     wrap=False,
     iface="net1",
+    nofail=False,
 ):
     osa, sa = create_scapy_sa_pair(
         mtu=mtu, addr1=unet.tun_if.remote_addr, addr2=unet.tun_if.local_addr
@@ -267,7 +279,8 @@ async def gen_pkt_test(
         if pmax:
             pmaxsize = max(pmax, psize)
         else:
-            pmaxsize = mtu - inner_ip_overhead - sa.get_ipsec_overhead()
+            pmaxsize = mtu - sa.get_ipsec_overhead()
+            logging.info("setting pmaxsize to %s", pmaxsize)
 
         if count:
             pcount = count
@@ -287,7 +300,7 @@ async def gen_pkt_test(
         unet.tun_if.local_addr,
         ping,
         payload_size=psize - inner_ip_overhead,
-        payload_spread=pmaxsize,
+        payload_spread=pmaxsize - inner_ip_overhead if pmaxsize else pmaxsize,
         inc=pstep,
         count=pcount,
     )
@@ -315,17 +328,16 @@ async def gen_pkt_test(
     nopkts = len(opkts)
     if nnet0pkts != nopkts:
         logging.error("host replies (%s) != sent pings (%s)", nnet0pkts, nopkts)
-    # assert (
-    #     nnet0pkts == nopkts
-    # ), f"inner packets, sent pings {nopkts} host replies {nnet0pkts} recv replies {npkts}"
-
-    if npkts != nopkts:
+    if npkts != nopkts and not nofail:
         logging.error("received replies (%s) != sent pings (%s)", npkts, nopkts)
-    # assert npkts == nopkts, f"inner packets, sent {nopkts} received {npkts}"
+    elif nofail:
+        logging.debug("received replies (%s) != sent pings (%s)", npkts, nopkts)
 
-    assert (
-        nnet0pkts == nopkts and npkts == nopkts
-    ), f"inner packets, sent {nopkts} host replies {nnet0pkts} received {npkts}"
+    if not nofail:
+        assert (
+            nnet0pkts == nopkts and npkts == nopkts
+        ), f"inner packets, sent {nopkts} host replies {nnet0pkts} received {npkts}"
+    return npkts, nopkts, nnet0pkts
 
 
 async def _gen_pkt_test(unet, astepf, expected=None, **kwargs):
@@ -364,19 +376,30 @@ async def _gen_pkt_test(unet, astepf, expected=None, **kwargs):
             p.wait()
 
 
-async def test_spread_with_frag(unet, astepf):
-    await setup_policy_tun(unet, r1only=True)
+async def test_spread_recv_frag(unet, astepf):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
     await astepf("Prior to gen_pkt_test")
-    await gen_pkt_test(unet, astepf, psize=0, pmax=1200, pstep=1, wrap=3)
+    await gen_pkt_test(unet, astepf, psize=0, pstep=1)
+    # await gen_pkt_test(unet, astepf, psize=1400, pmax=1438, pstep=1)
 
 
-async def test_packet_fragmentation(unet, astepf):
-    await setup_policy_tun(unet, r1only=True)
+async def test_spread_recv_frag_toobig_reply(unet, astepf):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
+    await astepf("Prior to gen_pkt_test")
+    npkts, nopkts, nnet0pkts = await gen_pkt_test(
+        unet, astepf, psize=1442, pmax=1443, pstep=1, nofail=True
+    )
+    # one echo reply is too big
+    assert npkts == 1 and nnet0pkts == 2 and nopkts == 2
+
+
+async def test_recv_frag(unet, astepf):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
     await astepf("Prior to gen_pkt_test")
     await gen_pkt_test(unet, astepf, psize=411, mtu=500, pstep=1, count=2)
 
 
 async def test_small_pkt_agg(unet, astepf):
-    await setup_policy_tun(unet, r1only=True)
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
     await astepf("Prior to gen_pkt_test")
     await gen_pkt_test(unet, astepf, count=80)
