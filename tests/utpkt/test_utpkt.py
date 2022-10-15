@@ -127,7 +127,7 @@ def _wait_output(p, regex, timeout=120):
     assert None, f"Failed to get output withint {timeout}s"
 
 
-def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30):
+def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30, faster=False):
 
     rxs, txs, rxerr, txerr = get_intf_stats(iface)
     assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
@@ -176,7 +176,11 @@ def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30):
     outer_pkts = []
     decpkts = []
 
-    sendp(encpkts, iface=iface, inter=0.001)
+    # Really we want to check for kvm
+    if faster or len(encpkts) <= 20:
+        sendp(encpkts, iface=iface, inter=0.001)
+    else:
+        sendp(encpkts, iface=iface, inter=0.01)
 
     # nchunk = 0
     # for chunk in chunkit(encpkts, chunksize):
@@ -310,17 +314,18 @@ async def gen_pkt_test(
     encpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=df)
     encpkts = unet.tun_if.prep_pkts(encpkts)
 
-    output = unet.hosts["r1"].conrepl.cmd_nostatus("ip -s link show eth2")
+    r1 = unet.hosts["r1"]
+    output = r1.conrepl.cmd_nostatus("ip -s link show eth2")
     logging.info("r1 eth2:\n%s", output)
-    output = unet.hosts["r1"].conrepl.cmd_nostatus("ip -s link show eth1")
+    output = r1.conrepl.cmd_nostatus("ip -s link show eth1")
     logging.info("r1 eth1:\n%s", output)
 
-    pkts, _, net0pkts = send_recv_iptfs_pkts(osa, encpkts, iface)
-    # pkts, _, _ = send_recv_iptfs_pkts(osa, encpkts, iface)
+    is_kvm = r1.is_kvm if hasattr(r1, "is_kvm") else False
+    pkts, _, net0pkts = send_recv_iptfs_pkts(osa, encpkts, iface, faster=is_kvm)
 
-    output = unet.hosts["r1"].conrepl.cmd_nostatus("ip -s link show eth2")
+    output = r1.conrepl.cmd_nostatus("ip -s link show eth2")
     logging.info("r1 eth2:\n%s", output)
-    output = unet.hosts["r1"].conrepl.cmd_nostatus("ip -s link show eth1")
+    output = r1.conrepl.cmd_nostatus("ip -s link show eth1")
     logging.info("r1 eth1:\n%s", output)
 
     nnet0pkts = len(net0pkts)
