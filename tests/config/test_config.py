@@ -63,8 +63,6 @@ async def test_config_combo(unet, astepf, psize, qsize, dtime, rewin, idelay, df
 
     args = (x for x in [psize, qsize, dtime, rewin, idelay, df] if x)
     args = " ".join(args)
-    if args:
-        args = "iptfs-opts " + args
 
     await astepf("before setup: args: " + args)
     await setup_routed_tun(unet, iptfs_opts=args)

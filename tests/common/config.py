@@ -153,13 +153,6 @@ async def setup_policy_tun(
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"] if "r2" in unet.hosts else None
 
-    # XXX hack until we support fragmentation
-    if mode == "iptfs":
-        if not iptfs_opts:
-            iptfs_opts = "dont-frag"
-        elif iptfs_opts.find("dont-frag") == -1:
-            iptfs_opts += " dont-frag"
-
     if iptfs_opts:
         iptfs_opts = "iptfs-opts " + iptfs_opts
 
@@ -268,13 +261,6 @@ async def setup_routed_tun(
 ):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"] if "r2" in unet.hosts else None
-
-    # XXX hack until we support fragmentation
-    if mode == "iptfs":
-        if not iptfs_opts:
-            iptfs_opts = "dont-frag"
-        elif iptfs_opts.find("dont-frag") == -1:
-            iptfs_opts += " dont-frag"
 
     if iptfs_opts:
         iptfs_opts = "iptfs-opts " + iptfs_opts
