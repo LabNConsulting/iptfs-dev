@@ -86,3 +86,6 @@ for symdir in trex trex_stl_lib; do
     ln -fs $libdir/$symdir $symlink
     set +x
 done
+set -x
+ln -fs $tdir/external_libs $TESTSDIR/trex-external-libs
+set +x

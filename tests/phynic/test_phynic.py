@@ -42,6 +42,15 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @pytest.fixture(scope="module", autouse=True)
+async def checkrun(pytestconfig):
+    if not pytestconfig.option.enable_physical:
+        pytest.skip(
+            "Physical interface test being skipped, pass --enable-physical",
+            allow_module_level=True,
+        )
+
+
+@pytest.fixture(scope="module", autouse=True)
 async def network_up(unet):
     await _network_up(unet)
 

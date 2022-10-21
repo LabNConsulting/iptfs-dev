@@ -60,7 +60,7 @@ kinds:
       - "%RUNDIR%/s:/tmp/qemu-sock"
 
   - name: trex
-    # image: quay.io/chopps/trex:v2.98
+    # image: quay.io/chopps/trex:v3.00
     # privileged: true
     # cap_add:
     #   - ALL

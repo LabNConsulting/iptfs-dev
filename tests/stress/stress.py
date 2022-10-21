@@ -19,11 +19,20 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 "Shared functionality between virtual and physical stress tests."
+import glob
 import logging
 import os
+import sys
 import time
 
 import pytest
+
+# So gross.. but trex plays stupid games with embedded pkgs and path
+SRCDIR = os.path.dirname(os.path.abspath(__file__))
+trexlib = os.path.join(os.path.dirname(SRCDIR), "trex-external-libs")
+scapydir = glob.glob(trexlib + "/scapy*")[0]
+sys.path[0:0] = [scapydir]
+
 from common import testutil, trexlib
 from common.config import setup_policy_tun, toggle_ipv6
 from trex_stl_lib.api import STLClient
@@ -34,8 +43,6 @@ from trex_stl_lib.api import STLClient
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
-
-SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 
 #                    192.168.0.0/24
