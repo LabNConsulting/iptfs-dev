@@ -186,3 +186,26 @@ jobs:
         with:
           name: test-logs-tar
           path: test-logs.tar.bz2
+
+  deploy:
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: ["build-kernel", "build-rootfs", "test"]
+    steps:
+
+      - name: Download kernel bzImage
+        uses: actions/download-artifact@v3
+        with:
+          name: kernel-bzImage
+
+      - name: Download buildroot rootfs.cpio.gz
+        uses: actions/download-artifact@v3
+        with:
+          name: rootfs-compressed-cpio
+
+      - name: Deploy
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            bzImage
+            rootfs.cpio.gz
