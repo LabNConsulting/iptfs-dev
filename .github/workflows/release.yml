@@ -15,12 +15,15 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: CI
+          run_number: ${{ github.event.workflow_run.run_number }}
           name: kernel-bzImage
           path: bzImage
+          if_no_artifact_found: warn
       - name: Download the buildroot artifact
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: CI
+          run_number: ${{ github.event.workflow_run.run_number }}
           name: rootfs-compressed-cpio
           path: rootfs.cpio.gz
       - name: Deploy
