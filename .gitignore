@@ -15,6 +15,7 @@ __pycache__/
 /tests/trex
 /tests/trex_stl_lib
 /tests/podman-trex-extract/
+/tests/trex-external-libs
 /.ccls-cache/
 /root-key*
 /exec-pytest.log
