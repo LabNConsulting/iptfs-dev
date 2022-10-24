@@ -55,7 +55,9 @@ kinds:
       cmdline-extra: "acpi=off nokaslr"
       memory: "2048M"
       kvm: true
-      ncpu: 4
+      ncpu: 2
+      console:
+        timeout: 180
     volumes:
       - "%RUNDIR%/s:/tmp/qemu-sock"
 
