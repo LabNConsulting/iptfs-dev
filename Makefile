@@ -20,6 +20,9 @@ rootfs: output-buildroot/images/rootfs.cpio.gz
 linux-menuconfig:
 	make -C linux O=../output-linux menuconfig
 
+br-menuconfig:
+	make -C buildroot O=../output-buildroot menuconfig
+
 output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
 	mkdir -p output-linux
 	make -C linux -j$(shell nproc) O=../output-linux
