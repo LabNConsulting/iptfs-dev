@@ -160,29 +160,36 @@ jobs:
           mkdir -p output-buildroot/images/
           mv rootfs.cpio.gz output-buildroot/images/
 
+      - name: Print the environment under sudo
+        run: sudo -E env
+
       - name: Config test
         run: |
           set -e
-          sudo python3 -m pytest -s tests/config | tee /tmp/unet-test/conf-results.txt
-          grep -v SKIPPED  /tmp/unet-test/conf-results.txt
+          tmpf=/tmp/test-results-$$.txt
+          sudo -E env CI=$CI python3 -m pytest -s tests/config | tee $tmpf
+          grep -v SKIPPED $tmpf
 
       - name: Errors test
         run: |
           set -e
-          sudo python3 -m pytest -s tests/errors | tee /tmp/unet-test/errors-results.txt
-          grep -v SKIPPED /tmp/unet-test/errors-results.txt
+          tmpf=/tmp/test-results-$$.txt
+          sudo -E env CI=$CI python3 -m pytest -s tests/errors | tee $tmpf
+          grep -v SKIPPED $tmpf
 
       - name: Simple test
         run: |
           set -e
-          sudo python3 -m pytest -s tests/simplenet | tee /tmp/unet-test/simple-results.txt
-          grep -v SKIPPED /tmp/unet-test/simple-results.txt
+          tmpf=/tmp/test-results-$$.txt
+          sudo -E env CI=$CI python3 -m pytest -s tests/simplenet | tee $tmpf
+          grep -v SKIPPED $tmpf
 
       - name: UT packet test
         run: |
           set -e
-          sudo python3 -m pytest -s tests/utpkt | tee /tmp/unet-test/ut-results.txt
-          grep -v SKIPPED /tmp/unet-test/ut-results.txt
+          tmpf=/tmp/test-results-$$.txt
+          sudo python3 -m pytest -s tests/utpkt | tee $tmpf
+          grep -v SKIPPED $tmpf
 
       - name: Collect test logs
         if: ${{ always() }}
