@@ -27,7 +27,7 @@ import sys
 from common import iptfs
 from common.config import create_scapy_sa_pair
 from common.scapy import Interface, gen_ippkts
-from common.testutil import chunkit, get_intf_stats
+from common.util import chunkit, get_intf_stats
 from scapy.config import conf
 from scapy.layers.inet import ICMP, IP
 from scapy.layers.ipsec import ESP

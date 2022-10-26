@@ -18,7 +18,9 @@
 # with this program; see the file COPYING; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
+# pylint: disable=wrong-import-position
 "Shared functionality between virtual and physical stress tests."
+
 import glob
 import logging
 import os
@@ -29,11 +31,11 @@ import pytest
 
 # So gross.. but trex plays stupid games with embedded pkgs and path
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
-trexlib = os.path.join(os.path.dirname(SRCDIR), "trex-external-libs")
+trexlib = os.path.join(os.path.dirname(SRCDIR), "external_libs")
 scapydir = glob.glob(trexlib + "/scapy*")[0]
 sys.path[0:0] = [scapydir]
 
-from common import testutil, trexlib
+from common import trexlib, trexutil
 from common.config import setup_policy_tun, toggle_ipv6
 from trex_stl_lib.api import STLClient
 
@@ -145,7 +147,7 @@ async def _test_policy_small_pkt(unet, rate, mode="iptfs", duration=10, connecti
 
     # await async_pause_test("after policy setup")
 
-    args = testutil.Args(
+    args = trexutil.Args(
         rate=rate, user_packet_size=40, duration=duration, connections=connections
     )
 
@@ -167,9 +169,9 @@ async def _test_policy_small_pkt(unet, rate, mode="iptfs", duration=10, connecti
         )
 
     dutlist = []
-    imix_table, pps, avg_ipsize, imix_desc = testutil.get_imix_table(args, c)
+    imix_table, pps, avg_ipsize, imix_desc = trexutil.get_imix_table(args, c)
     logging.info("pps: %s av_ipsize: %s desc: %s", pps, avg_ipsize, imix_desc)
-    trex_stats, vstats, _ = await testutil.run_trex_cont_test(
+    trex_stats, vstats, _ = await trexutil.run_trex_cont_test(
         args,
         c,
         dutlist,
@@ -179,14 +181,14 @@ async def _test_policy_small_pkt(unet, rate, mode="iptfs", duration=10, connecti
         # extended_stats=True)
     )
     c.disconnect()
-    testutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)
+    trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)
     # await async_cli(unet)
 
 
 async def _test_policy_imix(unet, rate, mode="iptfs", duration=10, connections=1):
     await setup_policy_tun(unet, ipsec_intf="eth1", mode=mode, trex=True)
 
-    args = testutil.Args(
+    args = trexutil.Args(
         rate=rate, old_imix=True, duration=duration, connections=connections
     )
 
@@ -208,11 +210,11 @@ async def _test_policy_imix(unet, rate, mode="iptfs", duration=10, connections=1
         )
 
     dutlist = []
-    imix_table, pps, avg_ipsize, imix_desc = testutil.get_imix_table(
+    imix_table, pps, avg_ipsize, imix_desc = trexutil.get_imix_table(
         args, c, max_imix_size=1400
     )
     logging.info("pps: %s av_ipsize: %s desc: %s", pps, avg_ipsize, imix_desc)
-    trex_stats, vstats, _ = await testutil.run_trex_cont_test(
+    trex_stats, vstats, _ = await trexutil.run_trex_cont_test(
         args,
         c,
         dutlist,
@@ -222,7 +224,7 @@ async def _test_policy_imix(unet, rate, mode="iptfs", duration=10, connections=1
         # extended_stats=True)
     )
     c.disconnect()
-    testutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)
+    trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)
     # await async_cli(unet)
 
 

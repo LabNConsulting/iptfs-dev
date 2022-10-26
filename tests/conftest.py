@@ -18,8 +18,14 @@
 # with this program; see the file COPYING; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
-"""Fixtures and other utilities imported from munet for testing."""
 # pylint: disable=wildcard-import,unused-wildcard-import
+# pylint: disable=wrong-import-position
+"""Fixtures and other utilities imported from munet for testing."""
+
+import glob
+import os
+import sys
+
 from munet.testing.fixtures import *  # noqa
 from munet.testing.hooks import *  # noqa
 from munet.testing.hooks import pytest_addoption as _pytest_addoption
@@ -32,3 +38,19 @@ def pytest_addoption(parser):  # pylint: disable=E0102
         help="Enable the physical interface based tests",
     )
     return _pytest_addoption(parser)
+
+
+# This still doesn't work and
+# def pytest_collection_finish(session):
+#     found = False
+#     for item in session.items:
+#         if "stress" in str(item.path):
+#             logging.warning("Found stress test '%s', modifying sys.path", item.path)
+#             found = True
+#             break
+#     if found:
+#         # So gross.. but trex plays stupid games with embedded pkgs and path
+#         SRCDIR = os.path.dirname(os.path.abspath(__file__))
+#         trexlib = os.path.join(SRCDIR, "external_libs")
+#         scapydir = glob.glob(trexlib + "/scapy*")[0]
+#         sys.path[0:0] = [scapydir]

@@ -24,7 +24,7 @@ import argparse
 import logging
 import socket
 
-from testutil import convert_number, get_human_readable
+from common.util import convert_number, get_human_readable
 
 BLOCKSIZE = 2**20
 

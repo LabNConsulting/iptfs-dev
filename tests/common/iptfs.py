@@ -18,11 +18,13 @@
 # with this program; see the file COPYING; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
+"IPTFS Scapy Functionality"
 import logging
 import socket
 import struct
 from functools import partial
 
+from common.scapy import ppp
 from scapy.compat import orb, raw
 from scapy.config import conf
 from scapy.data import IP_PROTOS
@@ -58,6 +60,8 @@ def sizeof(x):
 
 # This was way too hard to figure out. :)
 class AllPadField(StrLenField):
+    "A field for representing all-pad content"
+
     def getfield(self, pkt, s):
         slen = len(s)
         return s[slen:], self.m2i(pkt, s[:slen])
@@ -67,6 +71,7 @@ class AllPadField(StrLenField):
 
 
 class IPTFSPad(Packet):
+    "An IPTFS pad packet"
     name = "IPTFSPad"
     fields_desc = [XByteField("zerotype", 0), AllPadField("pad", "")]
 
@@ -78,6 +83,7 @@ def fraglen_from(*args):
 
 
 class IPTFSFrag(Packet):
+    "An IPTFS Pcaket"
     __slots__ = ["fraglen"]
 
     fields_desc = [StrLenField("frag", None, length_from=fraglen_from)]
@@ -94,15 +100,15 @@ class IPTFSFrag(Packet):
 
 
 class IPTFSEndFrag(IPTFSFrag):
-    pass
+    "IPTFS packet ending a fragment"
 
 
 class IPTFSIPFrag(IPTFSFrag):
-    pass
+    "IPTFS packet containing a fragment"
 
 
 class IPTFSIPv6Frag(IPTFSFrag):
-    pass
+    "IPTFS packet containing an IPv6 fragment"
 
 
 def get_frag_class_and_len(data):
@@ -191,6 +197,7 @@ def _iptfs_decap_pkt_with_frags(ppkt, pkts, curpkt, data):
 
 
 class IPTFSWithFrags(Packet):
+    "An IPTFS packet which handles fragments"
 
     __slots__ = ["offset", "prevpkts"]
 
@@ -239,6 +246,7 @@ def iptfs_decap_pkt_nofrag(ppkt, pkts, curpkt, data):
 
 
 class IPTFS(Packet):
+    "An IPTFS Packet"
     name = "IPTFS"
     fields_desc = [
         FlagsField("flags", 0, 8, ["r0", "r1", "r2", "r3", "r4", "ECN", "CC", "V"]),
@@ -249,6 +257,7 @@ class IPTFS(Packet):
 
 
 class IPTFSHeader(Packet):
+    "An IPTFS Header"
     name = "IPTFSHeader"
     fields_desc = [
         FlagsField("flags", 0, 8, ["r0", "r1", "r2", "r3", "r4", "ECN", "CC", "V"]),
@@ -496,6 +505,93 @@ def gen_encrypt_pkts(sa, sw_intf, src, dst, count=1, payload_size=54):
     ]
 
 
+def verify_encrypted(src, dst, sa, expected_count, rxs):
+    decrypt_pkts = []
+    for rx in rxs:
+        # self.assert_packet_checksums_valid(rx)
+        assert len(rx) - len(Ether()) == rx[IP].len
+        dpkts = sa.decrypt(rx[IP]).packets
+        dpkts = [x for x in dpkts if not isinstance(x, IPTFSPad)]
+        decrypt_pkts += dpkts
+
+        for decrypt_pkt in dpkts:
+            try:
+                assert decrypt_pkt.src == src
+                assert decrypt_pkt.dst == dst
+            except:
+                logging.debug(ppp("Unexpected packet:", rx))
+                try:
+                    logging.debug(ppp("Decrypted packet:", decrypt_pkt))
+                except Exception:  # pylint: disable=W0703
+                    pass
+                raise
+
+    assert len(decrypt_pkts) == expected_count
+    # pkts = reassemble4(decrypt_pkts)
+    # for pkt in pkts:
+    #     self.assert_packet_checksums_valid(pkt)
+
+
+def verify_encrypted_with_frags(self, src, dst, sa, rxs, cmprxs):
+    dpkts_pcap = []
+    oldrxs = []
+
+    for rx in rxs:
+        self.assert_packet_checksums_valid(rx)
+        assert len(rx) - len(Ether()) == rx[IP].len
+        dpkts_pcap += sa.decrypt_iptfs_pkt(rx[IP], oldrxs)
+        oldrxs.append(rx)
+
+    # logging.info("XXXYYY: decrypted packets: {}".format(
+    #     len(dpkts_pcap)))
+
+    # for x in dpkts_pcap:
+    #     try:
+    #         # ix = IPTFS(x)
+    #         ix = x
+    #         logging.info("XXXYYY: decrypted pkt:")
+    #         logging.info("dump: {}".format(ix.show(dump=True)))
+    #     except Exception as expkt:
+    #         logging.info("XXXYYY: decrypted pkt: ex: {}".format(
+    #             str(expkt)))
+    #         logging.info(
+    #             "XXXYYY: decrypted pkt: len {} dump: {}".format(
+    #                 len(x), x.show(dump=True)))
+
+    # Join fragments into real packets and drop padding return list of
+    # real packets.
+    dpkts = decap_frag_stream(dpkts_pcap)
+
+    for decrypt_pkt in dpkts:
+        # logging.info("XXXYYY: pktlen {} pkt: {}".format(
+        #     len(decrypt_pkt), decrypt_pkt.show(dump=True)))
+        try:
+            assert decrypt_pkt.src == src
+            assert decrypt_pkt.dst == dst
+        except:
+            logging.debug(ppp("Unexpected packet:", decrypt_pkt))
+            try:
+                logging.debug(ppp("Decrypted packet:", decrypt_pkt))
+            except Exception:  # pylint: disable=W0703
+                pass
+            raise
+
+    # logging.info("XXXYYY: dpkts count {} cmprxs count {}".format(
+    #     len(dpkts), len(cmprxs)))
+
+    assert len(dpkts) == len(cmprxs)
+    # pkts = reassemble4(decrypt_pkts)
+    # for pkt in pkts:
+    #     self.assert_packet_checksums_valid(pkt)
+
+
+def verify_decrypted(self, src, dst, rxs):
+    for rx in rxs:
+        assert rx[IP].src == src
+        assert rx[IP].dst == dst
+        self.assert_packet_checksums_valid(rx)
+
+
 class SecurityAssociation(ipsec.SecurityAssociation):
     """
     This class is responsible of "encryption" and "decryption" of IPsec IPTFS packets.
@@ -574,7 +670,10 @@ class SecurityAssociation(ipsec.SecurityAssociation):
         esp = self.crypt_algo.encrypt(
             self, esp, self.crypt_key, esn_en=esn_en or self.esn_en, esn=esn or self.esn
         )
-        self.auth_algo.sign(esp, self.auth_key, high_seq_num)
+        try:
+            self.auth_algo.sign(esp, self.auth_key, high_seq_num)
+        except TypeError:
+            self.auth_algo.sign(esp, self.auth_key)
 
         if ip_header.version == 4:
             ip_header.len = len(ip_header) + len(esp)
@@ -608,7 +707,10 @@ class SecurityAssociation(ipsec.SecurityAssociation):
 
         if verify:
             self.check_spi(pkt)
-            self.auth_algo.verify(encrypted, self.auth_key, high_seq_num)
+            try:
+                self.auth_algo.verify(encrypted, self.auth_key, high_seq_num)
+            except TypeError:
+                self.auth_algo.verify(encrypted, self.auth_key)
 
         esp = self.crypt_algo.decrypt(
             self,

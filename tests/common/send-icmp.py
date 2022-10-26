@@ -28,7 +28,7 @@ import socket
 import struct
 import time
 
-from common.testutil import convert_number, line_rate_to_ip_pps
+from common.util import convert_number, line_rate_to_ip_pps
 
 ICMP_ECHO = 8
 ICMP_ECHO_CODE = 0

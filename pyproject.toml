@@ -1,3 +1,6 @@
+[tool.pylint.master_control]
+init-hook='import sys; sys.path += ["tests"]'
+
 [tool.pylint.messages_control]
 disable = [
   "broad-except",
@@ -24,10 +27,22 @@ max-line-length = 88
 
 addopts = "-s"
 asyncio_mode = "auto"
-norecursedirs = "tests/manual tests/podman-trex-extract tests/trex*"
+norecursedirs = "tests/external_libs tests/manual tests/podman-trex-extract tests/trex*"
 
+# The order of these really matters, and there's serious voodoo, it has to do
+# with trex's use of it's own earlier scapy. It's not enough for utpkt to be
+# before stress though, it has to be at the top (or somewhere more than just
+# above stress..) who knows...; this works.
 testpaths = [
-        "tests",
+        "tests/utpkt",
+        "tests/config",
+        "tests/console",
+        "tests/errors",
+        "tests/phynic",
+        "tests/simplenet",
+        "tests/verify",
+        # need to put trex stuff last so normal scapy is not messed up
+        "tests/stress",
 ]
 
 log_level = "INFO"

@@ -23,14 +23,13 @@ import logging
 import os
 
 import pytest
+from munet.testing.fixtures import _unet_impl
 from stress import (
     _network_up,
     _test_policy_imix,
     _test_policy_small_pkt,
     convert_number,
 )
-from munet.testing.fixtures import _unet_impl
-
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
@@ -84,8 +83,8 @@ async def test_net_up(unet):
 
 
 async def test_policy_small_pkt(unet):
-    await _test_policy_small_pkt(unet, convert_number("20M"))
+    await _test_policy_small_pkt(unet, convert_number("8M"))
 
 
 async def test_policy_imix(unet):
-    await _test_policy_imix(unet, convert_number("20M"))
+    await _test_policy_imix(unet, convert_number("40M"))

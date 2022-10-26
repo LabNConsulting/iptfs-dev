@@ -87,5 +87,5 @@ for symdir in trex trex_stl_lib; do
     set +x
 done
 set -x
-ln -fs $tdir/external_libs $TESTSDIR/trex-external-libs
+ln -fs $tdir/external_libs $TESTSDIR/
 set +x
