@@ -13,6 +13,7 @@ __pycache__/
 /linux-torvalds/
 /linux-stk/
 /tests/trex
+/tests/external_libs
 /tests/trex_stl_lib
 /tests/podman-trex-extract/
 /tests/trex-external-libs

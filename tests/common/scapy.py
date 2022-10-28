@@ -91,7 +91,7 @@ def gen_ippkts(  # pylint: disable=W0221
 ):
     if not payload_spread and not payload_sizes:
         return [
-            IP(src=src, dst=dst) / ICMP(seq=i + 1) / Raw("X" * payload_size)
+            IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * payload_size)
             for i in range(count)
         ]
 
@@ -99,9 +99,7 @@ def gen_ippkts(  # pylint: disable=W0221
         pslen = len(payload_sizes)
         for i in range(count):
             return [
-                IP(src=src, dst=dst)
-                / ICMP(seq=i + 1)
-                / Raw("X" * payload_sizes[i % pslen])
+                IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * payload_sizes[i % pslen])
                 for i in range(count)
             ]
     else:
@@ -111,7 +109,7 @@ def gen_ippkts(  # pylint: disable=W0221
         end = payload_spread
         psize = start
         for i in range(count):
-            pkts.append(IP(src=src, dst=dst) / ICMP(seq=i + 1) / Raw("X" * (psize)))
+            pkts.append(IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * (psize)))
             psize += inc
             if psize > end:
                 # wrap around
@@ -130,6 +128,22 @@ async def gen_pkts(
     count=0,
     wrap=False,
 ):
+    """Generate IPCMP packet stream according to various parameters.
+
+    Args:
+        mtu: the size of the outer IPTFS packet.
+        psize: size of the inner packet including the IP header, or
+            0 for minimum.
+        pstep: if non-zero indicates each packet should increse in size
+            byte this size, up to large enough to fill the maximum
+            size.
+        pmax: the size to `pstep` to, or zero to fill to `mtu` size
+            outer packet. This determines the maximum size.
+        count: the number of packets to send. If zero then pstep should
+            be set and the count will be enough to reach the maximum size.
+        wrap: the number of times to repeat `pstep`ing to the maximum size.
+
+    """
     inner_ip_overhead = len(IP() / ICMP(seq=1))
 
     psize = max(psize, inner_ip_overhead)
@@ -169,7 +183,13 @@ async def gen_pkts(
 
 # XXX There's a few hard coded values in here that probably need cleaning up
 def send_recv_esp_pkts(
-    osa, encpkts, iface, chunksize=30, faster=False, process_recv_pkts=None
+    osa,
+    encpkts,
+    iface,
+    chunksize=30,
+    faster=False,
+    net0only=False,
+    process_recv_pkts=None,
 ):
     del chunksize
 
@@ -203,14 +223,17 @@ def send_recv_esp_pkts(
     net0sniffer = AsyncSniffer(iface="net0", promisc=1, filter="icmp[0] == 0")
     net0sniffer.start()
 
-    net1sniffer = AsyncSniffer(
-        iface=iface,
-        # prn=lambda x: print("-"),
-        promisc=1,
-        # filter=f"ip proto esp and ip[((ip[0]&0x0f)<<2):4]=={osa.spi}",
-        filter="dst host 10.0.1.3",
-    )
-    net1sniffer.start()
+    if net0only:
+        net1sniffer = None
+    else:
+        net1sniffer = AsyncSniffer(
+            iface=iface,
+            # prn=lambda x: print("-"),
+            promisc=1,
+            # filter=f"ip proto esp and ip[((ip[0]&0x0f)<<2):4]=={osa.spi}",
+            filter="dst host 10.0.1.3",
+        )
+        net1sniffer.start()
 
     # This sleep seems required or the sniffer misses initial packets!?
     time.sleep(1)
@@ -271,8 +294,7 @@ def send_recv_esp_pkts(
     time.sleep(2)
 
     net0results = net0sniffer.stop()
-    # net0results = []
-    net1results = net1sniffer.stop()
+    net1results = net1sniffer.stop() if not net0only else []
 
     # _esppkts = get_esp_pkts(pkts)
     pkts = [x[IP] for x in net1results if x.haslayer(ESP)]

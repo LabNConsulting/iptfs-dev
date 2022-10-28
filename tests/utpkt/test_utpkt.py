@@ -21,11 +21,9 @@
 #
 # pylint: disable=wrong-import-position
 "Unit tests utilizign scapy"
-import glob
 import logging
 import os
 import subprocess
-import sys
 
 import pytest
 from common import iptfs, util
@@ -124,7 +122,14 @@ def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30, faster=False):
         ]
         return inner_pkts, other_inner_pkts
 
-    return send_recv_esp_pkts(osa, encpkts, iface, chunksize, faster, process_pkts)
+    return send_recv_esp_pkts(
+        osa,
+        encpkts,
+        iface,
+        chunksize=chunksize,
+        faster=faster,
+        process_recv_pkts=process_pkts,
+    )
 
 
 async def gen_pkt_test(

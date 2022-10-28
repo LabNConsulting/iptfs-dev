@@ -439,7 +439,6 @@ def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R091
     #         len(pkt), pkt.show(dump=True)))
 
     ipsec_payload_size = mtu - sa.get_ipsec_overhead()
-    ipsec_payload_size = (ipsec_payload_size // 4) * 4
     tunpkts = [
         sa.encrypt_esp_raw(rawpkt)
         for rawpkt in raw_iptfs_stream(pkts, ipsec_payload_size, dontfrag)

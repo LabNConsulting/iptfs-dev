@@ -414,7 +414,7 @@ def create_scapy_sa_pair(
         ip1 = IPv6(src=addr1, dst=addr2)
         ip2 = IPv6(src=addr2, dst=addr1)
 
-    sa_1to2 = SA(ipsec.ESP, spi_1to2, tunnel_header=ip1, seq_num=1, **kwargs)
-    sa_2to1 = SA(ipsec.ESP, spi_2to1, tunnel_header=ip2, seq_num=1, **kwargs)
+    sa_1to2 = SA(ipsec.ESP, spi_1to2, tunnel_header=ip1, seq_num=0, **kwargs)
+    sa_2to1 = SA(ipsec.ESP, spi_2to1, tunnel_header=ip2, seq_num=0, **kwargs)
 
     return sa_1to2, sa_2to1

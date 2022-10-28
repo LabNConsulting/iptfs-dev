@@ -43,5 +43,8 @@ output-buildroot:
 output-linux:
 	mkdir -p $@
 
+tests/ci:
+	sudo -E pytest -s tests/config tests/errors tests/simplenet tests/utpkt
+
 tests/trex:
 	scripts/extract-trex.sh
