@@ -181,6 +181,11 @@ async def gen_pkts(
     return opkts
 
 
+def _nologf(*args, **kwargs):
+    del args
+    del kwargs
+
+
 # XXX There's a few hard coded values in here that probably need cleaning up
 def send_recv_esp_pkts(
     osa,
@@ -190,8 +195,14 @@ def send_recv_esp_pkts(
     faster=False,
     net0only=False,
     process_recv_pkts=None,
+    dolog=False,
 ):
     del chunksize
+
+    if dolog:
+        logf = logging.info
+    else:
+        logf = _nologf
 
     rxs, txs, rxerr, txerr = get_intf_stats(iface)
     assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
@@ -238,22 +249,22 @@ def send_recv_esp_pkts(
     # This sleep seems required or the sniffer misses initial packets!?
     time.sleep(1)
 
-    logging.info("SENDING %s ipsec/iptfs packets", len(encpkts))
+    logf("SENDING %s ipsec/iptfs packets", len(encpkts))
 
     outer_pkts = []
     decpkts = []
 
     # Really we want to check for kvm
     if faster or len(encpkts) <= 20:
-        sendp(encpkts, iface=iface, inter=0.001)
+        sendp(encpkts, iface=iface, inter=0.001, verbose=False)
     else:
-        sendp(encpkts, iface=iface, inter=0.01)
+        sendp(encpkts, iface=iface, inter=0.01, verbose=False)
 
     # nchunk = 0
     # for chunk in chunkit(encpkts, chunksize):
-    #     # logging.info("SENDING gratiutous arp on %s", tun_if.name)
+    #     # logf("SENDING gratiutous arp on %s", tun_if.name)
     #     # tun_if.send_gratuitous_arp()
-    #     logging.info(
+    #     logf(
     #          "sending chunk %s with %s ipsec/iptfs packets", nchunk, len(chunk)
     #     )
 
@@ -270,15 +281,15 @@ def send_recv_esp_pkts(
     #         inter=0.05,
     #         chainCC=True,  # pass up ^C
     #     )
-    #     logging.info("srp returns %s", pkts)
+    #     logf("srp returns %s", pkts)
 
     #     _esppkts = get_esp_pkts(pkts[0])
     #     outer_pkts.extend(_esppkts)
     #     if len(_esppkts) == 0 and timeo is not None:
     #         if timeo.is_expired():
-    #             logging.info("Ending chunking loop as no packets received (timeout)")
+    #             logf("Ending chunking loop as no packets received (timeout)")
     #             raise TimeoutError()
-    #         logging.info("Ending chunking loop as no packets received (break)")
+    #         logf("Ending chunking loop as no packets received (break)")
     #         raise KeyboardInterrupt()
     #     _decpkts = process_esp_pkts(_esppkts, nchunk)
     #     decpkts.extend(_decpkts)
@@ -286,9 +297,9 @@ def send_recv_esp_pkts(
     # # If we arrive here w/o exceptions (from timeout or break)
     # # let's take another second to see if we have anymore packets coming.
     # timeout = 1
-    # logging.info("Waiting %ss for final packets", timeout)
+    # logf("Waiting %ss for final packets", timeout)
     # pkts = sniff(timeout=timeout, promisc=1, nofilter=1, iface=iface)
-    # logging.info("Final sniff returns %s", pkts)
+    # logf("Final sniff returns %s", pkts)
 
     # XXX improve this, sleep 2 seconds for things to flush
     time.sleep(2)
@@ -300,7 +311,7 @@ def send_recv_esp_pkts(
     pkts = [x[IP] for x in net1results if x.haslayer(ESP)]
     # XXX should use iface ip local addr
     _esppkts = [x for x in pkts if x.src != "10.0.1.3"]
-    logging.info("RECEIVED %s ipsec packets", len(_esppkts))
+    logf("RECEIVED %s ipsec packets", len(_esppkts))
 
     outer_pkts.extend(_esppkts)
     if _esppkts:
@@ -315,9 +326,9 @@ def send_recv_esp_pkts(
     nrxs, ntxs, rxerr, txerr = get_intf_stats(iface)
     assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
     assert max(txerr) == 0, f"txerr not 0, is {max(txerr)}"
-    logging.info("STATS for %s: RX %s TX %s", iface, nrxs - rxs, ntxs - txs)
+    logf("STATS for %s: RX %s TX %s", iface, nrxs - rxs, ntxs - txs)
 
-    logging.info(
+    logf(
         "DECAP %s inner ICMP replies and %s other pkts from %s ipsec pkts",
         len(inner_pkts),
         len(other_inner_pkts),

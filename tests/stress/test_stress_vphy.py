@@ -23,14 +23,13 @@ import logging
 import os
 
 import pytest
+from munet.testing.fixtures import _unet_impl
 from stress import (
     _network_up,
     _test_policy_imix,
     _test_policy_small_pkt,
     convert_number,
 )
-from munet.testing.fixtures import _unet_impl
-
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
@@ -62,7 +61,7 @@ async def checkrun(pytestconfig):
 
 @pytest.fixture(scope="module", name="unet")
 async def _unet(rundir_module, pytestconfig):
-    async for x in _unet_impl(rundir_module, pytestconfig, "munet_vphy"):
+    async for x in _unet_impl(rundir_module, pytestconfig, param="munet_vphy"):
         yield x
 
 
