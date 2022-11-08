@@ -1,3 +1,6 @@
+# LINUXCONFIG ?= linux.config
+# LINUXCONFIG ?= linux-default.config
+LINUXCONFIG ?= linux-fast.config
 
 ifdef SHALLOW_CLONE
 DEPTH ?= --depth 1
@@ -17,6 +20,9 @@ rootfs: output-buildroot/images/rootfs.cpio.gz
 # These aren't phoney but we always want to descend to check them with make
 .PHONY: output-linux/arch/x86/boot/bzImage output-buildroot/images/rootfs.cpio.gz
 
+linux-defconfig:
+	make -C linux O=../output-linux defconfig
+
 linux-menuconfig:
 	make -C linux O=../output-linux menuconfig
 
@@ -31,7 +37,7 @@ output-buildroot/images/rootfs.cpio.gz: output-buildroot output-buildroot/.confi
 	mkdir -p output-buildroot
 	make -C buildroot -j$(shell nproc) V=1 O=../output-buildroot
 
-output-linux/.config: linux.config
+output-linux/.config: $(LINUXCONFIG)
 	cp -p $< $@
 
 output-buildroot/.config: buildroot.config
