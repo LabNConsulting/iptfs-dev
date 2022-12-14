@@ -51,7 +51,7 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture(scope="module", name="unet")
 async def _unet(rundir_module, pytestconfig):
-    async for x in _unet_impl(rundir_module, pytestconfig, "munet"):
+    async for x in _unet_impl(rundir_module, pytestconfig):
         yield x
 
 

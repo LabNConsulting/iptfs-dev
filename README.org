@@ -99,6 +99,9 @@ If your ~socat~ doesn't support ~rawer~ option replace with ~raw,echo=0,icanon=0
   target remote /tmp/unet-test/tests.errors.test_errors/r1/s/gdbserver
   target remote /tmp/unet-test/tests.errors.test_errors/r2/s/gdbserver
 
+  target remote /tmp/unet-test/tests.frags.test_frags/r1/s/gdbserver
+  target remote /tmp/unet-test/tests.frags.test_frags/r2/s/gdbserver
+
   target remote /tmp/unet-test/tests.phynic.test_simplenet/r1/s/gdbserver
 
   target remote /tmp/unet-test/tests.stress.test_stress/r2/s/gdbserver
@@ -115,14 +118,11 @@ I like to use ccls with LSP mode in emacs, which will allow you to jump to all
 references with semantics (i.e., it's not just a tag search) as well as
 displaying documentation and tab completion of symbols etc..
 
-In order for this to work seemlessly you need to do 2 things:
+In order for this to work seemlessly you need to do a couple steps:
 
-  1. run `scripts/clang-tools/gen_compile_commands.py`
-  2. printf "%compile_commands.json\n-D__IN_CCLS__\n" > .ccls
-
-#2 isn't technically needed but I have conditionally wrapped a few couple low
-level `asm` things on __IN_CCLS__ in the iptfs branch to keep WARN/BUG macros
-from being highlighted as "bad code".
+  1. cd linux # kernel source directory
+  2. run ./scripts/clang-tools/gen_compile_commands.py -d ../output-linux
+  3. printf "%compile_commands.json\n-D__IN_CCLS__\n" > .ccls
 
 ** Design Notes
 *** Config
@@ -215,7 +215,7 @@ printf("packet-time %luns %luns %luns %luns\n", (uint64_t)_1GE_PP_NANOS(mtu),(ui
 
 ** Performance Triaging
 Testing done on a single server with 3 networks cards using munet and wiring the
-ports to each other. Performance is nowhere near line rate even for routed packets.
+ports to each other.
 [h1] - [r1] - [r2] - [h2]
        ===========
 
@@ -231,8 +231,6 @@ ports to each other. Performance is nowhere near line rate even for routed packe
 - Routed from h1 to h2 iperf bidir:               ~9400 Mbps
 - IPsec [r1,r2] tunnel, from h1 to h2 iperf bidir ~7200 Mbps
 - IPTFS [r1,r2] tunnel, from h1 to h2 iperf bidir     700Kbps-3.87Mbps
-
-  
 * Examples
 ** These are single Core
 *** tests/stress/trex_stress_phy.py::test_policy_imix
@@ -653,3 +651,15 @@ status:  |
 browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
 dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
 
+
+
+
+* Issues to close
+** tcpdump test/veth (non-phy) bad perf
+- When 2 packets are sent performance is horrendous.
+  - there's a 200ms pause after EGRESS sends a 2 inner pkt IPTFS packet.
+  - use pkt-size 1400 and inner pkt size of 625 to get this, or similar
+  - [not] this acutally appears to be some sort of bug with chained skbuffs and veths
+  - even lineraizing the buffer stillk see problem
+  - saw one run with corruption on other side
+  - physical interface runs seem fine

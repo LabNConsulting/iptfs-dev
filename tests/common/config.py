@@ -26,12 +26,36 @@ import shlex
 
 from . import iptfs
 
+g_offloads = [
+    # These are both required on my machine to get rid of GSO
+    "generic-receive-offload",
+    "rx-gro-hw",
+    # These are not required to get rid of GSO in iptfs path
+    # "generic-segmentation-offload",
+    # "tcp-segmentation-offload",
+    # "tx-gso-partial",
+]
+
+
+async def ethtool_disable_if_offloads(node, ifname, offloads):
+    for offload in offloads:
+        node.conrepl.cmd_raises(f"ethtool -K {ifname} {offload} off")
+
+
+async def ethtool_disable_offloads(node, offloads):
+    for ifname in node.intf_addrs:
+        await ethtool_disable_if_offloads(node, ifname, offloads)
+
 
 async def _network_up(unet, r1only=False):
     h1 = unet.hosts["h1"] if "h1" in unet.hosts else None
     h2 = unet.hosts["h2"] if "h2" in unet.hosts else None
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"] if not r1only else None
+
+    await ethtool_disable_offloads(r1, g_offloads)
+    if r2:
+        await ethtool_disable_offloads(r2, g_offloads)
 
     await toggle_ipv6(unet, enable=False)
 

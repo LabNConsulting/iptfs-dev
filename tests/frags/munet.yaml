@@ -39,43 +39,29 @@ topology:
       connections:
         - to: mgmt0
         - to: net2
-
 kinds:
   - name: host
     cmd: |
-      pwd
-      ls
       ip addr
-      ethtool -L eth1 rx 16 tx 16
-      echo 1 >&2
-      ethtool -K eth1 rx-gro-hw off
-      echo 2 >&2
-      ethtool -K eth1 generic-receive-offload off
-      echo 3 >&2
-      ethtool -K eth1 generic-segmentation-offload off
-      echo 4 >&2
-      ethtool -K eth1 tcp-segmentation-offload off
-      echo 5 >&2
-      ethtool -K eth1 tcp-gso-partial off
-      echo 6 >&2
-      #%CONFIGDIR%/counteth.py
-      echo "done countudp"
+      ip link set eth1 mtu 9000
       tail -f /dev/null
   - name: linux
     qemu:
-      kernel: "%CONFIGDIR%/../../../output-linux/arch/x86/boot/bzImage"
-      initrd: "%CONFIGDIR%/../../../output-buildroot/images/rootfs.cpio.gz"
+      kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
+      initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
       cmdline-extra: "acpi=off nokaslr"
       memory: "2048M"
       kvm: true
-      ncpu: 4
+      ncpu: 2
+      console:
+        timeout: 180
     volumes:
       - "%RUNDIR%/s:/tmp/qemu-sock"
 
 cli:
   commands:
     - name: con
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/vcon0"
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/console"
       format: "con HOST [HOST ...]"
       help: "open console on given hosts, * for all"
       new-window: true
@@ -83,4 +69,9 @@ cli:
       exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
       format: "mon HOST [HOST ...]"
       help: "open monitor on given hosts, * for all"
+      new-window: true
+    - name: ssh
+      exec: "ssh -i ../../root-key -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' {host.intf_addrs['eth0'].ip}"
+      format: "ssh HOST [HOST ...]"
+      help: "open ssh to given hosts, * for all"
       new-window: true
