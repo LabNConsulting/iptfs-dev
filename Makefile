@@ -50,7 +50,7 @@ output-linux:
 	mkdir -p $@
 
 tests/ci:
-	sudo -E pytest -s tests/config tests/errors tests/simplenet tests/utpkt
+	sudo -E pytest -s tests/config tests/errors tests/frags tests/simplenet tests/utpkt/test_utpkt.py
 
 tests/trex:
 	scripts/extract-trex.sh
