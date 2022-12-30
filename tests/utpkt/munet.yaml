@@ -13,7 +13,6 @@ topology:
       ip: 10.0.1.3/24
   nodes:
     - name: h1
-      kind: host
       connections:
         - to: mgmt0
         - to: net0
@@ -23,40 +22,3 @@ topology:
         - to: mgmt0
         - to: net0
         - to: net1
-
-kinds:
-  - name: host
-    cmd: |
-      pwd; ls
-      ip addr
-      tail -f /dev/null
-  - name: linux
-    qemu:
-      kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
-      initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
-      cmdline-extra: "acpi=off nokaslr"
-      memory: "2048M"
-      kvm: true
-      ncpu: 2
-      console:
-        timeout: 180
-    volumes:
-      - "%RUNDIR%/s:/tmp/qemu-sock"
-
-cli:
-  commands:
-    - name: con
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/console"
-      format: "con HOST [HOST ...]"
-      help: "open console on given hosts, * for all"
-      new-window: true
-    - name: mon
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
-      format: "mon HOST [HOST ...]"
-      help: "open monitor on given hosts, * for all"
-      new-window: true
-    - name: ssh
-      exec: "ssh -i ../../root-key -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' {host.intf_addrs['eth0'].ip}"
-      format: "ssh HOST [HOST ...]"
-      help: "open ssh to given hosts, * for all"
-      new-window: true

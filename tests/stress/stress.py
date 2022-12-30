@@ -46,7 +46,6 @@ from trex_stl_lib.api import STLClient
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
 
-
 #                    192.168.0.0/24
 #   --+--------------------+------ mgmt0 -------+
 #     | .1                 | .2                 | .3
@@ -58,6 +57,12 @@ pytestmark = pytest.mark.asyncio
 #   |    | ---- p2p ----------------------------+
 #   |    | .1          12.0.0.0/24
 #   +----+
+
+
+#
+# Add some options for this test.
+#
+# def _pytest_addoption(parser):
 
 
 async def _network_up(unet):
@@ -142,8 +147,16 @@ def convert_number(value):
     return int(rate) * base ** (index + 1)
 
 
-async def _test_policy_small_pkt(unet, rate, mode="iptfs", duration=10, connections=1):
-    await setup_policy_tun(unet, ipsec_intf="eth1", mode=mode, trex=True)
+async def _test_policy_small_pkt(unet, pytestconfig):
+    connections = pytestconfig.getoption("--connections")
+    duration = pytestconfig.getoption("--duration")
+    iptfs_opts = pytestconfig.getoption("--iptfs-opts")
+    mode = pytestconfig.getoption("--mode")
+    rate = convert_number(pytestconfig.getoption("--rate")) / connections
+
+    await setup_policy_tun(
+        unet, ipsec_intf="eth1", mode=mode, iptfs_opts=iptfs_opts, trex=True
+    )
 
     # await async_pause_test("after policy setup")
 
@@ -185,8 +198,16 @@ async def _test_policy_small_pkt(unet, rate, mode="iptfs", duration=10, connecti
     # await async_cli(unet)
 
 
-async def _test_policy_imix(unet, rate, mode="iptfs", duration=10, connections=1):
-    await setup_policy_tun(unet, ipsec_intf="eth1", mode=mode, trex=True)
+async def _test_policy_imix(unet, pytestconfig):
+    connections = pytestconfig.getoption("--connections")
+    duration = pytestconfig.getoption("--duration")
+    iptfs_opts = pytestconfig.getoption("--iptfs-opts")
+    mode = pytestconfig.getoption("--mode")
+    rate = convert_number(pytestconfig.getoption("--rate")) / connections
+
+    await setup_policy_tun(
+        unet, ipsec_intf="eth1", mode=mode, iptfs_opts=iptfs_opts, trex=True
+    )
 
     args = trexutil.Args(
         rate=rate, old_imix=True, duration=duration, connections=connections

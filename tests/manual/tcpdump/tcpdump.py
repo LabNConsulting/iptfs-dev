@@ -35,19 +35,19 @@ async def _test_iperf(unet, astepf, ipsec_intf):
     # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="reorder-window 5")
     # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="dont-frag reorder-window 0")
     # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="dont-frag reorder-window 5")
-    if "IPTFS_MODE" in os.environ:
-        mode = os.environ["IPTFS_MODE"]
+    mode = os.environ.get("IPTFS_MODE", None)
+    if mode is not None:
         logging.info("Using IPTFS_MODE envvar value: %s", mode)
-        opts = os.environ.get("IPTFS_OPTS", None)
-        if opts:
-            logging.info("Using IPTFS_OPTS envvar value: %s", opts)
-            await setup_policy_tun(
-                unet, mode=mode, ipsec_intf=ipsec_intf, iptfs_opts=opts
-            )
-        else:
-            await setup_policy_tun(unet, ipsec_intf=ipsec_intf, mode=mode)
     else:
-        await setup_policy_tun(unet, ipsec_intf=ipsec_intf, mode="iptfs")
+        mode = "iptfs"
+
+    opts = os.environ.get("IPTFS_OPTS", None)
+    if opts is not None:
+        logging.info("Using IPTFS_OPTS envvar value: %s", opts)
+    else:
+        opts = ""
+
+    await setup_policy_tun(unet, mode=mode, ipsec_intf=ipsec_intf, iptfs_opts=opts)
 
     # Let's open an iperf3 process on h2.
     iperf3 = False

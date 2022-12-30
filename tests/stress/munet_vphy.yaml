@@ -8,7 +8,7 @@ topology:
       nat: true
   nodes:
     - name: trex
-      kind: trex
+      kind: trex_phy
       connections:
         - to: mgmt0
           name: mgmt0
@@ -46,58 +46,3 @@ topology:
           physical: "0000:d8:0a.0"
           ip: 12.0.0.3/24
           name: eth2
-
-kinds:
-  - name: linux
-    qemu:
-      kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
-      initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
-      cmdline-extra: "acpi=off nokaslr"
-      memory: "2048M"
-      kvm: true
-      ncpu: 4
-    volumes:
-      - "%RUNDIR%/s:/tmp/qemu-sock"
-
-  - name: trex
-    # image: quay.io/chopps/trex:v3.00
-    # privileged: true
-    # cap_add:
-    #   - ALL
-    # podman:
-    #   extra-args:
-    #     - --sysctl=net.ipv6.conf.all.disable_ipv6=1
-    #     - --sysctl=net.ipv6.conf.all.forwarding=0
-    #     - --sysctl=net.ipv6.conf.default.forwarding=0
-    cmd: |
-      cd /opt/trex/current
-      ./t-rex-64 --cfg /etc/trex_cfg.yaml -v 3 --no-termio --no-scapy-server --iom 0 -i
-      tail -f /dev/null
-    ports:
-      - 8090:8090
-      - 4500:4500
-      - 4501:4501
-    volumes:
-      - ./trex_cfg.yaml:/etc/trex_cfg.yaml
-      - ../common:/common
-      # - /dev/hugepages:/dev/hugepages
-      # - /var/run/systemd/journal/socket:/var/run/systemd/journal/socket
-    merge: ["volumes"]
-
-cli:
-  commands:
-    - name: con
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/vcon0"
-      format: "con HOST [HOST ...]"
-      help: "open console on given hosts, * for all"
-      new-window: true
-    - name: mon
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
-      format: "mon HOST [HOST ...]"
-      help: "open monitor on given hosts, * for all"
-      new-window: true
-    - name: ssh
-      exec: "ssh -i ../../root-key -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' {host.intf_addrs['eth0'].ip}"
-      format: "ssh HOST [HOST ...]"
-      help: "open ssh to given hosts, * for all"
-      new-window: true

@@ -5,11 +5,11 @@ topology:
     - name: mgmt0
   nodes:
     - name: r1
-      kind: linux
+      kind: linux_cmd
       connections: ["mgmt0"]
 
 kinds:
-  - name: linux
+  - name: linux_cmd
     cmd: |
       qemu-system-x86_64 \
         -boot c \

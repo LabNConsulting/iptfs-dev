@@ -40,12 +40,6 @@ topology:
           ip: 10.0.2.4/24
 
 kinds:
-  - name: host
-    cmd: |
-      pwd
-      ls
-      ip addr
-      tail -f /dev/null
   - name: linux
     qemu:
       kernel: "%CONFIGDIR%/../../../output-linux/arch/x86/boot/bzImage"

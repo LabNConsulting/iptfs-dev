@@ -83,17 +83,9 @@ async def test_net_up(unet):
     # so we cannot ping test those ports
 
 
-async def test_policy_small_pkt(unet):
-    connections = 1
-    rate = convert_number("1G") / connections
-    await _test_policy_small_pkt(
-        unet, rate, mode="iptfs", duration=10, connections=connections
-    )
+async def test_policy_small_pkt(unet, pytestconfig):
+    await _test_policy_small_pkt(unet, pytestconfig)
 
 
-async def test_policy_imix(unet):
-    connections = 1
-    rate = convert_number("2G") / connections
-    await _test_policy_imix(
-        unet, rate, mode="iptfs", duration=10, connections=connections
-    )
+async def test_policy_imix(unet, pytestconfig):
+    await _test_policy_imix(unet, pytestconfig)
