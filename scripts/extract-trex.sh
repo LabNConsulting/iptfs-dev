@@ -56,16 +56,18 @@ fi
 symlink1=$TESTSDIR/trex_stl_lib
 symlink2=$TESTSDIR/trex
 
+do_extract=0
 for symdir in trex trex_stl_lib; do
     symlink=$TESTSDIR/$symdir
     if [[ -h $symlink ]]; then
         rpath="$(realpath $symlink)"
         if [[ -n $rpath ]] && [[ "$rpath" == "$(realpath $libdir/$symdir)" ]]; then
-            exit 0
+            continue
         fi
+        do_extract=1
         echo "Symlink to wrong version will extract and update"
     elif [[ -e $symlink ]]; then
-        echo "$symlink not a symlink"
+        echo "existing $symlink not a symlink, can't extract"
         exit 1
     fi
 done
@@ -86,6 +88,7 @@ for symdir in trex trex_stl_lib; do
     ln -fs $libdir/$symdir $symlink
     set +x
 done
+
 set -x
 ln -fs $tdir/external_libs $TESTSDIR/
 set +x
