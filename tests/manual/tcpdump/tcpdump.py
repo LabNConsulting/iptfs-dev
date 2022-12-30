@@ -56,7 +56,8 @@ async def _test_iperf(unet, astepf, ipsec_intf):
 
     # check the sum inside iptfs code with printk
 
-    pktsize = "40"
+    pktsize = "128"
+    # pktsize = None
 
     logging.info("Starting iperf server on h2")
     sargs = ["iperf3" if iperf3 else "iperf", "-s"]
@@ -71,7 +72,7 @@ async def _test_iperf(unet, astepf, ipsec_intf):
         if use_udp:
             cargs = ["-u", "-b", udp_brate, "-l", pktsize]
         else:
-            cargs = ["-M", pktsize]
+            cargs = ["-M", pktsize] if pktsize else []
             if not iperf3:
                 cargs.append("-m")
 

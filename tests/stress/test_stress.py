@@ -82,9 +82,9 @@ async def test_net_up(unet):
     logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 11.0.0.1"))
 
 
-async def test_policy_small_pkt(unet):
-    await _test_policy_small_pkt(unet, convert_number("8M"))
+async def test_policy_small_pkt(unet, pytestconfig):
+    await _test_policy_small_pkt(unet, pytestconfig)
 
 
-async def test_policy_imix(unet):
-    await _test_policy_imix(unet, convert_number("40M"))
+async def test_policy_imix(unet, pytestconfig):
+    await _test_policy_imix(unet, pytestconfig)

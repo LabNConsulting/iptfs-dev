@@ -651,15 +651,3 @@ status:  |
 browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
 dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
 
-
-
-
-* Issues to close
-** tcpdump test/veth (non-phy) bad perf
-- When 2 packets are sent performance is horrendous.
-  - there's a 200ms pause after EGRESS sends a 2 inner pkt IPTFS packet.
-  - use pkt-size 1400 and inner pkt size of 625 to get this, or similar
-  - [not] this acutally appears to be some sort of bug with chained skbuffs and veths
-  - even lineraizing the buffer stillk see problem
-  - saw one run with corruption on other side
-  - physical interface runs seem fine

@@ -152,7 +152,7 @@ async def _test_policy_small_pkt(unet, pytestconfig):
     duration = pytestconfig.getoption("--duration")
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
     mode = pytestconfig.getoption("--mode")
-    rate = convert_number(pytestconfig.getoption("--rate")) / connections
+    rate = convert_number(pytestconfig.getoption("--rate", "8M")) / connections
 
     await setup_policy_tun(
         unet, ipsec_intf="eth1", mode=mode, iptfs_opts=iptfs_opts, trex=True
@@ -203,7 +203,7 @@ async def _test_policy_imix(unet, pytestconfig):
     duration = pytestconfig.getoption("--duration")
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
     mode = pytestconfig.getoption("--mode")
-    rate = convert_number(pytestconfig.getoption("--rate")) / connections
+    rate = convert_number(pytestconfig.getoption("--rate", "40M")) / connections
 
     await setup_policy_tun(
         unet, ipsec_intf="eth1", mode=mode, iptfs_opts=iptfs_opts, trex=True

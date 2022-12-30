@@ -168,7 +168,7 @@ async def _test_tun_drop_XtoYofN(
     #
     # Now drop various packets given by parameter x, y and n.
     #
-    seqnos = list(range(1, count + 1))
+    seqnos = list(range(1, count))
     addts = []
     addss = []
     if exceptevery:
@@ -338,36 +338,37 @@ async def _test_tun_reverse_XofYxZ(
 #         self.verify_decap_44(p, tunpkts, seqnos=[2, 3, 4, 5, 6, 7])
 
 
-# async def test_tun_reverse_2of2x1(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 2, 2, 1)
+async def test_tun_reverse_2of2x1(unet):
+    await _test_tun_reverse_XofYxZ(unet, 2, 2, 1)
 
 
-# async def test_tun_reverse_2of2x2(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 2, 2, 2)
+async def test_tun_reverse_2of2x2(unet):
+    await _test_tun_reverse_XofYxZ(unet, 2, 2, 2)
 
 
-# async def test_tun_reverse_3of3x1(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 3, 3, 1)
+async def test_tun_reverse_3of3x1(unet):
+    await _test_tun_reverse_XofYxZ(unet, 3, 3, 1)
 
 
-# async def test_tun_reverse_3of3x2(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 3, 3, 2)
+async def test_tun_reverse_3of3x2(unet):
+    await _test_tun_reverse_XofYxZ(unet, 3, 3, 2)
 
 
-# async def test_tun_reverse_5of5(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 5, 5, 1)
+async def test_tun_reverse_5of5(unet):
+    await _test_tun_reverse_XofYxZ(unet, 5, 5, 1)
 
 
-# async def test_tun_reverse_5of5x30(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 5, 5, 30)
+async def test_tun_reverse_5of5x30(unet):
+    await _test_tun_reverse_XofYxZ(unet, 5, 5, 30)
 
 
-# async def test_tun_reverse_7of7(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 7, 7, 1)
+async def test_tun_reverse_7of7(unet):
+    await _test_tun_reverse_XofYxZ(unet, 7, 7, 1)
 
 
-# async def test_tun_reverse_7of7x30(unet):
-#     await _test_tun_reverse_XofYxZ(unet, 7, 7, 30)
+async def test_tun_reverse_7of7x30(unet):
+    await _test_tun_reverse_XofYxZ(unet, 7, 7, 30)
+
 
 # # Generate more tests.
 
@@ -381,9 +382,16 @@ async def _test_tun_reverse_XofYxZ(
 #                 name = "test_tun_drop_{}to{}of{}_exceptevery_{}".format(2, Y, N, Z)
 #             metafunc.addcall(funcargs=dict(X=2, Y=Y, Z=Z)
 
+# #
+# # reorder_window = 3
+# #
+reorder_window = 3
 for Z in range(0, 3):
-    for Y in range(2, 6):
-        for N in range(Y + 1, 13):
+    # Drop from 0 to 2 more than the window size
+    for Y in range(2, 2 + reorder_window + 3):
+        # XXX we are making sure we get in order packets at least window size so we
+        # don't need a drop timer
+        for N in range(Y + 1, Y + reorder_window + 1):
             if Z == 0:
                 name = f"test_tun_drop_2to{Y}of{N}"
             else:
@@ -391,14 +399,20 @@ for Z in range(0, 3):
             exec(
                 f"""
 async def {name}(unet):
-    return await _test_tun_drop_XtoYofN(unet, 2, {Y}, {N}, exceptevery={Z}, reorder_window=2)
+    return await _test_tun_drop_XtoYofN(unet, 2, {Y}, {N}, exceptevery={Z}, reorder_window=3)
             """
             )
 
+
+# #
+# # reorder_window = 4
+# #
+
 # pylint: disable=exec-used,eval-used
+reorder_window = 4
 for Z in range(0, 5):
     for Y in range(2, 10):
-        for N in range(Y + 6, 17):
+        for N in range(Y + 1, Y + reorder_window + 1):
             if Z == 0:
                 name = f"test_tun_drop_2to{Y}of{N}"
             else:
