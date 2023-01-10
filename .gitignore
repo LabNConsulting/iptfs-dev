@@ -20,3 +20,6 @@ __pycache__/
 /.ccls-cache/
 /root-key*
 /exec-pytest.log
+/*.svg
+/sandbox/*
+!/sandbox/*.c
