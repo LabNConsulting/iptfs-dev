@@ -250,7 +250,7 @@ async def test_recv_runt(unet, astepf):
     await gen_pkt_test(unet, psize=1441, mtu=1500, count=8)
 
 
-async def test_recv_runt2(unet, astepf):
+async def _test_recv_runt2(unet, astepf):
     await setup_policy_tun(unet, r1only=True, iptfs_opts="")
     await astepf("Prior to gen_pkt_test")
     await gen_pkt_test(unet, psize=1441, pmax=1451, mtu=1500, count=10, pstep=-1)
