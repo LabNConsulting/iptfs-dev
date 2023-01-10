@@ -1,15 +1,18 @@
 kinds:
   - name: linux
+    merge: [ "qemu" ]
     gdb-cmd: "sudo -E gdb %CONFIGDIR%/../../output-linux/vmlinux"
     gdb-target-cmds: ["target remote %RUNDIR%/s/gdbserver"]
     gdb-run-cmds: ["c"]
     qemu:
       kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
       initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
-      cmdline-extra: "acpi=off nokaslr"
+      sshkey: "%CONFIGDIR%/../../root-key"
+      #cmdline-extra: "acpi=off idle=poll nokaslr"
+      cmdline-extra: "idle=poll nokaslr"
       memory: "4096M"
       kvm: true
-      ncpu: 4
+      ncpu: 1
       console:
         timeout: 180
     volumes:
@@ -27,7 +30,7 @@ kinds:
     #     - --sysctl=net.ipv6.conf.default.forwarding=0
     cmd: |
       cd /opt/trex/current
-      ./t-rex-64 --cfg /etc/trex_cfg.yaml -v 3 --no-termio --no-scapy-server --iom 0 -i
+      ./t-rex-64 --cfg /etc/trex_cfg.yaml -v 3 --no-termio --no-scapy-server -c 2 --iom 0 -i
       tail -f /dev/null
     ports:
       - 8090:8090
@@ -77,14 +80,14 @@ cli:
         - kind: linux
           exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
         - kind: trex
-          exec: "bash -c 'cd /opt/trex/current && ./trex-console -r'"
+          exec: "bash -c 'cd /opt/trex/current && ./trex-console 192.168.0.1 -r'"
       format: "mon HOST|TREX [HOST|TREX ...]"
       help: "open monitor on given hosts, * for all"
       new-window: true
     - name: xmon
       exec-kind:
         - kind: trex
-          exec: "bash -c 'cd /opt/trex/current && ./trex-console -r -x'"
+          exec: "bash -c 'cd /opt/trex/current && ./trex-console 192.168.0.1 -r -x'"
       format: "xmon TREX [TREX ...]"
       help: "open trex monitor using X11"
       new-window: false

@@ -47,7 +47,7 @@ async def ethtool_disable_offloads(node, offloads):
         await ethtool_disable_if_offloads(node, ifname, offloads)
 
 
-async def _network_up(unet, r1only=False):
+async def _network_up(unet, trex=False, r1only=False):
     h1 = unet.hosts["h1"] if "h1" in unet.hosts else None
     h2 = unet.hosts["h2"] if "h2" in unet.hosts else None
     r1 = unet.hosts["r1"]
@@ -63,10 +63,18 @@ async def _network_up(unet, r1only=False):
         h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
         h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")
 
-    r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
+    if not trex:
+        r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
+    else:
+        r1.conrepl.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
+        r1.conrepl.cmd_raises("ip route add 48.0.0.0/8 via 10.0.1.3")
 
     if r2:
-        r2.conrepl.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
+        if not trex:
+            r2.conrepl.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
+        else:
+            r2.conrepl.cmd_raises("ip route add 11.0.0.0/24 via 10.0.1.2")
+            r2.conrepl.cmd_raises("ip route add 16.0.0.0/8 via 10.0.1.2")
 
     if h2:
         h2.cmd_raises("ip route add 10.0.1.0/24 via 10.0.2.3")

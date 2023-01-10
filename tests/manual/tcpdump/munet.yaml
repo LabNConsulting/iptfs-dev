@@ -65,10 +65,11 @@ kinds:
     qemu:
       kernel: "%CONFIGDIR%/../../../output-linux/arch/x86/boot/bzImage"
       initrd: "%CONFIGDIR%/../../../output-buildroot/images/rootfs.cpio.gz"
+      sshkey: "%CONFIGDIR%/../../../root-key"
       cmdline-extra: "acpi=off nokaslr"
       memory: "2048M"
       kvm: true
-      ncpu: 4
+      ncpu: 2
     volumes:
       - "%RUNDIR%/s:/tmp/qemu-sock"
 

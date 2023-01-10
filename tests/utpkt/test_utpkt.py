@@ -233,7 +233,7 @@ async def test_spread_recv_frag_toobig_reply(unet, astepf):
 
 
 async def test_recv_frag(unet, astepf):
-    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="init-delay 10000")
     await astepf("Prior to gen_pkt_test")
     await gen_pkt_test(unet, psize=411, mtu=500, pstep=1, count=2)
 
@@ -242,3 +242,15 @@ async def test_small_pkt_agg(unet, astepf):
     await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
     await astepf("Prior to gen_pkt_test")
     await gen_pkt_test(unet, count=80)
+
+
+async def test_recv_runt(unet, astepf):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="")
+    await astepf("Prior to gen_pkt_test")
+    await gen_pkt_test(unet, psize=1441, mtu=1500, count=8)
+
+
+async def test_recv_runt2(unet, astepf):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="")
+    await astepf("Prior to gen_pkt_test")
+    await gen_pkt_test(unet, psize=1441, pmax=1451, mtu=1500, count=10, pstep=-1)

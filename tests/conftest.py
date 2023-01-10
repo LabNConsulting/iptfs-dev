@@ -41,7 +41,6 @@ def pytest_addoption(parser):  # pylint: disable=E0102
     parser.addoption(
         "--connections",
         type=int,
-        default=1,
         help="number of connectoin (really parallel execution) in test",
     )
 
@@ -60,14 +59,36 @@ def pytest_addoption(parser):  # pylint: disable=E0102
 
     parser.addoption(
         "--mode",
-        default="iptfs",
         help="'iptfs' or 'tunnel' mode",
     )
 
     parser.addoption(
         "--rate",
-        default="1G",
         help="rate to run test at",
+    )
+
+    parser.addoption(
+        "--pkt-size",
+        type=int,
+        help="tunnel packet size",
+    )
+
+    parser.addoption(
+        "--profile",
+        action="store_true",
+        help="Enable profiling if supported by test",
+    )
+
+    parser.addoption(
+        "--unidir",
+        type=int,
+        help="Only run in one direction 0 or 1 for direction",
+    )
+
+    parser.addoption(
+        "--user-pkt-size",
+        type=int,
+        help="user packet size",
     )
 
     return _pytest_addoption(parser)

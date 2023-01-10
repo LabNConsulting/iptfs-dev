@@ -34,40 +34,96 @@ UINT_NULL = 4294967295
 USER_IFINDEX = 1
 
 
+def convert_number(value):
+    """Convert a number value with a possible suffix to an integer.
+
+    >>> convert_number("100k") == 100 * 1024
+    True
+    >>> convert_number("100M") == 100 * 1000 * 1000
+    True
+    >>> convert_number("100Gi") == 100 * 1024 * 1024 * 1024
+    True
+    >>> convert_number("55") == 55
+    True
+    """
+    if value is None:
+        return None
+    rate = str(value)
+    base = 1000
+    if rate[-1] == "i":
+        base = 1024
+        rate = rate[:-1]
+    suffix = "KMGTPEZY"
+    index = suffix.find(rate[-1])
+    if index == -1:
+        base = 1024
+        index = suffix.lower().find(rate[-1])
+    if index != -1:
+        rate = rate[:-1]
+    return int(rate) * base ** (index + 1)
+
+
 @dataclass
 class Args:
     """This is a replacement for previous code which used argparse args"""
 
-    cc: bool = False
-    connections: int = 1
-    capture_drops: bool = False
-    dont_use_ipsec: bool = False
-    dont_use_tfs: bool = False
-    duration: float = 10.0
-    encap_ipv6: bool = False
-    encap_udp: bool = False
-    forward_only: bool = False
-    gdb: bool = False
-    iptfs_packet_size: int = 1500
-    ipv6_traffic: bool = False
-    is_docker: bool = True
-    null: bool = False
-    old_imix: bool = False
-    pause: bool = False
-    pause_on_success: bool = False
-    percentage: float = None
-    rate: float = 0.0
-    unidirectional: bool = False
-    user_packet_size: int = 0
+    def __init__(self, pytestconfig, **kwargs):
+        def get_value(name, default):
+            uname = name.replace("-", "_")
+            defname = "default_" + uname
+            defvalue = kwargs.get(defname, default)
+            if pytestconfig is None:
+                return defvalue
+            cvalue = pytestconfig.getoption("--" + name, defvalue)
+            if cvalue is None:
+                return defvalue
+            return cvalue
+
+        self.mode: str = get_value("mode", "iptfs")
+        mode = self.mode
+
+        self.cc: bool = get_value("cc", False)
+        self.connections: int = get_value("connections", 1)
+        self.capture_drops: bool = get_value("capture_drops", False)
+        self.dont_use_ipsec: bool = mode == "ipip"
+        self.dont_use_tfs: bool = mode == "tunnel"
+        self.duration: float = get_value("duration", 10.0)
+        self.encap_ipv6: bool = get_value("encap-ipv6", False)
+        self.encap_udp: bool = get_value("encap-udp", False)
+        self.forward_only: bool = mode == "routed"
+        self.gdb: bool = get_value("gdb-routers", False)
+        self.pkt_size: int = get_value("pkt-size", 1500)
+        self.ipv6_traffic: bool = get_value("ipv6-traffic", False)
+        self.is_docker: bool = True
+        self.null: bool = get_value("null-encrypt", False)
+        self.old_imix: bool = get_value("old-imix", False)
+        self.pause: bool = get_value("pause", False)
+        self.pause_on_success: bool = get_value("pause-at-end", False)
+        self.percentage: float = get_value("percentage", None)
+        self.rate: float = convert_number(get_value("rate", "1G"))
+        self.unidirectional: int = get_value("unidir", None)
+        self.user_pkt_size: int = get_value("user-pkt-size", 0)
 
 
-def get_max_client_rate(c):
+def get_check_ports(args, c, default=None):
+    ports = c.get_acquired_ports()
+    if not ports and default is not None:
+        ports = default
+    assert len(ports) == 2
+    if args.unidirectional is None:
+        return ports
+    if args.unidirectional == 0:
+        return ports[:1]
+    assert args.unidirectional == 1
+    return ports[1:]
+
+
+def get_max_client_rate(args, c):
     if not c:
         return None
     max_speed = 0
-    ports = c.get_acquired_ports()
-    if not ports:
-        ports = [0, 1]
+    ports = get_check_ports(args, c, [0, 1])
+    assert ports
     for port in ports:
         stl_port = c.ports[port]
         info = stl_port.get_formatted_info()
@@ -111,16 +167,16 @@ def update_table_with_rate(
 
 def get_udp_spread_table(args, c):
     del c
-    assert args.user_packet_size
+    assert args.user_pkt_size
 
     if args.ipv6_traffic:
         minpkt = 48
     else:
         minpkt = 28
 
-    spread_count = (args.user_packet_size + 1) - minpkt
-    avg_ipsize = sum(range(minpkt, args.user_packet_size + 1)) / spread_count
-    pps = util.line_rate_to_pps(args, args.rate, avg_ipsize, args.iptfs_packet_size)
+    spread_count = (args.user_pkt_size + 1) - minpkt
+    avg_ipsize = sum(range(minpkt, args.user_pkt_size + 1)) / spread_count
+    pps = util.line_rate_to_pps(args, args.rate, avg_ipsize, args.pkt_size)
     if args.percentage:
         pps = pps * (args.percentage / 100)
 
@@ -137,7 +193,7 @@ def get_udp_spread_table(args, c):
 
     table = [
         {
-            "size": args.user_packet_size,
+            "size": args.user_pkt_size,
             "pps": pps,
             "pg_id": 1,
         }
@@ -147,15 +203,15 @@ def get_udp_spread_table(args, c):
 
 
 def get_imix_table(args, c, max_imix_size=1500):
-    if args.user_packet_size:
-        ipsize = args.user_packet_size
-        pps = util.line_rate_to_pps(args, args.rate, ipsize, args.iptfs_packet_size)
+    if args.user_pkt_size:
+        ipsize = args.user_pkt_size
+        pps = util.line_rate_to_pps(args, args.rate, ipsize, args.pkt_size)
         if args.percentage:
             pps = pps * (args.percentage / 100)
 
         capacity = 0
         if c:
-            max_speed = get_max_client_rate(c)
+            max_speed = get_max_client_rate(args, c)
             max_pps = util.line_rate_to_ip_pps(max_speed, ipsize)
             if max_speed > 1e9:
                 max_speed_float = f"{max_speed / 1e9}Gbps"
@@ -226,11 +282,11 @@ def get_imix_table(args, c, max_imix_size=1500):
             ]
 
         pps, avg_ipsize, _ = update_table_with_rate(
-            args, imix_table, args.rate, args.iptfs_packet_size, args.percentage, True
+            args, imix_table, args.rate, args.pkt_size, args.percentage, True
         )
         capacity = 0
         if c:
-            max_speed = get_max_client_rate(c)
+            max_speed = get_max_client_rate(args, c)
             max_pps = util.line_rate_to_ip_pps(max_speed, avg_ipsize)
             capacity = 100 * pps / max_pps
         desc = (
@@ -250,19 +306,25 @@ def clear_stats(c):
         c.clear_stats()
 
 
-def collect_trex_stats(c, unidir=False):
+def collect_trex_stats(c, unidir=None):
     stats = c.get_stats()
     stats[0]["rx-missed"] = stats[1]["opackets"] - stats[0]["ipackets"]
     stats[1]["rx-missed"] = stats[0]["opackets"] - stats[1]["ipackets"]
-    if unidir:
+
+    if unidir == 0:
         stats[0]["rx-missed-pct"] = 0
-    else:
+    elif unidir == 1:
+        stats[1]["rx-missed-pct"] = 0
+
+    if unidir == 0 or unidir is None:
+        stats[1]["rx-missed-pct"] = (
+            100 * (stats[0]["opackets"] - stats[1]["ipackets"]) / stats[0]["opackets"]
+        )
+
+    if unidir == 1 or unidir is None:
         stats[0]["rx-missed-pct"] = (
             100 * (stats[1]["opackets"] - stats[0]["ipackets"]) / stats[1]["opackets"]
         )
-    stats[1]["rx-missed-pct"] = (
-        100 * (stats[0]["opackets"] - stats[1]["ipackets"]) / stats[0]["opackets"]
-    )
     return stats
 
 
@@ -338,7 +400,7 @@ def wait_for_test_done(
         c.wait_on_traffic(rx_delay_ms=100)
 
 
-async def run_trex_cont_test(
+async def start_trex_cont_test(
     args,
     c,
     dutlist,
@@ -346,10 +408,9 @@ async def run_trex_cont_test(
     get_streams_func,
     imix_table,
     extended_stats=False,
-    beat_callback=None,
-    beat_time=1,
     modeclass=None,
     statsclass=None,
+    startingf=None,
 ):
     del extended_stats
     # create two streams
@@ -364,7 +425,7 @@ async def run_trex_cont_test(
         ports = c.get_acquired_ports()
         assert len(ports) == 2
 
-        check_ports = ports[:1] if args.unidirectional else ports
+        check_ports = get_check_ports(args, c)
         # add both streams to ports
         for port in check_ports:
             extra_args = {}
@@ -426,16 +487,34 @@ async def run_trex_cont_test(
     check_active_dut(dutlist)
 
     # Setup beat callback and end times
-    starttime = datetime.datetime.now()
-    endtime = starttime + datetime.timedelta(0, duration)
 
     #
     # Start the traffic
     #
-
+    startingfval = await startingf() if startingf else None
+    starttime = datetime.datetime.now()
     if c:
         logger.info("Starting TREX: mult: %s duration: %s", str(mult), str(duration))
         c.start(ports=check_ports, mult=mult, duration=duration)
+
+    return starttime, pcap_servers, startingfval
+
+
+async def end_trex_cont_test(
+    starttime,
+    pcap_servers,
+    startingfval,
+    args,
+    c,
+    dutlist,
+    beat_callback=None,
+    beat_time=1,
+    stoppingf=None,
+):
+    if c:
+        check_ports = get_check_ports(args, c)
+    duration = float(args.duration) if args.duration is not None else 10
+    endtime = starttime + datetime.timedelta(0, duration)
 
     #
     # wait for active ports done
@@ -446,13 +525,16 @@ async def run_trex_cont_test(
 
     logger.debug("TREX: after wait on traffic")
 
+    if stoppingf:
+        await stoppingf(startingfval)
+
     #
     # gpz workaround
     # ETFS tests have not waited long enough to collect VPP counters after
     # the test runs, causing reported values to be incorrect (low). Waiting
     # a few seconds here yields the correct values.
     #
-    time.sleep(5)
+    time.sleep(1)
 
     active_dutlist = get_active_dut(dutlist)
 
@@ -574,6 +656,52 @@ async def run_trex_cont_test(
     #         run_cmd(f"tcpdump -n -s9014 -vvv -ttttt -e -XX -r {pcapfile}"))
 
     return stats, vstats, pcap_servers
+
+
+async def run_trex_cont_test(
+    args,
+    c,
+    dutlist,
+    mult,
+    get_streams_func,
+    imix_table,
+    extended_stats=False,
+    beat_callback=None,
+    beat_time=1,
+    modeclass=None,
+    statsclass=None,
+    startingf=None,
+    beforewaitf=None,
+    stoppingf=None,
+):
+
+    starttime, pcap_servers, startingfval = await start_trex_cont_test(
+        args,
+        c,
+        dutlist,
+        mult,
+        get_streams_func,
+        imix_table,
+        extended_stats,
+        modeclass,
+        statsclass,
+        startingf,
+    )
+
+    if beforewaitf:
+        await beforewaitf(startingfval)
+
+    return await end_trex_cont_test(
+        starttime,
+        pcap_servers,
+        startingfval,
+        args,
+        c,
+        dutlist,
+        beat_callback,
+        beat_time,
+        stoppingf,
+    )
 
 
 def fail_test(args, reason, trex_stats, vstats, dutlist=None):

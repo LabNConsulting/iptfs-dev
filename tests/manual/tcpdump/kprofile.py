@@ -19,25 +19,17 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 "Simple virtual interface qemu based iptfs test."
-import asyncio
 import logging
 import os
-import signal
 
 from common.config import setup_policy_tun
 from munet.base import cmd_error
 
 
-async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
+async def _test_profile(unet, astepf, ipsec_intf):
     h1 = unet.hosts["h1"]
-    r1 = unet.hosts["r1"]
     h2 = unet.hosts["h2"]
 
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="reorder-window 0")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="reorder-window 1")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="reorder-window 5")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="dont-frag reorder-window 0")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="dont-frag reorder-window 5")
     mode = os.environ.get("IPTFS_MODE", None)
     if mode is not None:
         logging.info("Using IPTFS_MODE envvar value: %s", mode)
@@ -68,9 +60,8 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
         sargs.append("-u")
     iperfs = await h2.async_popen(sargs)
 
-    # perfs = None
     try:
-        # And then runt he client
+        # And then run the client
         await astepf("Prior to starting client")
 
         if use_udp:
@@ -81,6 +72,10 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
                 cargs.append("-m")
 
         tval = 10
+
+        logging.info("Starting iperf client on h1 for %s", tval)
+        # logging.info("Starting iperf3 client on h1 at %s for %s", brate, tval)
+        # -M 682 fast, -M 681 superslow, probably the point we aggregate
 
         if iperf3:
             args = [
@@ -117,31 +112,6 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
                 f"{h2.intf_addrs['eth1'].ip}",
             ]
 
-        if profile:
-            perfargs = [
-                "perf",
-                "record",
-                "-F",
-                "997",
-                "-a",
-                "-g",
-                "-o",
-                "/tmp/perf.data",
-                "--",
-                "sleep",
-                tval + 1,
-            ]
-
-        perfc = None
-        if profile:
-            await r1.async_cmd_raises("sysctl -w kernel.perf_cpu_time_max_percent=75")
-            logging.info("Starting perf-profile on r1 for %s", tval + 1)
-            perfc = await r1.async_popen(perfargs)
-
-        logging.info("Starting iperf client on h1 for %s", tval)
-        # logging.info("Starting iperf3 client on h1 at %s for %s", brate, tval)
-        # -M 682 fast, -M 681 superslow, probably the point we aggregate
-
         iperfc = await h1.async_popen(args)
         try:
             rc = await iperfc.wait()
@@ -151,34 +121,10 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
             e = e.decode("utf-8")
             assert not rc, f"client failed: {cmd_error(rc, o, e)}"
 
-            if profile:
-                # We need some sort of timeout here.
-                try:
-                    logging.info("signaling perf to exit")
-                    perfc.send_signal(signal.SIGHUP)
-                    logging.info("waiting for perf to exit")
-                    o, e = await asyncio.wait_for(perfc.communicate(), timeout=2.0)
-                except TimeoutError:
-                    logging.warning(
-                        "perf didn't finish after signal rc: %s", perfc.returncode
-                    )
-                    raise
-                logging.info("perf rc: %s output: %s error: %s", perfc.returncode, o, e)
             logging.info("Results: %s", o)
             # result = json.loads(o)
             # logging.info("Results: %s", json.dumps(result, sort_keys=True, indent=2))
         finally:
-            if perfc:
-                try:
-                    perfc.terminate()
-                    o, e = await perfc.communicate()
-                    logging.warning(
-                        "perf rc: %s output: %s error: %s", perfc.returncode, o, e
-                    )
-                except Exception as error:
-                    logging.warning(
-                        "ignoring error terminating perf profiling: %s", error
-                    )
             if iperfc.returncode is None:
                 iperfc.terminate()
     finally:

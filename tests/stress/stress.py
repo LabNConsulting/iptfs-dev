@@ -21,6 +21,7 @@
 # pylint: disable=wrong-import-position
 "Shared functionality between virtual and physical stress tests."
 
+import asyncio
 import glob
 import logging
 import os
@@ -36,11 +37,15 @@ scapydir = glob.glob(trexlib + "/scapy*")[0]
 sys.path[0:0] = [scapydir]
 
 from common import trexlib, trexutil
-from common.config import setup_policy_tun, toggle_ipv6
+from common.config import (  # pylint: disable=unused-import
+    setup_policy_tun,
+    setup_routed_tun,
+    toggle_ipv6,
+)
+from munet.cli import remote_cli
 from trex_stl_lib.api import STLClient
 
 # from munet.testing.util import async_pause_test
-
 # from munet.cli import async_cli
 
 # All tests are coroutines
@@ -57,6 +62,65 @@ pytestmark = pytest.mark.asyncio
 #   |    | ---- p2p ----------------------------+
 #   |    | .1          12.0.0.0/24
 #   +----+
+
+
+async def start_profile(unet, hostname, tval):
+    perfargs = [
+        "perf",
+        "record",
+        "-F",
+        "997",
+        "-a",
+        "-g",
+        "-o",
+        "/tmp/perf.data",
+        "--",
+        "sleep",
+        tval,
+    ]
+    host = unet.hosts[hostname]
+    await host.async_cmd_raises("sysctl -w kernel.perf_cpu_time_max_percent=75")
+    logging.info("Starting perf-profile on %s for %s", hostname, tval)
+
+    p = await host.async_popen(perfargs, use_pty=True)
+    p.host = host
+    return p
+
+
+async def stop_profile(p):
+    try:
+        try:
+            # logging.info("signaling perf to exit")
+            # p.send_signal(signal.SIGTERM)
+            logging.info("waiting for perf to exit")
+            o, e = await asyncio.wait_for(p.communicate(), timeout=5.0)
+            logging.info(
+                "perf rc: %s output: %s error: %s",
+                p.returncode,
+                o.decode("utf-8"),
+                e.decode("utf-8"),
+            )
+            pdpath = os.path.join(p.host.rundir, "perf.data")
+            p.host.cmd_raises(["/bin/cat", "/tmp/perf.data"], stdout=open(pdpath, "wb"))
+            p = None
+        except TimeoutError:
+            logging.warning("perf didn't finish after signal rc: %s", p.returncode)
+            raise
+        except Exception as error:
+            logging.warning(
+                "unexpected error while waiting for perf: %s", error, exc_info=True
+            )
+    finally:
+        if p is not None:
+            logging.info("terminating perf")
+            p.terminate()
+            try:
+                _, e = await asyncio.wait_for(p.communicate(), timeout=2.0)
+                logging.warning("perf rc: %s error: %s", p.returncode, e)
+            except TimeoutError:
+                logging.warning(
+                    "perf didn't finish after terminate rc: %s", p.returncode
+                )
 
 
 #
@@ -118,51 +182,19 @@ async def _network_up(unet):
     r2.conrepl.cmd_raises("ip neigh change 12.0.0.1 dev eth2")
 
 
-def convert_number(value):
-    """Convert a number value with a possible suffix to an integer.
-
-    >>> convert_number("100k") == 100 * 1024
-    True
-    >>> convert_number("100M") == 100 * 1000 * 1000
-    True
-    >>> convert_number("100Gi") == 100 * 1024 * 1024 * 1024
-    True
-    >>> convert_number("55") == 55
-    True
-    """
-    if value is None:
-        return None
-    rate = str(value)
-    base = 1000
-    if rate[-1] == "i":
-        base = 1024
-        rate = rate[:-1]
-    suffix = "KMGTPEZY"
-    index = suffix.find(rate[-1])
-    if index == -1:
-        base = 1024
-        index = suffix.lower().find(rate[-1])
-    if index != -1:
-        rate = rate[:-1]
-    return int(rate) * base ** (index + 1)
-
-
 async def _test_policy_small_pkt(unet, pytestconfig):
-    connections = pytestconfig.getoption("--connections")
-    duration = pytestconfig.getoption("--duration")
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
-    mode = pytestconfig.getoption("--mode")
-    rate = convert_number(pytestconfig.getoption("--rate", "8M")) / connections
+    profile = bool(pytestconfig.getoption("--profile"))
 
-    await setup_policy_tun(
-        unet, ipsec_intf="eth1", mode=mode, iptfs_opts=iptfs_opts, trex=True
-    )
+    args = trexutil.Args(pytestconfig, default_rate="10M", default_user_pkt_size=40)
+
+    # await setup_policy_tun(
+    if args.mode != "routed":
+        await setup_routed_tun(
+            unet, ipsec_intf="eth1", mode=args.mode, iptfs_opts=iptfs_opts, trex=True
+        )
 
     # await async_pause_test("after policy setup")
-
-    args = trexutil.Args(
-        rate=rate, user_packet_size=40, duration=duration, connections=connections
-    )
 
     # Some TREX test
     trex_ip = unet.hosts["trex"].intf_addrs["mgmt0"].ip
@@ -181,9 +213,18 @@ async def _test_policy_small_pkt(unet, pytestconfig):
             direction, imix_table, modeclass, statsclass, nstreams=nstreams
         )
 
+    async def starting():
+        return await start_profile(unet, "r1", args.duration)
+
+    async def beforewait(_):
+        pass
+        # unet.hosts["r1"].run_in_window("bash")
+        # unet.hosts["r2"].run_in_window("bash")
+
     dutlist = []
     imix_table, pps, avg_ipsize, imix_desc = trexutil.get_imix_table(args, c)
     logging.info("pps: %s av_ipsize: %s desc: %s", pps, avg_ipsize, imix_desc)
+
     trex_stats, vstats, _ = await trexutil.run_trex_cont_test(
         args,
         c,
@@ -192,26 +233,27 @@ async def _test_policy_small_pkt(unet, pytestconfig):
         get_streams,
         imix_table=imix_table,
         # extended_stats=True)
+        startingf=starting if profile else None,
+        beforewaitf=beforewait,
+        stoppingf=stop_profile if profile else None,
     )
     c.disconnect()
     trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)
+
+    await remote_cli(unet, "cli>", "CLI", True)
     # await async_cli(unet)
 
 
 async def _test_policy_imix(unet, pytestconfig):
-    connections = pytestconfig.getoption("--connections")
-    duration = pytestconfig.getoption("--duration")
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
-    mode = pytestconfig.getoption("--mode")
-    rate = convert_number(pytestconfig.getoption("--rate", "40M")) / connections
+    profile = bool(pytestconfig.getoption("--profile"))
 
-    await setup_policy_tun(
-        unet, ipsec_intf="eth1", mode=mode, iptfs_opts=iptfs_opts, trex=True
-    )
+    args = trexutil.Args(pytestconfig)
 
-    args = trexutil.Args(
-        rate=rate, old_imix=True, duration=duration, connections=connections
-    )
+    if args.mode != "routed":
+        await setup_policy_tun(
+            unet, ipsec_intf="eth1", mode=args.mode, iptfs_opts=iptfs_opts, trex=True
+        )
 
     # Some TREX test
     trex_ip = unet.hosts["trex"].intf_addrs["mgmt0"].ip
@@ -229,6 +271,9 @@ async def _test_policy_imix(unet, pytestconfig):
         return trexlib.get_static_streams_simple(
             direction, imix_table, modeclass, statsclass, nstreams=nstreams
         )
+
+    def starting():
+        return start_profile(unet, "r1", args.duration)
 
     dutlist = []
     imix_table, pps, avg_ipsize, imix_desc = trexutil.get_imix_table(
@@ -243,6 +288,8 @@ async def _test_policy_imix(unet, pytestconfig):
         get_streams,
         imix_table=imix_table,
         # extended_stats=True)
+        startingf=starting if profile else None,
+        stoppingf=stop_profile if profile else None,
     )
     c.disconnect()
     trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)

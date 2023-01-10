@@ -1,10 +1,31 @@
-- port_limit    : 2
-  version       : 2
-  low_end       : false
-  c             : 2
-  interfaces    : ["1b:02.0", "1b:0a.0"]
-  port_info     :
-                 - ip         : 11.0.0.1
-                   default_gw : 11.0.0.2
-                 - ip         : 12.0.0.1
-                   default_gw : 12.0.0.3
+# - port_limit    : 2
+#   version       : 2
+#   low_end       : false
+#   c             : 4
+#   interfaces    : ["d8:02.0", "d8:0a.0"]
+#   port_info     :
+#                  - ip         : 11.0.0.1
+#                    default_gw : 11.0.0.2
+#                  - ip         : 12.0.0.1
+#                    default_gw : 12.0.0.3
+#   platform:
+#     master_thread_id: 0
+#     latency_thread_id: 1
+#     dual_if:
+#       - socket: 1
+#         threads: [24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47]
+
+- version: 2
+  interfaces: ['1b:02.0', '1b:0a.0']
+  #interfaces: ['d8:02.0', 'd8:0a.0']
+  port_info:
+      - ip: 11.0.0.1
+        default_gw: 11.0.0.2
+      - ip: 12.0.0.1
+        default_gw: 12.0.0.3
+  platform:
+      master_thread_id: 0
+      latency_thread_id: 1
+      dual_if:
+        - socket: 1
+          threads: [25,26,27,28]

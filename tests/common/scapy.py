@@ -107,13 +107,18 @@ def gen_ippkts(  # pylint: disable=W0221
         pkts = []
         start = payload_size
         end = payload_spread
-        psize = start
+        psize = start if inc > 0 else end
         for i in range(count):
             pkts.append(IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * (psize)))
             psize += inc
-            if psize > end:
-                # wrap around
-                psize = start + (psize - end)
+            if inc > 0:
+                if psize > end:
+                    # wrap around
+                    psize = start + (psize - end)
+            else:
+                if psize < end:
+                    # wrap around
+                    psize = end - (end - psize)
         return pkts
 
 
@@ -158,8 +163,9 @@ async def gen_pkts(
             pcount = count
         else:
             # Walk spread one time
-            pcount = (pmaxsize - psize + 1 + pstep - 1) // pstep
+            pcount = (pmaxsize - psize + 1) // (-pstep if pstep < 0 else pstep)
             if wrap:
+                # should incorporate the remainder from division.
                 pcount *= wrap
     else:
         pcount = count if count else 100
@@ -219,7 +225,7 @@ def send_recv_esp_pkts(
         pkts = []
         try:
             for idx, esppkt in enumerate(esppkts):
-                pkts.append(osa.decrypt(esppkt))
+                pkts.append(osa.decrypt_iptfs_pkt(esppkt, prevpkts=pkts))
         except Exception as error:
             logging.error(
                 "Exception decrypt recv ESP pkts index %s chunk %s: %s\n",

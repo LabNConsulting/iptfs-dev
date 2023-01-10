@@ -24,12 +24,7 @@ import os
 
 import pytest
 from munet.testing.fixtures import _unet_impl
-from stress import (
-    _network_up,
-    _test_policy_imix,
-    _test_policy_small_pkt,
-    convert_number,
-)
+from stress import _network_up, _test_policy_imix, _test_policy_small_pkt
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio

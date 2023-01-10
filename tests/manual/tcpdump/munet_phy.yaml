@@ -1,6 +1,6 @@
 topology:
   networks-autonumber: true
-  dns: "mgmt0"
+  dns-network: "mgmt0"
   networks:
     - name: mgmt0
       ip: 192.168.0.254/24
@@ -44,6 +44,7 @@ kinds:
     qemu:
       kernel: "%CONFIGDIR%/../../../output-linux/arch/x86/boot/bzImage"
       initrd: "%CONFIGDIR%/../../../output-buildroot/images/rootfs.cpio.gz"
+      sshkey: "%CONFIGDIR%/../../../root-key"
       cmdline-extra: "acpi=off nokaslr"
       memory: "2048M"
       kvm: true
@@ -60,4 +61,9 @@ cli:
       exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
       format: "mon HOST [HOST ...]"
       help: "open monitor on given hosts, * for all"
+      new-window: true
+    - name: twin
+      exec: "bash -c '{}'"
+      format: "twin HOST [HOST ...] cmd"
+      help: "run command in window"
       new-window: true
