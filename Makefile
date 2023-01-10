@@ -1,6 +1,8 @@
 # LINUXCONFIG ?= linux.config
 # LINUXCONFIG ?= linux-default.config
 LINUXCONFIG ?= linux-fast.config
+# LINUXCONFIG ?= linux-fasttrace.config
+# LINUXCONFIG ?= linux-nosmp.config
 
 ifdef SHALLOW_CLONE
 DEPTH ?= --depth 1
@@ -49,8 +51,30 @@ output-buildroot:
 output-linux:
 	mkdir -p $@
 
+#
+# Testing
+#
 tests/ci:
 	sudo -E pytest -s tests/config tests/errors tests/frags tests/simplenet tests/utpkt/test_utpkt.py
 
 tests/trex tests/external_libs:
 	scripts/extract-trex.sh
+
+#
+# Personal
+#
+flame-clean:
+	sudo rm -f /tmp/out.perf-folded flame.svg /tmp/unet-test/tests.stress.test_stress_phy/r1/perf.data
+
+flame: flame.svg
+	scp flame.svg ja:
+
+/tmp/unet-test/tests.stress.test_stress_phy/r1/perf.data:
+	sudo -E pytest -s -v tests/stress/test_stress_phy.py::test_policy_small_pkt  --stdout=r1  --enable-physical --profile --duration=30 || true
+
+/tmp/out.perf-folded: /tmp/unet-test/tests.stress.test_stress_phy/r1/perf.data
+	(cd FlameGraph && perf script --vmlinux ../output-linux/vmlinux -i ../$< | ./stackcollapse-perf.pl > /tmp/out.perf-folded)
+
+flame.svg: /tmp/out.perf-folded
+	(cd FlameGraph && ./flamegraph.pl --height=16 --fontsize=6 $< > ../$@)
+
