@@ -220,29 +220,38 @@ jobs:
         run: |
           set -e
           tmpf=/tmp/test-results-$$.txt
-          sudo -E env CI=$CI python3 -m pytest -s tests/config | tee $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage tests/config | tee $tmpf
           grep -v SKIPPED $tmpf
 
       - name: Errors test
         run: |
           set -e
           tmpf=/tmp/test-results-$$.txt
-          sudo -E env CI=$CI python3 -m pytest -s tests/errors | tee $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage tests/errors | tee $tmpf
           grep -v SKIPPED $tmpf
 
       - name: Simple test
         run: |
           set -e
           tmpf=/tmp/test-results-$$.txt
-          sudo -E env CI=$CI python3 -m pytest -s tests/simplenet | tee $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage tests/simplenet | tee $tmpf
           grep -v SKIPPED $tmpf
 
       - name: UT packet test
         run: |
           set -e
           tmpf=/tmp/test-results-$$.txt
-          sudo python3 -m pytest -s tests/utpkt | tee $tmpf
+          sudo python3 -m pytest -s --coverage tests/utpkt | tee $tmpf
           grep -v SKIPPED $tmpf
+
+      - name: Extract coverage data
+        if: ${{ always() }}
+        run: |
+          whoami
+          bash scripts/extract-cov.sh
+          mkdir -p test-logs
+          sudo cp *.info test-logs
+          sudo find /tmp/unet-test -name 'gcov-data.tgz' -exec rm
 
       - name: Collect test logs
         if: ${{ always() }}
