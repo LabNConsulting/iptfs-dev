@@ -1,4 +1,5 @@
 # LINUXCONFIG ?= linux.config
+# LINUXCONFIG ?= linux-cov.config
 # LINUXCONFIG ?= linux-default.config
 LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
