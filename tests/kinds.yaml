@@ -15,8 +15,6 @@ kinds:
       ncpu: 1
       console:
         timeout: 180
-    volumes:
-      - "%RUNDIR%/s:/tmp/qemu-sock"
 
   - name: trex_phy
     privileged: true
