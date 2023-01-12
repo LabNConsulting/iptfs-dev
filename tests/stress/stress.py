@@ -182,11 +182,11 @@ async def _network_up(unet):
     r2.conrepl.cmd_raises("ip neigh change 12.0.0.1 dev eth2")
 
 
-async def _test_policy_small_pkt(unet, pytestconfig):
+async def _test_policy_small_pkt(unet, pytestconfig, default_rate="100M"):
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
     profile = bool(pytestconfig.getoption("--profile"))
 
-    args = trexutil.Args(pytestconfig, default_rate="10M", default_user_pkt_size=40)
+    args = trexutil.Args(pytestconfig, default_rate=default_rate, default_user_pkt_size=40)
 
     # await setup_policy_tun(
     if args.mode != "routed":
@@ -244,11 +244,11 @@ async def _test_policy_small_pkt(unet, pytestconfig):
     # await async_cli(unet)
 
 
-async def _test_policy_imix(unet, pytestconfig):
+async def _test_policy_imix(unet, pytestconfig, default_rate="1G"):
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
     profile = bool(pytestconfig.getoption("--profile"))
 
-    args = trexutil.Args(pytestconfig)
+    args = trexutil.Args(pytestconfig, default_rate=default_rate)
 
     if args.mode != "routed":
         await setup_policy_tun(

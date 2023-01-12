@@ -79,8 +79,8 @@ async def test_net_up(unet):
 
 
 async def test_policy_small_pkt(unet, pytestconfig):
-    await _test_policy_small_pkt(unet, pytestconfig)
+    await _test_policy_small_pkt(unet, pytestconfig, default_rate="100M")
 
 
 async def test_policy_imix(unet, pytestconfig):
-    await _test_policy_imix(unet, pytestconfig)
+    await _test_policy_imix(unet, pytestconfig, default_rate="1G")
