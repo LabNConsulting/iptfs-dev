@@ -150,7 +150,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: output-buildroot.tar.gz
-          key: ${{ runner.os }}-br-${{ hashFiles('buildroot.config', 'output-buildroot.tar.gz') }}
+          key: ${{ runner.os }}-br-${{ hashFiles('buildroot.config', 'output-buildroot.tar.gz', 'root-key', 'root-key.pub') }}
           restore-keys: |
             key: ${{ runner.os }}-br-
 
@@ -184,7 +184,7 @@ jobs:
           # tar up the remaining files including .ccache
           cd ..
           echo "Collecting new cache contents: $(date)"
-          tar -czf output-buildroot.tar.gz output-buildroot
+          tar -czf output-buildroot.tar.gz output-buildroot root-key root-key.pub
           ls -hl output-buildroot.tar.gz
           echo "Done collecting new cache contents: $(date)"
 
@@ -194,7 +194,17 @@ jobs:
           name: rootfs-compressed-cpio
           path: output-buildroot/images/rootfs.cpio.gz
           retention-days: 1
+          if-no-files-found: error
 
+      - name: Archive buildroot root-key
+        uses: actions/upload-artifact@v3
+        with:
+          name: root-key
+          path: |
+            root-key
+            root-key.pub
+          retention-days: 1
+          if-no-files-found: error
   test:
     runs-on: ubuntu-22.04
     needs: ["build-cov-kernel", "build-rootfs"]
@@ -219,6 +229,11 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: rootfs-compressed-cpio
+
+      - name: Fetch root-key
+        uses: actions/download-artifact@v3
+        with:
+          name: root-key
 
       - name: Prep tests
         run: |
@@ -303,4 +318,6 @@ jobs:
         with:
           files: |
             bzImage
+            root-key
+            root-key.pub
             rootfs.cpio.gz
