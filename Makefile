@@ -1,4 +1,5 @@
 # LINUXCONFIG ?= linux.config
+# LINUXCONFIG ?= linux-cov.config
 # LINUXCONFIG ?= linux-default.config
 LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
@@ -59,6 +60,16 @@ tests/ci:
 
 tests/trex tests/external_libs:
 	scripts/extract-trex.sh
+
+
+#
+# CI Rules
+#
+ci-extract-cov:
+	bash scripts/extract-cov.sh
+	mkdir -p test-logs
+	cp *.info test-logs
+
 
 #
 # Personal

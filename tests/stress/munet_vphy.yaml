@@ -1,7 +1,7 @@
 topology:
   networks-autonumber: true
   ipv6-enable: false
-  dns: "mgmt0"
+  dns-network: "mgmt0"
   networks:
     - name: mgmt0
       ip: 192.168.0.254/24

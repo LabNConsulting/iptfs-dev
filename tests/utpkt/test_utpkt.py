@@ -93,6 +93,12 @@ async def test_net_up(unet):
     # r1 (qemu side) pings h1
     logging.debug(r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.0.1"))
 
+    # Make sure we can ping the ssh interface
+    # h1.cmd_raises("ping -w1 -i.2 -c1 192.168.0.2")
+    # unet.cmd_raises("ping -w1 -i.2 -c1 192.168.0.2")
+    # commander.cmd_raises("ping -w1 -i.2 -c1 192.168.0.2")
+    # unet.hosts["r1"].cmd_raises("ping -w1 -i.2 -c1 192.168.0.2")
+
 
 def decrypt_decap_iptfs_pkts(osa, encpkts):
     """Decrypt a list of packets and then process resulting IPTFS stream"""

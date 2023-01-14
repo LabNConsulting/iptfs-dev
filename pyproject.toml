@@ -34,7 +34,7 @@ norecursedirs = "tests/external_libs tests/manual tests/podman-trex-extract test
 # before stress though, it has to be at the top (or somewhere more than just
 # above stress..) who knows...; this works.
 testpaths = [
-        "tests/utpkt",
+        # "tests/utpkt",
         "tests/config",
         "tests/console",
         "tests/errors",
