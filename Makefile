@@ -35,6 +35,8 @@ br-menuconfig:
 output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
 	mkdir -p output-linux
 	make -C linux -j$(shell nproc) O=../output-linux
+	(cd linux && scripts/clang-tools/gen_compile_commands.py -d../output-linux)
+
 
 output-buildroot/images/rootfs.cpio.gz: output-buildroot output-buildroot/.config
 	mkdir -p output-buildroot
