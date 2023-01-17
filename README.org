@@ -70,19 +70,18 @@ ping from ~h1~ to ~h2~ over the iptfs tunnel use the following command).
 
 *** Qemu
 **** consoles
-2 serial consoles are created using unix sockets '/tmp/qemu-sock/console' and
-'/tmp/qemu-sock/con2'. These can be accessed in the namespace with the following
-command:
+3 serial consoles are created using unix sockets:
+   - '%RUNDIR%/s/console'
+   - '%RUNDIR%/s/vcon0'
+   - '%RUNDIR%/s/vcon1'
+   -
+These can be accessed with::
 
-~socat /dev/stdin,escape=0x1d,rawer unix-connect:/tmp/qemu-sock/console~
+~socat /dev/stdin,escape=0x1d,rawer unix-connect:%RUNDIR%/s/console~
 
-And outside of the namespace with
+Where if the node is named ~r1~ then ~%RUNDIR%~ is usually /tmp/unet-root/r1/ so:
 
-~socat /dev/stdin,escape=0x1d,rawer unix-connect:<rundir>/<name>/s/console~
-
-Where ~<rundir>~ is usually ~/tmp/unet-root/~, so if the node name is ~r1~:
-
-~sudo socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/unet-root/r1/console~
+~sudo socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/unet-root/r1/s/console~
 
 If your ~socat~ doesn't support ~rawer~ option replace with ~raw,echo=0,icanon=0~.
 **** GDB
