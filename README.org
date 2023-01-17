@@ -124,6 +124,17 @@ In order for this to work seemlessly you need to do a couple steps:
   2. run ./scripts/clang-tools/gen_compile_commands.py -d ../output-linux
   3. printf "%compile_commands.json\n-D__IN_CCLS__\n" > .ccls
 
+** CI Usage
+*** Testing.
+The tests contained herein are used directly in the ~iptfs-linux~ github project
+in it's CI for testing kernel changes.
+*** Releases
+To create a new release (for artifacts) of a kernel and rootfs on github add a tag.
+These artifacts are used by other external project (e.g., by munet to test munet
+VM capabilities).
+
+This works in the ~iptfs-dev~ directory as well as in ~iptfs-linux~ as they both
+use this repo for CI.
 ** Design Notes
 *** Config
 The most basic configuration is to select "iptfs" as the mode rather than
@@ -178,12 +189,10 @@ way to go at a first glance. The modes are implemented in:
 net/xfrm/xfrm_output.c
 net/xfrm/xfrm_input.c
 
-
 ** Bugs
 - xfrmi_rcv_cb is looking up xfrm_state from our newly created skb from decaping
   iptfs, but it has not xfrm_state so we panic
   - Need to associate the xfrm_state with new skbs too.. is there a refcnt for this?
-
 
 * Miscellaneous Development Scratchpad
 This is an area for development notes. Please don't consider them current or
