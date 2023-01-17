@@ -22,6 +22,7 @@
 import logging
 import os
 import subprocess
+import time
 
 import pytest
 from common.config import setup_policy_tun, toggle_ipv6
@@ -62,9 +63,11 @@ async def network_up(unet):
     #     r1repl.cmd_raises(f"sysctl -w net.ipv6.conf.eth{i}.disable_ipv6=1")
     #     # r1repl.cmd_raises(f"ip addr flush dev eth{i}")
     #     r1repl.cmd_raises(f"ip link set eth{i} up")
-    #     r1repl.cmd_raises(f"ip addr add {r1.intf_addrs[f'eth{i}']} dev eth{i}")
+    #     r1repl.cmd_raises(f"ip addr add {r1.get_intf_addr(f'eth{i}')} dev eth{i}")
 
     r1repl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
+
+    time.sleep(5)
 
     #
     # R2 - VPP
@@ -73,7 +76,7 @@ async def network_up(unet):
         vppctl_raises(r2, f"vppctl set int state UnknownEthernet{i} up")
         vppctl_raises(
             r2,
-            f"vppctl set int ip address UnknownEthernet{i} {r2.intf_addrs[f'eth{i}']}",
+            f"vppctl set int ip address UnknownEthernet{i} {r2.get_intf_addr(f'eth{i}')}",
         )
     vppctl_raises(r2, "vppctl create loopback interface", "loop0")
     vppctl_raises(r2, "vppctl set int state loop0 up")
@@ -197,14 +200,14 @@ async def setup_vpp_ipsec(
     vppctl_raises(
         r2,
         f"vppctl ipsec sa add {reqid_1to2} spi {spi_1to2} esp {sa_enc} {sa_auth} "
-        f"tunnel-src {r1.intf_addrs['eth2'].ip} tunnel-dst {r2.intf_addrs['eth2'].ip} "
+        f"tunnel-src {r1.get_intf_addr('eth2').ip} tunnel-dst {r2.get_intf_addr('eth2').ip} "
         "inbound" + in_iptfs_opts
         # " use-esn use-anti-replay inbound",
     )
     vppctl_raises(
         r2,
         f"vppctl ipsec sa add {reqid_2to1} spi {spi_2to1} esp {sa_enc} {sa_auth} "
-        f"tunnel-src {r2.intf_addrs['eth2'].ip} tunnel-dst {r1.intf_addrs['eth2'].ip} "
+        f"tunnel-src {r2.get_intf_addr('eth2').ip} tunnel-dst {r1.get_intf_addr('eth2').ip} "
         + out_iptfs_opts
         # " use-esn use-anti-replay",
     )
@@ -264,7 +267,7 @@ async def _test_iptfs_policy_tun_up(
     # for r, repl in [(r1, r1repl), (r2, r2repl)]:
     #     repl.cmd_raises("ip link set lo up")
     #     repl.cmd_raises("ip link set eth0 up")
-    #     repl.cmd_status(f"""ip addr add {r.intf_addrs["eth0"]} dev eth0""")
+    #     repl.cmd_status(f"""ip addr add {r.get_intf_addr("eth0")} dev eth0""")
 
     if not use_gcm:
         if use_nullnull:
@@ -294,11 +297,11 @@ async def _test_iptfs_policy_tun_up(
             # "256"
         )
 
-    r1ipp = r1.intf_addrs["eth2"]
+    r1ipp = r1.get_intf_addr("eth2")
     r1ip = r1ipp.ip
     r1ipp = r1ipp.network
 
-    r2ipp = r2.intf_addrs["eth2"]
+    r2ipp = r2.get_intf_addr("eth2")
     r2ip = r2ipp.ip
     r2ipp = r2ipp.network
 
