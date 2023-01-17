@@ -43,13 +43,13 @@ fi
 # fi
 
 
-trex_image=$(sed -e '/image: quay.io\/chopps\/trex.*/!d;s/.*image: *//' $TESTSDIR/stress/munet.yaml)
+trex_image=$(sed -e '/image: quay.io\/chopps\/trex.*/!d;s/.*image: *//' $TESTSDIR/kinds.yaml)
 trex_version=${trex_image#*trex:}
 tdir=$extract_dir/$trex_version
 libdir=$tdir/automation/trex_control_plane/interactive
 
 if [[ ! $trex_version ]] || [[ ! $trex_image ]]; then
-    echo "can't locate image in stress/munet.yaml"
+    echo "can't locate image in kinds.yaml"
     exit 1
 fi
 

@@ -25,7 +25,6 @@ import pytest
 from common.config import _network_up, setup_policy_tun, setup_routed_tun
 from common.tests import _test_net_up
 
-
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
 
@@ -59,10 +58,11 @@ async def test_net_up(unet):
     await _test_net_up(unet, mgmt0=False)
 
 
-async def test_policy_tun_up(unet, astepf):
+async def test_policy_tun_up(unet, astepf, pytestconfig):
     h1 = unet.hosts["h1"]
 
-    await setup_policy_tun(unet, ipsec_intf="eth1")
+    opts = pytestconfig.getoption("--iptfs-opts", "")
+    await setup_policy_tun(unet, iptfs_opts=opts, ipsec_intf="eth1")
 
     # Need to count ESP packets somehow to verify these were encrypted
     # logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
@@ -89,10 +89,11 @@ async def test_policy_tun_up(unet, astepf):
     # await async_cli(unet)
 
 
-async def test_routed_tun_up(unet):
+async def test_routed_tun_up(unet, pytestconfig):
     h1 = unet.hosts["h1"]
 
-    await setup_routed_tun(unet, ipsec_intf="eth1")
+    opts = pytestconfig.getoption("--iptfs-opts", "")
+    await setup_routed_tun(unet, iptfs_opts=opts, ipsec_intf="eth1")
 
     # await astepf("first ping")
     # logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))

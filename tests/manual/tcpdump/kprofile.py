@@ -143,7 +143,7 @@ async def _test_tcp(unet, astepf):
         logging.info("Using IPTFS_MODE envvar value: %s", mode)
         await setup_policy_tun(unet, mode=mode)
     else:
-        await setup_policy_tun(unet, mode="iptfs")
+        await setup_policy_tun(unet)
 
     # # Keep everything SUPER simple
     # for host in (r1, r2):

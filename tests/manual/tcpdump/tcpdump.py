@@ -33,11 +33,11 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
     r1 = unet.hosts["r1"]
     h2 = unet.hosts["h2"]
 
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="reorder-window 0")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="reorder-window 1")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="reorder-window 5")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="dont-frag reorder-window 0")
-    # await setup_policy_tun(unet, mode="iptfs", iptfs_opts="dont-frag reorder-window 5")
+    # await setup_policy_tun(unet, iptfs_opts="reorder-window 0")
+    # await setup_policy_tun(unet, iptfs_opts="reorder-window 1")
+    # await setup_policy_tun(unet, iptfs_opts="reorder-window 5")
+    # await setup_policy_tun(unet, iptfs_opts="dont-frag reorder-window 0")
+    # await setup_policy_tun(unet, iptfs_opts="dont-frag reorder-window 5")
     mode = os.environ.get("IPTFS_MODE", None)
     if mode is not None:
         logging.info("Using IPTFS_MODE envvar value: %s", mode)
@@ -192,12 +192,7 @@ async def _test_tcp(unet, astepf):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
 
-    if "IPTFS_MODE" in os.environ:
-        mode = os.environ["IPTFS_MODE"]
-        logging.info("Using IPTFS_MODE envvar value: %s", mode)
-        await setup_policy_tun(unet, mode=mode)
-    else:
-        await setup_policy_tun(unet, mode="iptfs")
+    await setup_policy_tun(unet)
 
     # # Keep everything SUPER simple
     # for host in (r1, r2):

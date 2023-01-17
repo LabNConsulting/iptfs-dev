@@ -71,17 +71,17 @@ kinds:
       kvm: true
       ncpu: 2
     volumes:
-      - "%RUNDIR%/s:/tmp/qemu-sock"
+      - "%RUNDIR%/s:%RUNDIR%/s"
 
 cli:
   commands:
     - name: con
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/vcon0"
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:%RUNDIR%/s/vcon0"
       format: "con HOST [HOST ...]"
       help: "open console on given hosts, * for all"
       new-window: true
     - name: mon
-      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:/tmp/qemu-sock/monitor"
+      exec: "socat /dev/stdin,rawer,escape=0x1d,,echo=0,icanon=0 unix-connect:%RUNDIR%/s/monitor"
       format: "mon HOST [HOST ...]"
       help: "open monitor on given hosts, * for all"
       new-window: true

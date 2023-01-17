@@ -1,16 +1,21 @@
 topology:
+  ipv6-enable: true
   networks-autonumber: true
   dns-network: "mgmt0"
   networks:
     - name: mgmt0
       ip: 192.168.0.254/24
+      ipv6: "fd00::ff/64"
       nat: true
     - name: net0
-      ip: 10.0.0.254/24
+      ip: 10.0.0.0/24
+      ipv6: "fc00::/64"
     - name: net1
-      ip: 10.0.1.254/24
+      ip: 10.0.1.0/24
+      ipv6: "fc00:0:0:1::/64"
     - name: net2
-      ip: 10.0.2.254/24
+      ip: 10.0.2.0/24
+      ipv6: "fc00:0:0:2::/64"
   nodes:
     - name: h1
       connections:

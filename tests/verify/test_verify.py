@@ -259,7 +259,7 @@ async def _test_iptfs_policy_tun_up(
     r1repl = r1.conrepl
 
     setup_vpp_ipsec(unet)
-    setup_policy_tun(unet, mode="iptfs", r1only=True)
+    setup_policy_tun(unet, r1only=True)
 
     # for r, repl in [(r1, r1repl), (r2, r2repl)]:
     #     repl.cmd_raises("ip link set lo up")

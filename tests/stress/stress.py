@@ -186,7 +186,9 @@ async def _test_policy_small_pkt(unet, pytestconfig, default_rate="100M"):
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
     profile = bool(pytestconfig.getoption("--profile"))
 
-    args = trexutil.Args(pytestconfig, default_rate=default_rate, default_user_pkt_size=40)
+    args = trexutil.Args(
+        pytestconfig, default_rate=default_rate, default_user_pkt_size=40
+    )
 
     # await setup_policy_tun(
     if args.mode != "routed":
@@ -197,7 +199,7 @@ async def _test_policy_small_pkt(unet, pytestconfig, default_rate="100M"):
     # await async_pause_test("after policy setup")
 
     # Some TREX test
-    trex_ip = unet.hosts["trex"].intf_addrs["mgmt0"].ip
+    trex_ip = unet.hosts["trex"].get_intf_addr("mgmt0").ip
     c = STLClient(server=trex_ip, sync_timeout=10, async_timeout=10)
     c.connect()
 
@@ -256,7 +258,7 @@ async def _test_policy_imix(unet, pytestconfig, default_rate="1G"):
         )
 
     # Some TREX test
-    trex_ip = unet.hosts["trex"].intf_addrs["mgmt0"].ip
+    trex_ip = unet.hosts["trex"].get_intf_addr("mgmt0").ip
     c = STLClient(server=trex_ip, sync_timeout=10, async_timeout=10)
     c.connect()
 

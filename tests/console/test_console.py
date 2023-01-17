@@ -30,23 +30,23 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
-async def _test_console(unet, cmd, use_pty, will_echo=False):
-    r1 = unet.hosts["r1"]
+async def _test_console(r, cmd, use_pty, will_echo=False):
     time.sleep(1)
-    repl = await r1.console(
-        cmd, user="root", use_pty=use_pty, trace=True, will_echo=will_echo
+    repl = await r.console(
+        cmd, user="root", use_pty=use_pty, trace=True, will_echo=will_echo, ns_only=True
     )
     return repl
 
 
 async def test_console_pty(unet):
     "Test pty inside the VM"
+    r1 = unet.hosts["r1"]
     cmd = [
         "socat",
         "/dev/stdin,rawer,echo=0,icanon=0",
-        "unix-connect:/tmp/qemu-sock/console",
+        f"unix-connect:{r1.rundir}/s/console",
     ]
-    repl = await _test_console(unet, cmd, use_pty=True, will_echo=True)
+    repl = await _test_console(r1, cmd, use_pty=True, will_echo=True)
 
     output = repl.cmd_raises("ls --color=never -1 /sys")
     logging.debug("'ls /sys' output: '%s'", output)
@@ -72,8 +72,9 @@ async def test_console_pty(unet):
 
 async def test_console_piped(unet):
     "Test inside the VM"
-    cmd = ["socat", "-", "unix-connect:/tmp/qemu-sock/console"]
-    repl = await _test_console(unet, cmd, use_pty=False, will_echo=True)
+    r1 = unet.hosts["r1"]
+    cmd = ["socat", "-", f"unix-connect:{r1.rundir}/s/console"]
+    repl = await _test_console(r1, cmd, use_pty=False, will_echo=True)
 
     output = repl.cmd_raises("ls -1 --color=never /sys")
     logging.debug("'ls /sys' output: '%s'", output)

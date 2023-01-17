@@ -76,10 +76,12 @@ async def test_net_up(unet):
     await _test_net_up(unet)
 
 
-async def test_policy_mtu(unet, astepf):
+async def test_policy_mtu(unet, astepf, pytestconfig):
     h1 = unet.hosts["h1"]
 
-    await setup_policy_tun(unet, mode="tunnel")
+    ipv6 = pytestconfig.getoption("--enable-ipv6", False)
+    opts = pytestconfig.getoption("--iptfs-opts", "")
+    await setup_policy_tun(unet, iptfs_opts=opts, ipv6=ipv6)
 
     await astepf("Send initial small ping")
     logging.info(h1.cmd_raises("ping -c1 10.0.2.4"))
@@ -87,14 +89,18 @@ async def test_policy_mtu(unet, astepf):
     await astepf("Send too big ping")
     rc, _, _ = h1.cmd_status("ping -s 1000 -Mdo -c1 10.0.2.4", warn=False)
     assert rc, "Ping worked over too small tunnel"
+
+    # XXX IPv6 testing?
 
     await astepf("Test complete")
 
 
-async def test_iptfs_mtu(unet, astepf):
+async def test_iptfs_mtu(unet, astepf, pytestconfig):
     h1 = unet.hosts["h1"]
 
-    await setup_policy_tun(unet, mode="tunnel")
+    ipv6 = pytestconfig.getoption("--enable-ipv6", False)
+    opts = pytestconfig.getoption("--iptfs-opts", "")
+    await setup_policy_tun(unet, iptfs_opts=opts, ipv6=ipv6)
 
     await astepf("Send initial small ping")
     logging.info(h1.cmd_raises("ping -c1 10.0.2.4"))
@@ -102,5 +108,7 @@ async def test_iptfs_mtu(unet, astepf):
     await astepf("Send too big ping")
     rc, _, _ = h1.cmd_status("ping -s 1000 -Mdo -c1 10.0.2.4", warn=False)
     assert rc, "Ping worked over too small tunnel"
+
+    # XXX IPv6 testing?
 
     await astepf("Test complete")
