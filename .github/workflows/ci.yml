@@ -2,6 +2,10 @@ name: CI
 
 on: [push, pull_request]
 
+#
+# Make sure to update the copy of this in `iptfs-linux` as well.
+#
+
 jobs:
   build-fast-kernel:
     runs-on: ubuntu-22.04
@@ -9,13 +13,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Checkout kernel repository
+        uses: actions/checkout@v3
+        with:
+          repository: LabNConsulting/iptfs-linux
+          path: linux
+
       - name: Install build depencies
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ccache device-tree-compiler libelf-dev xz-utils
-
-      - name: Checkout repos
-        run: git clone --depth 1 https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
       - name: Kernel build cache
         id: linux-cache
@@ -29,6 +36,7 @@ jobs:
 
       - name: Build kernel
         run: |
+          set -x
           rm -rf output-linux
           if [ -f output-linux.tar.xz ]; then
             echo "Cache found, extracting"
@@ -73,13 +81,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Checkout kernel repository
+        uses: actions/checkout@v3
+        with:
+          repository: LabNConsulting/iptfs-linux
+          path: linux
+
       - name: Install build depencies
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ccache device-tree-compiler libelf-dev xz-utils
-
-      - name: Checkout repos
-        run: git clone --depth 1 https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
       - name: Coverage kernel build cache
         id: linux-cov-cache
@@ -159,6 +170,7 @@ jobs:
 
       - name: Build Rootfs
         run: |
+          set -x
           if [ -f output-buildroot.tar.xz ] || [ -f output-buildroot.tar.gz ]; then
             echo "Cache found, extracting"
             if [ -f output-buildroot.tar.xz ]; then
@@ -215,19 +227,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # For coverage data, extract the source files.
+      - name: Checkout kernel repository
+        uses: actions/checkout@v3
+        with:
+          repository: LabNConsulting/iptfs-linux
+          path: linux
+
       - name: Install test depencies
         run: |
           sudo apt-get update -y
           sudo apt-get install -y lcov qemu-system-x86 socat
           sudo python3 -m pip install -U munet pytest pytest-asyncio scapy
 
-      #
-      # For coverage data, extract the source and full build to get the gcno
-      # files.
-      #
-      - name: Checkout repos
-        run: git clone --depth 1 https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
-
+      # For coverage data extract the full build to get the gcno
       - name: Restore coverage kernel build
         id: linux-cov-cache-restore
         uses: actions/cache/restore@v3
@@ -291,13 +304,12 @@ jobs:
           sudo -E env CI=$CI python3 -m pytest -s --coverage tests/simplenet | tee $tmpf
           grep -v SKIPPED $tmpf
 
-      # Restore longer running test once working
-      # - name: UT packet test
-      #   run: |
-      #     set -e
-      #     tmpf=test-logs/results-utpkt.txt
-      #     sudo python3 -m pytest -s --coverage tests/utpkt | tee $tmpf
-      #     grep -v SKIPPED $tmpf
+      - name: UT packet test
+        run: |
+          set -e
+          tmpf=test-logs/results-utpkt.txt
+          sudo python3 -m pytest -s --coverage tests/utpkt | tee $tmpf
+          grep -v SKIPPED $tmpf
 
       - name: Extract coverage data
         if: ${{ always() }}
@@ -308,12 +320,9 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          # env_vars: OS,PYTHON
-          fail_ci_if_error: true
           files: ./coverage.info
           flags: unittests
-          name: codecov-umbrella
-          path_to_write_report: ./test-logs/codecov_report.txt
+          root_dir: ./linux
           verbose: true
 
       - name: Collect test logs
@@ -347,11 +356,15 @@ jobs:
         with:
           name: rootfs-compressed-cpio
 
+      - name: Downlaod root-key
+        uses: actions/download-artifact@v3
+        with:
+          name: root-key
+
       - name: Deploy
         uses: softprops/action-gh-release@v1
         with:
           files: |
             bzImage
             root-key
-            root-key.pub
             rootfs.cpio.gz
