@@ -148,14 +148,6 @@ async def test_policy_tun_up(unet, astepf, pytestconfig):
     opts = pytestconfig.getoption("--iptfs-opts", "")
     await setup_policy_tun(unet, iptfs_opts=opts, ipv6=ipv6)
 
-    # Need to count ESP packets somehow to verify these were encrypted
-    await astepf("first ping")
-    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
-    await astepf("second ping")
-    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
-    await astepf("third ping")
-    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
-
     if ipv6:
         await astepf("first IPv6 ping")
         logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
@@ -163,6 +155,14 @@ async def test_policy_tun_up(unet, astepf, pytestconfig):
         logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
         await astepf("third IPv6 ping")
         logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
+
+    # Need to count ESP packets somehow to verify these were encrypted
+    await astepf("first ping")
+    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
+    await astepf("second ping")
+    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
+    await astepf("third ping")
+    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
 
 
 async def test_routed_tun_up(unet, astepf, pytestconfig):
@@ -172,14 +172,6 @@ async def test_routed_tun_up(unet, astepf, pytestconfig):
     opts = pytestconfig.getoption("--iptfs-opts", "")
     await setup_routed_tun(unet, iptfs_opts=opts, ipv6=ipv6)
 
-    # Need to count ESP packets somehow to verify these were encrypted
-    await astepf("first ping")
-    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
-    await astepf("second ping")
-    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
-    await astepf("third ping")
-    logging.debug(h1.cmd_raises("ping -c3 10.0.2.4"))
-
     if ipv6:
         await astepf("first IPv6 ping")
         logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
@@ -187,3 +179,11 @@ async def test_routed_tun_up(unet, astepf, pytestconfig):
         logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
         await astepf("third IPv6 ping")
         logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
+
+    # Need to count ESP packets somehow to verify these were encrypted
+    await astepf("first ping")
+    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
+    await astepf("second ping")
+    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
+    await astepf("third ping")
+    logging.debug(h1.cmd_raises("ping -c3 10.0.2.4"))

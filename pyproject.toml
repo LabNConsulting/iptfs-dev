@@ -38,6 +38,7 @@ testpaths = [
         "tests/config",
         "tests/console",
         "tests/errors",
+        "tests/iperf",
         "tests/phynic",
         "tests/simplenet",
         "tests/verify",

@@ -23,34 +23,18 @@ import asyncio
 import logging
 import os
 import signal
+import subprocess
 
 from common.config import setup_policy_tun
 from munet.base import cmd_error
 
 
-async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
+async def _test_iperf(unet, astepf, ipsec_intf, profile=True, ipv6=False):
     h1 = unet.hosts["h1"]
     r1 = unet.hosts["r1"]
     h2 = unet.hosts["h2"]
 
-    # await setup_policy_tun(unet, iptfs_opts="reorder-window 0")
-    # await setup_policy_tun(unet, iptfs_opts="reorder-window 1")
-    # await setup_policy_tun(unet, iptfs_opts="reorder-window 5")
-    # await setup_policy_tun(unet, iptfs_opts="dont-frag reorder-window 0")
-    # await setup_policy_tun(unet, iptfs_opts="dont-frag reorder-window 5")
-    mode = os.environ.get("IPTFS_MODE", None)
-    if mode is not None:
-        logging.info("Using IPTFS_MODE envvar value: %s", mode)
-    else:
-        mode = "iptfs"
-
-    opts = os.environ.get("IPTFS_OPTS", None)
-    if opts is not None:
-        logging.info("Using IPTFS_OPTS envvar value: %s", opts)
-    else:
-        opts = ""
-
-    await setup_policy_tun(unet, mode=mode, ipsec_intf=ipsec_intf, iptfs_opts=opts)
+    await setup_policy_tun(unet, ipsec_intf=ipsec_intf, ipv6=ipv6)
 
     # Let's open an iperf3 process on h2.
     iperf3 = False
@@ -59,7 +43,11 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
 
     # check the sum inside iptfs code with printk
 
-    pktsize = "189"
+    if ipv6:
+        pktsize = "536"
+    else:
+        # pktsize = "189"
+        pktsize = "536"
     # pktsize = None
 
     logging.info("Starting iperf server on h2")
@@ -97,7 +85,7 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
                 *cargs,
                 # "-w", "2M",
                 "-c",  # client
-                f"{h2.intf_addrs['eth1'].ip}",
+                f"{h2.get_intf_addr('eth1', ipv6=True).ip}",
             ]
         else:
             args = [
@@ -114,7 +102,7 @@ async def _test_iperf(unet, astepf, ipsec_intf, profile=True):
                 "-z",  # req realtime schedule
                 # "-w4m",
                 "-c",  # client
-                f"{h2.intf_addrs['eth1'].ip}",
+                f"{h2.get_intf_addr('eth1', ipv6=True).ip}",
             ]
 
         if profile:
@@ -219,7 +207,7 @@ async def _test_tcp(unet, astepf):
             script,
             "-l",
             size,
-            f"{h2.intf_addrs['eth1'].ip}",
+            f"{h2.get_intf_addr('eth1').ip}",
         ]
         tcpc = await h1.async_popen(args, stderr=subprocess.STDOUT)
         try:

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 eval: (blacken-mode 1) -*-
 #
-# February 9 2022, Christian Hopps <chopps@labn.net>
+# January 19 2023, Christian Hopps <chopps@labn.net>
 #
-# Copyright 2022, LabN Consulting, L.L.C.
+# Copyright (c) 2023, LabN Consulting, L.L.C.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -18,13 +18,13 @@
 # with this program; see the file COPYING; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
-"Simple virtual interface qemu based iptfs test."
+"Test iptfs tunnel using iperf with various configurations"
 import os
 
 import pytest
 from common.config import _network_up
 from common.tests import _test_net_up
-from tcpdump import _test_iperf
+from iperf import _test_iperf
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
@@ -33,13 +33,11 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @pytest.fixture(scope="module", autouse=True)
-async def network_up(unet, pytestconfig):
-    ipv6 = pytestconfig.getoption("--enable-ipv6", False)
-
-    await _network_up(unet, ipv6=ipv6)
+async def network_up(unet):
+    await _network_up(unet, ipv6=True)
 
 
-#                             192.168.0.0/24
+#                       192.168.0.0/24  fd00::/64
 #   --+-------------------+------ mgmt0 ------+-------------------+---
 #     | .1                | .2                | .3                | .4
 #   +----+              +----+              +----+              +----+
@@ -48,13 +46,32 @@ async def network_up(unet, pytestconfig):
 #          10.0.0.0/24         10.0.1.0/24         10.0.2.0/24
 
 
-async def test_net_up(unet, pytestconfig):
-    ipv6 = pytestconfig.getoption("--enable-ipv6", False)
-
-    await _test_net_up(unet, ipv6=ipv6)
+async def test_net_up(unet):
+    await _test_net_up(unet, ipv6=True)
 
 
-async def test_iperf(unet, astepf, pytestconfig):
-    ipv6 = pytestconfig.getoption("--enable-ipv6", False)
+@pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
+@pytest.mark.parametrize("pktsize", [None, 64, 536, 1442])
+@pytest.mark.parametrize("ipv6", [False, True])
+@pytest.mark.parametrize("routed", [False, True])
+async def test_iperf(unet, astepf, pytestconfig, iptfs_opts, pktsize, routed, ipv6):
+    if ipv6 and pktsize and pktsize < 536:
+        pytest.skip("Can't run IPv6 iperf with MSS < 536")
+        return
 
-    await _test_iperf(unet, astepf, "eth2", ipv6=ipv6)
+    test_iperf.count += 1
+
+    await _test_iperf(
+        unet,
+        astepf,
+        "eth2",
+        iptfs_opts=iptfs_opts,
+        pktsize=pktsize,
+        routed=routed,
+        ipv6=ipv6,
+        profile=pytestconfig.getoption("--profile", False),
+        profcount=test_iperf.count,
+    )
+
+
+test_iperf.count = -1

@@ -19,11 +19,13 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 "General purpose utility functions"
-from datetime import datetime, timedelta
-import re
+import asyncio
 import logging
-
+import os
+import re
+from datetime import datetime, timedelta
 from subprocess import check_output
+
 
 def myreadline(f):
     buf = ""
@@ -52,6 +54,8 @@ def wait_output(p, regex, timeout=120):
         if m:
             return m
     assert None, f"Failed to get output withint {timeout}s"
+
+
 class Timeout:
     """An object to passively monitor for timeouts."""
 
@@ -277,3 +281,66 @@ def line_rate_to_pps(args, l1_rate, ipmtu, iptfs_mtu):
             l1_rate, ipmtu, iptfs_mtu, gcm, args.cc, args.encap_ipv6, args.encap_udp
         )
     return pps
+
+
+async def start_profile(unet, hostname, tval):
+    perfargs = [
+        "perf",
+        "record",
+        "-F",
+        "997",
+        "-a",
+        "-g",
+        "-o",
+        "/tmp/perf.data",
+        "--",
+        "sleep",
+        tval,
+    ]
+    host = unet.hosts[hostname]
+    await host.async_cmd_raises("sysctl -w kernel.perf_cpu_time_max_percent=75")
+    logging.info("Starting perf-profile on %s for %s", hostname, tval)
+
+    p = await host.async_popen(perfargs, use_pty=True, start_new_session=True)
+    p.host = host
+    return p
+
+
+async def stop_profile(p, filebase="perf.data"):
+    try:
+        try:
+            # logging.info("signaling perf to exit")
+            # p.send_signal(signal.SIGTERM)
+            logging.info("waiting for perf to exit")
+            o, e = await asyncio.wait_for(p.communicate(), timeout=5.0)
+            o = o.decode("utf-8")
+            o = "\nerror:\n" + o if o else ""
+            e = e.decode("utf-8")
+            e = "\nerror:\n" + e if e else ""
+            logging.info(
+                "perf rc: %s%s%s",
+                p.returncode,
+                o,
+                e,
+            )
+            pdpath = os.path.join(p.host.rundir, filebase)
+            p.host.cmd_raises(["/bin/cat", "/tmp/perf.data"], stdout=open(pdpath, "wb"))
+            p = None
+        except TimeoutError:
+            logging.warning("perf didn't finish after signal rc: %s", p.returncode)
+            raise
+        except Exception as error:
+            logging.warning(
+                "unexpected error while waiting for perf: %s", error, exc_info=True
+            )
+    finally:
+        if p is not None:
+            logging.info("terminating perf")
+            p.terminate()
+            try:
+                _, e = await asyncio.wait_for(p.communicate(), timeout=2.0)
+                logging.warning("perf rc: %s error: %s", p.returncode, e)
+            except TimeoutError:
+                logging.warning(
+                    "perf didn't finish after terminate rc: %s", p.returncode
+                )

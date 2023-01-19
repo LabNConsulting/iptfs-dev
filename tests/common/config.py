@@ -288,7 +288,7 @@ async def setup_policy_tun(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"reqid {reqid_1to2} "
+                f"flag af-unspec reqid {reqid_1to2} "
             )
             + iptfs_opts
         )
@@ -296,7 +296,7 @@ async def setup_policy_tun(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"reqid {reqid_2to1} "
+                f"flag af-unspec reqid {reqid_2to1} "
             )
             + iptfs_opts
         )
@@ -458,7 +458,7 @@ async def setup_routed_tun(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"if_id 55 reqid {reqid_1to2} "
+                f"flag af-unspec if_id 55 reqid {reqid_1to2} "
             )
             + iptfs_opts
         )
@@ -466,7 +466,7 @@ async def setup_routed_tun(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"if_id 55 reqid {reqid_2to1} "
+                f"flag af-unspec if_id 55 reqid {reqid_2to1} "
             )
             + iptfs_opts
         )
@@ -487,7 +487,6 @@ async def setup_routed_tun(
         # Policy
         #
         xdef = "0.0.0.0/0"
-
         direction = "dir out"
         repl.cmd_raises(
             f"ip xfrm policy add if_id 55 src {xdef} dst {xdef} {direction}"
@@ -497,6 +496,22 @@ async def setup_routed_tun(
         for direction in ["dir fwd", "dir in"]:
             repl.cmd_raises(
                 f"ip xfrm policy add if_id 55 src {xdef} dst {xdef} {direction} "
+                f"tmpl src {rip} dst {lip} proto esp mode {mode} reqid {ireqid}"
+            )
+
+        #
+        # Policy
+        #
+        xdef = "::/0"
+        direction = "dir out"
+        repl.cmd_raises(
+            f"ip -6 xfrm policy add if_id 55 src {xdef} dst {xdef} {direction}"
+            f" tmpl src {lip} dst {rip} proto esp mode {mode} reqid {oreqid}"
+        )
+
+        for direction in ["dir fwd", "dir in"]:
+            repl.cmd_raises(
+                f"ip -6 xfrm policy add if_id 55 src {xdef} dst {xdef} {direction} "
                 f"tmpl src {rip} dst {lip} proto esp mode {mode} reqid {ireqid}"
             )
 
@@ -524,11 +539,13 @@ async def setup_routed_tun(
         if not trex:
             # Add ipsec0 based routes
             r1.conrepl.cmd_raises(
-                "ip route add fc00:0:0:2::/64 dev ipsec0 src fc00:0:0:1::2"
+                "ip route add fc00:0:0:2::/64 dev ipsec0"
+                # "ip route add fc00:0:0:2::/64 dev ipsec0 src fc00:0:0:1::2"
             )
             if not r1only:
                 r2.conrepl.cmd_raises(
-                    "ip route add fc00:0:0:0::/64 dev ipsec0 src fc00:0:0:1::3"
+                    "ip route add fc00:0:0:0::/64 dev ipsec0"
+                    # "ip route add fc00:0:0:0::/64 dev ipsec0 src fc00:0:0:1::3"
                 )
         else:
             # trex direct remote routes
