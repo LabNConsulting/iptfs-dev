@@ -158,9 +158,12 @@ async def _test_tun_drop_XtoYofN(
     # Create encrypted packet stream without fragmentation
     #
     psize = iptfs_payload_size(mtu, True)
-    opkts = await gen_pkts(unet, sa, ping=ping, mtu=mtu, psize=psize, count=count)
-    tunpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=True)
-    tunpkts = unet.tun_if.prep_pkts(tunpkts)
+    opkts = gen_pkts(unet, sa, ping=ping, mtu=mtu, psize=psize, count=count)
+    # tunpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=True)
+    tunpkts = iptfs.gen_encrypt_pktstream_pkts(
+        sa, mtu, opkts, dontfrag=False, fraghalf=True, pad=False
+    )
+    tunpkts = unet.tun_if.add_ether_encap(tunpkts)
 
     # Send one packet in order to establish seq num.
     tunpkts = await init_seq_num(osa, tunpkts)
@@ -223,9 +226,9 @@ async def _test_tun_reverse_XofYxZ(
     # Create encrypted packet stream without fragmentation.
     #
     psize = iptfs_payload_size(mtu, True)
-    opkts = await gen_pkts(unet, sa, ping=ping, mtu=mtu, psize=psize, count=count)
+    opkts = gen_pkts(unet, sa, ping=ping, mtu=mtu, psize=psize, count=count)
     tunpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=True)
-    tunpkts = unet.tun_if.prep_pkts(tunpkts)
+    tunpkts = unet.tun_if.add_ether_encap(tunpkts)
 
     # Send one packet in order to establish seq num.
     tunpkts = await init_seq_num(osa, tunpkts)
@@ -382,26 +385,30 @@ async def test_tun_reverse_7of7x30(unet):
 #                 name = "test_tun_drop_{}to{}of{}_exceptevery_{}".format(2, Y, N, Z)
 #             metafunc.addcall(funcargs=dict(X=2, Y=Y, Z=Z)
 
-# #
-# # reorder_window = 3
-# #
-reorder_window = 3
-for Z in range(0, 3):
-    # Drop from 0 to 2 more than the window size
-    for Y in range(2, 2 + reorder_window + 3):
-        # XXX we are making sure we get in order packets at least window size so we
-        # don't need a drop timer
-        for N in range(Y + 1, Y + reorder_window + 1):
-            if Z == 0:
-                name = f"test_tun_drop_2to{Y}of{N}"
-            else:
-                name = f"test_tun_drop_2to{Y}of{N}_exceptevery_{Z}"
-            exec(
-                f"""
-async def {name}(unet):
-    return await _test_tun_drop_XtoYofN(unet, 2, {Y}, {N}, exceptevery={Z}, reorder_window=3)
-            """
-            )
+# # #
+# # # reorder_window = 3
+# # #
+# reorder_window = 3
+# for Z in range(0, 3):
+#     # Drop from 0 to 2 more than the window size
+#     for Y in range(2, 2 + reorder_window + 3):
+#         # XXX we are making sure we get in order packets at least window size so we
+#         # don't need a drop timer
+#         for N in range(Y + 1, Y + reorder_window + 1):
+#             if Z == 0:
+#                 name = f"test_tun_drop_2to{Y}of{N}"
+#             else:
+#                 name = f"test_tun_drop_2to{Y}of{N}_exceptevery_{Z}"
+#             exec(
+#                 f"""
+# async def {name}(unet):
+#     return await _test_tun_drop_XtoYofN(unet, 2, {Y}, {N}, exceptevery={Z}, reorder_window=3)
+#             """
+#             )
+
+
+# async def test_fix(unet):
+#     return await _test_tun_drop_XtoYofN(unet, 2, 2, 3, exceptevery=0, reorder_window=4)
 
 
 # #
@@ -410,9 +417,16 @@ async def {name}(unet):
 
 # pylint: disable=exec-used,eval-used
 reorder_window = 4
-for Z in range(0, 5):
-    for Y in range(2, 10):
-        for N in range(Y + 1, Y + reorder_window + 1):
+for Z in range(0, reorder_window):
+    # Drop from 0 to 2 times more than the window size
+    # Y is range [2, Y)
+    for Y in range(2, reorder_window * 2 + 1):
+        # Y + 1 is one packet after run of drops
+        # N is the total number of packets in the run of packets
+        # for N in range(Y + 1, Y + 1 + reorder_window * 2 + 1):
+        # Nmax = Y + 2 if Y > 2 + reorder_window else reorder_window + 1
+        Nmax = Y + 2 if Y > reorder_window else reorder_window + 1
+        for N in range(Y + 1, Nmax):
             if Z == 0:
                 name = f"test_tun_drop_2to{Y}of{N}"
             else:

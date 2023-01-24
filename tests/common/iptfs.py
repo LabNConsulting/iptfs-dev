@@ -19,6 +19,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 "IPTFS Scapy Functionality"
+import ipaddress
 import logging
 import socket
 import struct
@@ -37,7 +38,7 @@ from scapy.fields import (
 )
 from scapy.layers import ipsec
 from scapy.layers.inet import ICMP, IP
-from scapy.layers.inet6 import IPv6
+from scapy.layers.inet6 import ICMPv6EchoRequest, IPv6
 from scapy.layers.ipsec import CRYPT_ALGOS, ESP, _ESPPlain, split_for_transport
 from scapy.layers.l2 import Ether
 from scapy.packet import Packet, Raw, bind_layers
@@ -71,44 +72,53 @@ class AllPadField(StrLenField):
 
 
 class IPTFSPad(Packet):
-    "An IPTFS pad packet"
+    "IPTFS pad fragment"
+    # Should we just make this a subclass of IPTFSFrag? That certainly would work for
+    # disection, not sure about creation though.
     name = "IPTFSPad"
     fields_desc = [XByteField("zerotype", 0), AllPadField("pad", "")]
 
 
-def fraglen_from(*args):
-    # B/c python foo[:fraglen] works even when fraglen > len(foo)
-    # this handles a block_offset being beyond the end of the packet.
-    return args[0].fraglen
-
-
 class IPTFSFrag(Packet):
-    "An IPTFS Pcaket"
+    "An IPTFS Pcaket - the raw load is the fragment data"
     __slots__ = ["fraglen"]
 
-    fields_desc = [StrLenField("frag", None, length_from=fraglen_from)]
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, value, **kwargs):
         if "fraglen" in kwargs:
             self.fraglen = kwargs["fraglen"]
             del kwargs["fraglen"]
-        super().__init__(self, *args, **kwargs)
+        else:
+            self.fraglen = 0
+        try:
+            super().__init__(value, **kwargs)
+        except Exception as e:
+            logging.error("bt: %s", e, exc_info=True)
+            print("Foo: ", e)
+
+    def extract_padding(self, s):
+        # fraglen can actually be beyond the data b/c we take it directly from
+        # block_offset for a packet that starts with an continuation fragment
+        fl = self.fraglen
+        return s[:fl], s[fl:]
 
     def default_payload_class(self, payload):
+        return conf.raw_layer
+        # XXX this was before we had extract_padding, which is used to trim padding off
+        # the fragment to hand to the next packetfield packet constructor
         # Return padding here so PacketFieldList re-uses it.
-        return conf.padding_layer
+        # return conf.padding_layer
 
 
-class IPTFSEndFrag(IPTFSFrag):
-    "IPTFS packet ending a fragment"
+class IPTFSContFrag(IPTFSFrag):
+    """IPTFS continuation fragment of inner packet"""
 
 
 class IPTFSIPFrag(IPTFSFrag):
-    "IPTFS packet containing a fragment"
+    """IPTFS fragment starting IP packet"""
 
 
 class IPTFSIPv6Frag(IPTFSFrag):
-    "IPTFS packet containing an IPv6 fragment"
+    """IPTFS fragment starting IPv6 packet"""
 
 
 def get_frag_class_and_len(data):
@@ -126,17 +136,22 @@ def get_frag_class_and_len(data):
         if dlen < 6:
             return IPv6, None
         return IPv6, (orb(data[4]) << 8) + orb(data[5]) + sizeof(IPv6())
-    return Raw, None
+    if t == 0x00:
+        return IPTFSPad, dlen
+
+    # This is unsupported type
+    logging.warning("unknown iptfs inner packet type 0x%02x: skipping", t)
+    return Raw, dlen
 
 
 def iptfs_decap_pkt_with_frags(ppkt, pkts, curpkt, data):  # pylint: disable=R0911
-    # logger.critical("iptfs_decap_pkt: pptype %s lens: %d %d",
-    # str(type(data)), len(curpkt) if curpkt is not None else 0, len(data))
-    # Check for type and frag here.
+    # this is the list we've created so fare except the most recent in curpkt
     del pkts
+    # No curpkt on first frag, and subsequent fragments have previous frag in curpkt
     if not curpkt and ppkt.block_offset:
-        # First datablock in packet with offset so start with the fragment.
-        return partial(IPTFSEndFrag, fraglen=ppkt.block_offset)
+        # First datablock in packet with offset so start with the fragment, do we handle
+        # this going past into the next packet?
+        return partial(IPTFSContFrag, fraglen=ppkt.block_offset)
 
     assert data
     t = orb(data[0]) & 0xF0
@@ -172,7 +187,7 @@ def _iptfs_decap_pkt_with_frags(ppkt, pkts, curpkt, data):
     del pkts
     if not curpkt and ppkt.block_offset:
         # First datablock in packet with offset so start with the fragment.
-        return partial(IPTFSEndFrag, fraglen=ppkt.block_offset)
+        return partial(IPTFSContFrag, fraglen=ppkt.block_offset)
 
     assert data
     t = orb(data[0]) & 0xF0
@@ -219,6 +234,8 @@ class IPTFSWithFrags(Packet):
             del fields["prevpkts"]
         # self.offset = (orb(_pkt[2]) << 8) + orb(_pkt[3])
         self.offset = 0
+        # _pkt is binary, post_transform is list of packets with last one being current,
+        # defaults for others and fields empty after removing prevpkts
         Packet.__init__(self, _pkt, post_transform, _internal, _underlayer, **fields)
 
     def is_all_pad(self):
@@ -228,12 +245,13 @@ class IPTFSWithFrags(Packet):
         return len(self.packets) and IPTFSPad in self.packets[-1]
 
 
-def iptfs_decap_pkt_nofrag(ppkt, pkts, curpkt, data):
+def iptfs_decap_pkt_nofrag(ppkt, pkts, curpkt, data, **kwargs):
     # logger.critical("iptfs_decap_pkt: pptype %s lens: %d %d",
     # str(type(data)), len(curpkt) if curpkt is not None else 0, len(data))
     del ppkt
     del pkts
     del curpkt
+    del kwargs
     assert data
     t = orb(data[0]) & 0xF0
     if t == 0:
@@ -357,12 +375,13 @@ def decap_frag_stream(pkts):
                 continue
 
             # Determine what type of packet fragment this is.
-            for fcls in [IPTFSFrag, IPTFSEndFrag, IPTFSIPFrag, IPTFSIPv6Frag]:
+            for fcls in [IPTFSFrag, IPTFSContFrag, IPTFSIPFrag, IPTFSIPv6Frag]:
                 if fcls in ipkt:
-                    fdata += ipkt[fcls].frag
+                    fdata += ipkt[fcls].load
                     break
             else:
                 logger.critical("Odd ipkt: %s", ipkt.show(dump=True))
+                print("Gah: ")
                 assert False
 
             if flen is None:
@@ -380,7 +399,7 @@ def decap_frag_stream(pkts):
     return ippkts
 
 
-def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False):
+def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False, fraghalf=False, pad=True):
     """raw_iptfs_stream - encapsulate ippkts in a stream of iptfs packes"""
     tunpkts = [IPTFSHeader() / Raw()]
     emptylen = len(tunpkts[-1])
@@ -394,6 +413,7 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False):
                 f"dont frag with input packet size {len(payload)}"
                 f" larger than payload size {payloadsize-emptylen}"
             )
+        fragsecond = False
         while again:
             clen = len(tunpkts[-1])
             if clen + len(payload) > payloadsize and dontfrag:
@@ -405,22 +425,32 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False):
                 tunpkts.append(IPTFSHeader() / Raw())
                 continue
 
-            if clen + len(payload) < payloadsize:
+            if not fragsecond:
+                pmax = payloadsize
+            else:
+                fragsecond = False
+                pmax = (payloadsize - emptylen) // 2 + emptylen
+
+            if fraghalf:
+                fragsecond = True
+                fraghalf = False
+
+            if clen + len(payload) < pmax:
                 tunpkts[-1][Raw].load += payload
                 again = False
-            elif clen + len(payload) == payloadsize:
+            elif clen + len(payload) == pmax:
                 tunpkts[-1][Raw].load += payload
                 tunpkts.append(IPTFSHeader() / Raw())
                 again = False
             else:
-                tunpkts[-1][Raw].load += payload[: payloadsize - clen]
-                payload = payload[payloadsize - clen :]
+                tunpkts[-1][Raw].load += payload[: pmax - clen]
+                payload = payload[pmax - clen :]
                 tunpkts.append(IPTFSHeader(block_offset=len(payload)) / Raw())
                 if not payload:
                     again = False
 
     clen = len(tunpkts[-1])
-    if clen != payloadsize:
+    if pad and clen != payloadsize:
         tunpkts[-1][Raw].load += b"\x00" * (payloadsize - clen)
     if clen == len(IPTFSHeader() / Raw()):
         tunpkts = tunpkts[:-1]
@@ -431,7 +461,7 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False):
 
 
 def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R0913
-    sa, mtu, pkts, dontfrag=False
+    sa, mtu, pkts, dontfrag=False, fraghalf=False, pad=True
 ):
 
     # for pkt in pkts:
@@ -439,10 +469,8 @@ def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R091
     #         len(pkt), pkt.show(dump=True)))
 
     ipsec_payload_size = mtu - sa.get_ipsec_overhead()
-    tunpkts = [
-        sa.encrypt_esp_raw(rawpkt)
-        for rawpkt in raw_iptfs_stream(pkts, ipsec_payload_size, dontfrag)
-    ]
+    tunpkts = raw_iptfs_stream(pkts, ipsec_payload_size, dontfrag, fraghalf, pad)
+    tunpkts = [sa.encrypt_esp_raw(x) for x in tunpkts]
 
     return tunpkts
 
@@ -459,10 +487,15 @@ def gen_encrypt_pktstream(  # pylint: disable=W0612  # pylint: disable=R0913,R09
     dontfrag=False,
 ):
 
-    # XXX IPv6
+    if ipaddress.ip_address(src).version == 6:
+        ipcls = IP
+        icmpcls = ICMP
+    else:
+        ipcls = IPv6
+        icmpcls = ICMPv6EchoRequest
     if not payload_spread:
         pstream = [
-            IP(src=src, dst=dst) / ICMP(seq=i) / Raw("d" * payload_size)
+            ipcls(src=src, dst=dst) / icmpcls(seq=i) / Raw("d" * payload_size)
             for i in range(count)
         ]
     else:
@@ -471,7 +504,9 @@ def gen_encrypt_pktstream(  # pylint: disable=W0612  # pylint: disable=R0913,R09
         end = payload_spread
         psize = start
         for i in range(count):
-            pstream.append(IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * (psize)))
+            pstream.append(
+                ipcls(src=src, dst=dst) / icmpcls(seq=i) / Raw("X" * (psize))
+            )
             psize += 1
             if psize == end:
                 psize = start
@@ -496,20 +531,30 @@ def gen_encrypt_pktstream(  # pylint: disable=W0612  # pylint: disable=R0913,R09
 
 
 def gen_encrypt_pkts(sa, sw_intf, src, dst, count=1, payload_size=54):
-    # XXX IPv6
+    if ipaddress.ip_address(src).version == 6:
+        ipcls = IP
+        icmpcls = ICMP
+    else:
+        ipcls = IPv6
+        icmpcls = ICMPv6EchoRequest
     return [
         Ether(src=sw_intf.remote_mac, dst=sw_intf.local_mac)
-        / sa.encrypt(IP(src=src, dst=dst) / ICMP(seq=i) / Raw("d" * payload_size))
+        / sa.encrypt(ipcls(src=src, dst=dst) / icmpcls(seq=i) / Raw("d" * payload_size))
         for i in range(count)
     ]
 
 
 def verify_encrypted(src, dst, sa, expected_count, rxs):
     decrypt_pkts = []
+    ipv6 = ipaddress.ip_address(src).version == 6
     for rx in rxs:
         # self.assert_packet_checksums_valid(rx)
-        assert len(rx) - len(Ether()) == rx[IP].len
-        dpkts = sa.decrypt(rx[IP]).packets
+        if ipv6:
+            assert len(rx) - len(Ether()) == rx[IPv6].plen + len(IPv6())
+            dpkts = sa.decrypt(rx[IPv6]).packets
+        else:
+            assert len(rx) - len(Ether()) == rx[IP].len
+            dpkts = sa.decrypt(rx[IP]).packets
         dpkts = [x for x in dpkts if not isinstance(x, IPTFSPad)]
         decrypt_pkts += dpkts
 
@@ -535,10 +580,18 @@ def verify_encrypted_with_frags(self, src, dst, sa, rxs, cmprxs):
     dpkts_pcap = []
     oldrxs = []
 
+    ipv6 = ipaddress.ip_address(src).version == 6
+
     for rx in rxs:
         self.assert_packet_checksums_valid(rx)
-        assert len(rx) - len(Ether()) == rx[IP].len
-        dpkts_pcap += sa.decrypt_iptfs_pkt(rx[IP], oldrxs)
+
+        if ipv6:
+            assert len(rx) - len(Ether()) == rx[IPv6].plen + len(IPv6())
+            dpkts_pcap += sa.decrypt_iptfs_pkt(rx[IPv6], prevpkts=oldrxs)
+        else:
+            assert len(rx) - len(Ether()) == rx[IP].len
+            dpkts_pcap += sa.decrypt_iptfs_pkt(rx[IP], prevpkts=oldrxs)
+
         oldrxs.append(rx)
 
     # logging.info("XXXYYY: decrypted packets: {}".format(
@@ -560,7 +613,6 @@ def verify_encrypted_with_frags(self, src, dst, sa, rxs, cmprxs):
     # Join fragments into real packets and drop padding return list of
     # real packets.
     dpkts = decap_frag_stream(dpkts_pcap)
-
     for decrypt_pkt in dpkts:
         # logging.info("XXXYYY: pktlen {} pkt: {}".format(
         #     len(decrypt_pkt), decrypt_pkt.show(dump=True)))
@@ -585,9 +637,10 @@ def verify_encrypted_with_frags(self, src, dst, sa, rxs, cmprxs):
 
 
 def verify_decrypted(self, src, dst, rxs):
+    ipcls = IPv6 if ipaddress.ip_address(src).version == 6 else IP
     for rx in rxs:
-        assert rx[IP].src == src
-        assert rx[IP].dst == dst
+        assert rx[ipcls].src == src
+        assert rx[ipcls].dst == dst
         self.assert_packet_checksums_valid(rx)
 
 
@@ -741,9 +794,8 @@ class SecurityAssociation(ipsec.SecurityAssociation):
         # in a packet to be actually part of the next packet. We probably want to figure
         # out how to get IPTFSFrag to have the extra remaining data added as Padding
         # instead of Raw.
-
         # Aaand this doesn't work b/c test IP packets lose their payloads.
-
+        # - Is this still a problem with frag fixes?
         # old = conf.padding_layer
         # conf.padding_layer = Raw
         mypkt = cls(esp.data, prevpkts)
@@ -751,7 +803,9 @@ class SecurityAssociation(ipsec.SecurityAssociation):
         return mypkt
 
     def decrypt_iptfs_pkt(self, pkt, prevpkts=None, verify=True, esn_en=None, esn=None):
-        return self._decrypt_esp(pkt, verify, esn_en, esn, prevpkts)
+        return self._decrypt_esp(
+            pkt, verify=verify, esn_en=esn_en, esn=esn, prevpkts=prevpkts
+        )
 
 
 bind_layers(ESP, IPTFS, nh=IPPROTO_IPTFS)

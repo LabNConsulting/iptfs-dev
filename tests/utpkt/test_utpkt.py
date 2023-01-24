@@ -23,15 +23,14 @@
 "Unit tests utilizign scapy"
 import logging
 import os
-import subprocess
 
 import pytest
-from common import iptfs, util
-from common.config import create_scapy_sa_pair, setup_policy_tun, toggle_ipv6
+from common import iptfs
+from common.config import _network_up, create_scapy_sa_pair, setup_policy_tun
 from common.scapy import Interface, gen_pkts, send_recv_esp_pkts
-from munet.base import comm_error
 from scapy.config import conf
 from scapy.layers.inet import ICMP
+from scapy.layers.inet6 import ICMPv6EchoReply
 
 # from munet.cli import async_cli
 
@@ -42,34 +41,41 @@ SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @pytest.fixture(scope="module", autouse=True)
-async def network_up(unet):
-    h1 = unet.hosts["h1"]
-    r1 = unet.hosts["r1"]
-    r1repl = r1.conrepl
-
-    await toggle_ipv6(unet, enable=False)
-
-    h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
-    h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")
-
-    r1repl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
-
-    # Get the arp entry for unet, and make it permanent
-    r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3")
-    r1repl.cmd_raises(f"ip neigh change 10.0.1.3 dev {r1.net_intfs['net1']}")
-
-    # # Remove IP from our scapy node
-    unet.cmd_raises("ip addr del 10.0.1.3/24 dev net1")
+async def network_up(unet, pytestconfig):
+    await _network_up(unet, r1only=True, ipv6=unet.ipv6_enable)
 
     #
     # Scapy settings
     #
+    # Reload now that unet is in a new namespace
+    conf.ifaces.reload()
+    conf.route.resync()
 
     # Defaults to 64k which leads to lots of packet drops on sniffers
     conf.bufsize = 2**18
 
     # conf.iface = "net1"
     unet.tun_if = Interface("net1", local_addr="10.0.1.3", remote_addr="10.0.1.2")
+    if unet.ipv6_enable:
+        unet.tun_if6 = Interface(
+            "net1", local_addr="fc00:0:0:1::3", remote_addr="fc00:0:0:1::2"
+        )
+
+    # Need to deal with ARP entry not going away on DUT since we won't answer as scapy
+    r1 = unet.hosts["r1"]
+    r1.cmd_raises("ping -c1 10.0.1.3")
+
+    r1dev = r1.net_intfs["net1"]
+    r1.conrepl.cmd_nostatus(f"ip neigh change {unet.tun_if.local_addr} dev {r1dev}")
+    # r1.conrepl.cmd_nostatus(f"ip neigh del {tun_if.local_addr} dev {r1dev}")
+    # unet.hosts["r1"].conrepl.cmd_raises(
+    #     f"ip neigh add {tun_if.local_addr} lladdr {tun_if.local_mac} "
+    #     f"dev {dev} nud permanent"
+    # )
+
+    # Remove IP from our scapy node
+    unet.cmd_raises("ip addr del 10.0.1.3/24 dev net1")
+    # unet.cmd_raises("ip -6 addr del fc00:0:0:1::3/64 dev net1")
 
 
 #                             192.168.0.0/24
@@ -81,7 +87,8 @@ async def network_up(unet):
 #          10.0.0.0/24         10.0.1.0/24
 
 
-async def test_net_up(unet):
+async def test_net_up(unet, pytestconfig):
+    ipv6 = pytestconfig.getoption("--enable-ipv6", False)
     r1repl = unet.hosts["r1"].conrepl
     h1 = unet.hosts["h1"]
 
@@ -89,9 +96,16 @@ async def test_net_up(unet):
     logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.0.2"))
     # h1 pings r1 (other side)
     logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
-
     # r1 (qemu side) pings h1
     logging.debug(r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.0.1"))
+
+    if ipv6:
+        # h1 pings r1 (qemu side)
+        logging.debug(h1.cmd_raises("ping -c1 fc00::2"))
+        # h1 pings r1 (other side)
+        logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:1::2"))
+        # r1 (qemu side) pings h1
+        logging.debug(r1repl.cmd_raises("ping -c1 fc00::1"))
 
     # Make sure we can ping the ssh interface
     # h1.cmd_raises("ping -w1 -i.2 -c1 192.168.0.2")
@@ -100,32 +114,18 @@ async def test_net_up(unet):
     # unet.hosts["r1"].cmd_raises("ping -w1 -i.2 -c1 192.168.0.2")
 
 
-def decrypt_decap_iptfs_pkts(osa, encpkts):
-    """Decrypt a list of packets and then process resulting IPTFS stream"""
-    idx = 0
-    pkts = []
-    try:
-        for idx, esppkt in enumerate(encpkts):
-            pkts.append(osa.decrypt(esppkt))
-    except Exception as error:
-        logging.error(
-            "Exception decrypt recv ESP pkts index %s: %s\n",
-            idx,
-            error,
-            exc_info=True,
-        )
-        raise
-    return iptfs.decap_frag_stream(pkts)
-
-
-def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30, faster=False):
+def send_recv_pkts(osa, encpkts, iface, chunksize=30, faster=False, ipv6=False):
     def process_pkts(decpkts):
         _pkts = iptfs.decap_frag_stream(decpkts)
         # Greb echo replies.
-        inner_pkts = [x for x in _pkts if x.haslayer(ICMP) and x[ICMP].type == 0]
-        other_inner_pkts = [
-            x for x in _pkts if not x.haslayer(ICMP) or x[ICMP].type != 0
-        ]
+        if ipv6:
+            inner_pkts = [x for x in _pkts if ICMPv6EchoReply in x]
+            other_inner_pkts = [x for x in _pkts if ICMPv6EchoReply not in x]
+        else:
+            inner_pkts = [x for x in _pkts if x.haslayer(ICMP) and x[ICMP].type == 0]
+            other_inner_pkts = [
+                x for x in _pkts if not x.haslayer(ICMP) or x[ICMP].type != 0
+            ]
         return inner_pkts, other_inner_pkts
 
     return send_recv_esp_pkts(
@@ -135,39 +135,43 @@ def send_recv_iptfs_pkts(osa, encpkts, iface, chunksize=30, faster=False):
         chunksize=chunksize,
         faster=faster,
         process_recv_pkts=process_pkts,
+        dolog=True,
     )
 
 
-async def gen_pkt_test(
+def prep_gen_pkts(
     unet,
-    ping="10.0.0.1",
+    remote_addr=None,
     mtu=1500,
     df=False,
-    iface="net1",
-    nofail=False,
+    ipv6=False,
+    tun_ipv6=False,
+    sa_seq=None,
     **kwargs,
 ):
+    tun_if = unet.tun_if6 if tun_ipv6 else unet.tun_if
+
+    if remote_addr is None:
+        remote_addr = "fc00::1" if ipv6 else "10.0.0.1"
+    # local_addr = "fc00:0:0:1::3" if ipv6 else "10.0.1.3"
+
+    seq2to1 = 0 if sa_seq is None else sa_seq
     osa, sa = create_scapy_sa_pair(
-        mtu=mtu, addr1=unet.tun_if.remote_addr, addr2=unet.tun_if.local_addr
+        mtu=mtu,
+        addr1=tun_if.remote_addr,
+        addr2=tun_if.local_addr,
+        seq_num2=seq2to1,
+        tun_ipv6=tun_ipv6,
     )
 
     #
     # Create encrypted packet stream with fragmentation
     #
-    opkts = await gen_pkts(unet, sa, mtu=mtu, ping=ping, **kwargs)
-    encpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=df)
-    encpkts = unet.tun_if.prep_pkts(encpkts)
+    opkts = gen_pkts(unet, sa, mtu=mtu, ping=remote_addr, **kwargs)
+    return tun_if, osa, sa, opkts
 
-    #
-    # Send and receive pkts
-    #
-    r1 = unet.hosts["r1"]
-    is_kvm = r1.is_kvm if hasattr(r1, "is_kvm") else False
-    pkts, _, net0pkts = send_recv_iptfs_pkts(osa, encpkts, iface, faster=is_kvm)
 
-    #
-    # Analyze results
-    #
+def analyze_pkts(opkts, pkts, net0pkts, nofail):
     nnet0pkts = len(net0pkts)
     npkts = len(pkts)
     nopkts = len(opkts)
@@ -185,78 +189,112 @@ async def gen_pkt_test(
     return npkts, nopkts, nnet0pkts
 
 
-async def _gen_pkt_test(unet, astepf, expected=None, **kwargs):
-    pktbin = os.path.join(SRCDIR, "genpkt.py")
-
-    if expected is None:
-        expected = kwargs["count"]
-
-    args = [f"--{x}={y}" for x, y in kwargs.items()]
-    await astepf(f"Running genpkt.py script: {' '.join(args)}")
-    p = unet.popen(
-        [pktbin, "-v", "--iface=net1", *args],
-        stderr=subprocess.STDOUT,
+async def gen_pkt_test(
+    unet,
+    addr=None,
+    mtu=1500,
+    df=False,
+    iface="net1",
+    nofail=False,
+    ipv6=False,
+    tun_ipv6=False,
+    sa_seq=None,
+    **kwargs,
+):
+    #
+    # Generate packets
+    #
+    tun_if, osa, sa, opkts = prep_gen_pkts(
+        unet, addr, mtu, df, ipv6, tun_ipv6, sa_seq, **kwargs
     )
-    try:
-        _ = util.wait_output(p, "STARTING")
+    encpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=df)
+    encpkts = tun_if.add_ether_encap(encpkts)
 
-        m = util.wait_output(p, r"DECAP (\d+) inner packets")
-        ndecap = int(m.group(1))
-        assert (
-            ndecap == expected
-        ), f"Wrong number ({ndecap}, expected {expected}) return IP packets"
+    #
+    # Send / receive packets
+    #
+    is_kvm = unet.hosts["r1"].is_kvm if hasattr(unet.hosts["r1"], "is_kvm") else False
+    is_kvm = False
+    pkts, _, net0pkts = send_recv_pkts(osa, encpkts, iface, faster=is_kvm, ipv6=ipv6)
 
-        _ = util.wait_output(p, "FINISH")
-
-    except Exception:
-        if p:
-            p.terminate()
-            if p.wait():
-                comm_error(p)
-            p = None
-        raise
-    finally:
-        if p:
-            p.terminate()
-            p.wait()
+    #
+    # Analyze results
+    #
+    return analyze_pkts(opkts, pkts, net0pkts, nofail)
 
 
-async def test_spread_recv_frag(unet, astepf):
-    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
+# @pytest.mark.parametrize("ipv6", [False, True])
+# async def test_primethepump(unet, astepf, ipv6):
+#     await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag", ipv6=ipv6)
+#     await astepf("Prior to gen_pkt_test")
+#     await gen_pkt_test(unet, psize=0, count=1, ipv6=ipv6)
+#     # await gen_pkt_test(unet, psize=1400, pmax=1438, pstep=1, ipv6=ipv6)
+
+
+@pytest.mark.parametrize("tun_ipv6", [False, True])
+@pytest.mark.parametrize("ipv6", [False, True])
+async def test_spread_recv_frag(unet, astepf, ipv6, tun_ipv6, pytestconfig):
+    await setup_policy_tun(unet, r1only=True, ipv6=ipv6, tun_ipv6=tun_ipv6)
+
+    # Priming the pump screws up the sequence numbering
+    await astepf("Prime the pump")
+    await gen_pkt_test(unet, psize=0, count=1, ipv6=ipv6, tun_ipv6=tun_ipv6)
+
     await astepf("Prior to gen_pkt_test")
-    await gen_pkt_test(unet, psize=0, pstep=1)
-    # await gen_pkt_test(unet, psize=1400, pmax=1438, pstep=1)
+    await gen_pkt_test(unet, psize=0, pstep=11, ipv6=ipv6, sa_seq=1, tun_ipv6=tun_ipv6)
+    # await gen_pkt_test(unet, psize=0, pstep=1, ipv6=ipv6, sa_seq=1, tun_ipv6=tun_ipv6)
 
 
-async def test_spread_recv_frag_toobig_reply(unet, astepf):
-    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
-    await astepf("Prior to gen_pkt_test")
+@pytest.mark.parametrize("tun_ipv6", [False, True])
+@pytest.mark.parametrize("ipv6", [False, True])
+async def test_spread_recv_frag_toobig_reply(unet, astepf, ipv6, tun_ipv6):
+    await setup_policy_tun(
+        unet, r1only=True, iptfs_opts="dont-frag", ipv6=ipv6, tun_ipv6=tun_ipv6
+    )
+
+    await astepf("Prior to too big gen_pkt_test")
+    toobig = 1423 if tun_ipv6 else 1443
     npkts, nopkts, nnet0pkts = await gen_pkt_test(
-        unet, psize=1442, pmax=1443, pstep=1, nofail=True
+        unet,
+        psize=toobig - 1,
+        pmax=toobig,
+        pstep=1,
+        nofail=True,
+        ipv6=ipv6,
+        tun_ipv6=tun_ipv6,
     )
     # one echo reply is too big
     assert npkts == 1 and nnet0pkts == 2 and nopkts == 2
 
 
-async def test_recv_frag(unet, astepf):
-    await setup_policy_tun(unet, r1only=True, iptfs_opts="init-delay 10000")
+@pytest.mark.parametrize("ipv6", [False, True])
+async def test_recv_frag(unet, astepf, ipv6):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="init-delay 10000", ipv6=ipv6)
     await astepf("Prior to gen_pkt_test")
-    await gen_pkt_test(unet, psize=411, mtu=500, pstep=1, count=2)
+    await gen_pkt_test(unet, psize=411, mtu=500, pstep=1, count=2, ipv6=ipv6)
 
 
-async def test_small_pkt_agg(unet, astepf):
-    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag")
+@pytest.mark.parametrize("ipv6", [False, True])
+async def test_small_pkt_agg(unet, astepf, ipv6):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="dont-frag", ipv6=ipv6)
     await astepf("Prior to gen_pkt_test")
-    await gen_pkt_test(unet, count=80)
+    await gen_pkt_test(unet, count=80, ipv6=ipv6)
 
 
-async def test_recv_runt(unet, astepf):
-    await setup_policy_tun(unet, r1only=True, iptfs_opts="")
-    await astepf("Prior to gen_pkt_test")
-    await gen_pkt_test(unet, psize=1441, mtu=1500, count=8)
+@pytest.mark.parametrize("tun_ipv6", [False, True])
+@pytest.mark.parametrize("ipv6", [False, True])
+async def test_recv_runt(unet, astepf, ipv6, tun_ipv6):
+    await setup_policy_tun(unet, r1only=True, iptfs_opts="", ipv6=ipv6)
+    await astepf(f"Prior to gen_pkt_test, ipv6: {ipv6}")
+    await gen_pkt_test(
+        unet, psize=1421 if tun_ipv6 else 1441, mtu=1500, count=3, ipv6=ipv6
+    )
 
 
-async def _test_recv_runt2(unet, astepf):
-    await setup_policy_tun(unet, r1only=True, iptfs_opts="")
-    await astepf("Prior to gen_pkt_test")
-    await gen_pkt_test(unet, psize=1441, pmax=1451, mtu=1500, count=10, pstep=-1)
+# @pytest.mark.parametrize("ipv6", [False, True])
+# async def _test_recv_runt2(unet, astepf, ipv6):
+#     await setup_policy_tun(unet, r1only=True, iptfs_opts="", ipv6=ipv6)
+#     await astepf("Prior to gen_pkt_test")
+#     await gen_pkt_test(
+#         unet, psize=1441, pmax=1451, mtu=1500, count=10, pstep=-1, ipv6=ipv6
+#     )

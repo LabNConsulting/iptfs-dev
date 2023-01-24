@@ -20,22 +20,78 @@
 #
 "Classes and functions for using scapy in tests."
 
+import ipaddress
 import logging
+import socket
 import time
 
 # from common.util import Timeout, chunkit
 from common.util import get_intf_stats
 from scapy.arch import get_if_addr, get_if_hwaddr
 from scapy.config import conf
+from scapy.data import ETH_P_IPV6
 from scapy.layers.inet import ICMP, IP
+from scapy.layers.inet6 import (
+    ICMPv6EchoRequest,
+    ICMPv6ND_NA,
+    ICMPv6ND_NS,
+    ICMPv6NDOptSrcLLAddr,
+    IPv6,
+    neighsol,
+)
 from scapy.layers.ipsec import ESP
 from scapy.layers.l2 import ARP, Ether
 from scapy.packet import Raw
-from scapy.sendrecv import AsyncSniffer, sendp, srp
+from scapy.pton_ntop import inet_ntop, inet_pton
+from scapy.sendrecv import AsyncSniffer, sendp, srp, srp1
+from scapy.utils6 import (
+    Net6,
+    in6_getnsma,
+    in6_getnsmac,
+    in6_isaddr6to4,
+    in6_isaddrllallnodes,
+    in6_isaddrllallservers,
+    in6_isaddrTeredo,
+    in6_isllsnmaddr,
+    in6_ismaddr,
+    teredoAddrExtractInfo,
+)
 
 
 def ppp(headline, pkt):
     return f"{headline}: {pkt.show(dump=True)}"
+
+
+@conf.commands.register
+def neighsol_(addr, src, iface, timeout=1, chainCC=0):
+    """Sends and receive an ICMPv6 Neighbor Solicitation message
+
+    This function sends an ICMPv6 Neighbor Solicitation message
+    to get the MAC address of the neighbor with specified IPv6 address address.
+
+    'src' address is used as source of the message. Message is sent on iface.
+    By default, timeout waiting for an answer is 1 second.
+
+    If no answer is gathered, None is returned. Else, the answer is
+    returned (ethernet frame).
+    """
+
+    nsma = in6_getnsma(inet_pton(socket.AF_INET6, addr))
+    d = inet_ntop(socket.AF_INET6, nsma)
+    dm = in6_getnsmac(nsma)
+    s = get_if_hwaddr(iface)
+    p = Ether(dst=dm, src=s) / IPv6(dst=d, src=src, hlim=255)
+    p /= ICMPv6ND_NS(tgt=addr)
+    p /= ICMPv6NDOptSrcLLAddr(lladdr=s)
+    for i in range(0, 10):
+        res = srp1(
+            p, type=ETH_P_IPV6, iface=iface, timeout=timeout, verbose=0, chainCC=chainCC
+        )
+        if not res:
+            logging.info("IPv6 NDisc failed trying agian in 1s")
+            time.sleep(1)
+
+    return res
 
 
 class Interface:
@@ -46,9 +102,9 @@ class Interface:
         self.local_mac = get_if_hwaddr(name)
         self.local_addr = local_addr
         self.remote_addr = remote_addr
+        self.is_ipv6 = ipaddress.ip_address(local_addr).version == 6
 
-        ans = self.send_gratuitous_arp()
-        self.remote_mac = ans[0][1][ARP].hwsrc
+        self.remote_mac = self.get_remote_mac()
         logging.debug(
             "Interface: local %s mac %s remote %s mac %s",
             self.local_addr,
@@ -57,11 +113,15 @@ class Interface:
             self.remote_mac,
         )
 
-    def prep_pkts(self, pkts):
-        npkts = []
-        for pkt in pkts:
-            npkts.append(Ether(src=self.local_mac, dst=self.remote_mac) / pkt)
-        return npkts
+    def add_ether_encap(self, pkts):
+        return [Ether(src=self.local_mac, dst=self.remote_mac) / x for x in pkts]
+
+    def get_remote_mac(self):
+        if self.is_ipv6:
+            pkt = neighsol_(self.remote_addr, self.local_addr, self.name)
+            return str(pkt[ICMPv6ND_NA].lladdr)
+        ans = self.send_gratuitous_arp()
+        return str(ans[0][1][ARP].hwsrc)
 
     def send_gratuitous_arp(self):
         # result = sr1(ARP(op=ARP.who_has, psrc='192.168.1.2', pdst='192.168.1.1'))
@@ -89,17 +149,32 @@ def send_gratuitous_arp(ip=None, mac=None, iface=None):
 def gen_ippkts(  # pylint: disable=W0221
     src, dst, count=1, payload_size=54, payload_spread=0, inc=1, payload_sizes=None
 ):
+
+    srcaddr = ipaddress.ip_address(src)
+    if srcaddr.version == 4:
+        ipcls = IP
+        icmpcls = ICMP
+    else:
+        ipcls = IPv6
+        icmpcls = ICMPv6EchoRequest
+
     if not payload_spread and not payload_sizes:
-        return [
-            IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * payload_size)
-            for i in range(count)
-        ]
+        try:
+            return [
+                ipcls(src=src, dst=dst) / icmpcls(seq=i) / Raw("X" * payload_size)
+                for i in range(count)
+            ]
+        except Exception as e:
+            breakpoint()
+            print("OOF")
 
     if not payload_spread:
         pslen = len(payload_sizes)
         for i in range(count):
             return [
-                IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * payload_sizes[i % pslen])
+                ipcls(src=src, dst=dst)
+                / icmpcls(seq=i)
+                / Raw("X" * payload_sizes[i % pslen])
                 for i in range(count)
             ]
     else:
@@ -109,7 +184,7 @@ def gen_ippkts(  # pylint: disable=W0221
         end = payload_spread
         psize = start if inc > 0 else end
         for i in range(count):
-            pkts.append(IP(src=src, dst=dst) / ICMP(seq=i) / Raw("X" * (psize)))
+            pkts.append(ipcls(src=src, dst=dst) / icmpcls(seq=i) / Raw("X" * (psize)))
             psize += inc
             if inc > 0:
                 if psize > end:
@@ -122,10 +197,10 @@ def gen_ippkts(  # pylint: disable=W0221
         return pkts
 
 
-async def gen_pkts(
+def gen_pkts(
     unet,
     sa,
-    ping="10.0.0.1",
+    ping=None,
     mtu=1500,
     psize=0,
     pstep=0,
@@ -149,7 +224,13 @@ async def gen_pkts(
         wrap: the number of times to repeat `pstep`ing to the maximum size.
 
     """
-    inner_ip_overhead = len(IP() / ICMP(seq=1))
+    pingaddr = ipaddress.ip_address(ping)
+    if pingaddr.version == 4:
+        inner_ip_overhead = len(IP() / ICMP(seq=1))
+        local_addr = unet.tun_if.local_addr
+    else:
+        inner_ip_overhead = len(IPv6() / ICMPv6EchoRequest(seq=1))
+        local_addr = unet.tun_if6.local_addr
 
     psize = max(psize, inner_ip_overhead)
     if pstep:
@@ -175,7 +256,7 @@ async def gen_pkts(
         "GENERATING from %s to %s count %s step %s", psize, pmaxsize, pcount, pstep
     )
     opkts = gen_ippkts(
-        unet.tun_if.local_addr,
+        local_addr,
         ping,
         payload_size=psize - inner_ip_overhead,
         payload_spread=pmaxsize - inner_ip_overhead if pmaxsize else pmaxsize,
@@ -204,6 +285,8 @@ def send_recv_esp_pkts(
     dolog=False,
 ):
     del chunksize
+
+    tun_ipv6 = IPv6 in encpkts[0]
 
     if dolog:
         logf = logging.info
@@ -237,7 +320,9 @@ def send_recv_esp_pkts(
             raise
         return pkts
 
-    net0sniffer = AsyncSniffer(iface="net0", promisc=1, filter="icmp[0] == 0")
+    net0sniffer = AsyncSniffer(
+        iface="net0", promisc=1, filter="icmp[0] == 0 or icmp6[0] == 129"
+    )
     net0sniffer.start()
 
     if net0only:
@@ -248,12 +333,13 @@ def send_recv_esp_pkts(
             # prn=lambda x: print("-"),
             promisc=1,
             # filter=f"ip proto esp and ip[((ip[0]&0x0f)<<2):4]=={osa.spi}",
-            filter="dst host 10.0.1.3",
+            # filter="ip proto 50 or ip6 proto 50",
+            filter="dst host 10.0.1.3 or dst host fc00:0:0:1::3",
         )
         net1sniffer.start()
 
     # This sleep seems required or the sniffer misses initial packets!?
-    time.sleep(1)
+    time.sleep(0.5)
 
     logf("SENDING %s ipsec/iptfs packets", len(encpkts))
 
@@ -308,15 +394,22 @@ def send_recv_esp_pkts(
     # logf("Final sniff returns %s", pkts)
 
     # XXX improve this, sleep 2 seconds for things to flush
-    time.sleep(2)
+    time.sleep(0.5)
 
     net0results = net0sniffer.stop()
     net1results = net1sniffer.stop() if not net0only else []
 
-    # _esppkts = get_esp_pkts(pkts)
-    pkts = [x[IP] for x in net1results if x.haslayer(ESP)]
-    # XXX should use iface ip local addr
-    _esppkts = [x for x in pkts if x.src != "10.0.1.3"]
+    if tun_ipv6:
+        # _esppkts = get_esp_pkts(pkts)
+        pkts = [x[IPv6] for x in net1results if x.haslayer(ESP)]
+        # XXX should use iface ip local addr
+        _esppkts = [x for x in pkts if x.src != "fc00:0:0:1::3"]
+    else:
+        # _esppkts = get_esp_pkts(pkts)
+        pkts = [x[IP] for x in net1results if x.haslayer(ESP)]
+        # XXX should use iface ip local addr
+        _esppkts = [x for x in pkts if x.src != "10.0.1.3"]
+
     logf("RECEIVED %s ipsec packets", len(_esppkts))
 
     outer_pkts.extend(_esppkts)

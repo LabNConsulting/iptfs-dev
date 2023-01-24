@@ -21,7 +21,7 @@
 "Common code for configuring tests."
 
 import binascii
-import ipaddress as ip
+import ipaddress
 import os
 import shlex
 
@@ -571,10 +571,18 @@ def create_scapy_sa_pair(
     mtu=1500,
     addr1="10.0.1.2",
     addr2="10.0.1.3",
+    seq_num1=0,
+    seq_num2=0,
+    tun_ipv6=False,
 ):
     from scapy.layers import ipsec
     from scapy.layers.inet import IP
     from scapy.layers.inet6 import IPv6
+
+    if ipaddress.ip_address(addr1).version == 4:
+        ipcls = IP
+    else:
+        ipcls = IPv6
 
     linux_algo_to_scapy = {
         "rfc4106(gcm(aes))": "AES-GCM",
@@ -588,7 +596,9 @@ def create_scapy_sa_pair(
             es = es[2:]
         return binascii.unhexlify(es)
 
-    spi_1to2, spi_2to1, sa_auth, sa_enc = get_sa_values(use_gcm, use_nullnull, enc_null)
+    spi_1to2, spi_2to1, sa_auth, sa_enc = get_sa_values(
+        use_gcm, use_nullnull, enc_null, tun_ipv6=tun_ipv6
+    )
     sa_auth = shlex.split(sa_auth)
     sa_enc = shlex.split(sa_enc)
 
@@ -604,14 +614,9 @@ def create_scapy_sa_pair(
     else:
         SA = ipsec.SecurityAssociation
 
-    if isinstance(ip.ip_address(addr1), ip.IPv4Address):
-        ip1 = IP(src=addr1, dst=addr2)
-        ip2 = IP(src=addr2, dst=addr1)
-    else:
-        ip1 = IPv6(src=addr1, dst=addr2)
-        ip2 = IPv6(src=addr2, dst=addr1)
-
-    sa_1to2 = SA(ipsec.ESP, spi_1to2, tunnel_header=ip1, seq_num=0, **kwargs)
-    sa_2to1 = SA(ipsec.ESP, spi_2to1, tunnel_header=ip2, seq_num=0, **kwargs)
+    ip1 = ipcls(src=addr1, dst=addr2)
+    ip2 = ipcls(src=addr2, dst=addr1)
+    sa_1to2 = SA(ipsec.ESP, spi_1to2, tunnel_header=ip1, seq_num=seq_num1, **kwargs)
+    sa_2to1 = SA(ipsec.ESP, spi_2to1, tunnel_header=ip2, seq_num=seq_num2, **kwargs)
 
     return sa_1to2, sa_2to1

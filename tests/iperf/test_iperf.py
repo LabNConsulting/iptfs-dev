@@ -55,6 +55,9 @@ async def test_net_up(unet):
 @pytest.mark.parametrize("ipv6", [False, True])
 @pytest.mark.parametrize("routed", [False, True])
 async def test_iperf(unet, astepf, pytestconfig, iptfs_opts, pktsize, routed, ipv6):
+    if not unet.ipv6_enable and ipv6:
+        pytest.skip("skipping ipv6 as --enable-ipv6 not specified")
+
     if ipv6 and pktsize and pktsize < 536:
         pytest.skip("Can't run IPv6 iperf with MSS < 536")
         return
