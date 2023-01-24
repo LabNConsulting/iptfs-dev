@@ -1,4 +1,7 @@
 #+STARTUP: overview indent
+#+html: <p>Linux Branch: "iptfs": <a href="https://github.com/LabNConsulting/iptfs-linux/actions"><img src="https://github.com/LabNConsulting/iptfs-linux/actions/workflows/ci.yml/badge.svg?branch=iptfs"></a>
+#+html: <a href="https://codecov.io/gh/LabNConsulting/iptfs-linux" ><img src="https://codecov.io/gh/LabNConsulting/iptfs-linux/branch/iptfs/graph/badge.svg?token=JAO48ACBPT"></a>
+#+html: </p>
 
 * Linux TFS development environment
 There's a Makefile that will git clone the needed repos.
@@ -196,7 +199,30 @@ net/xfrm/xfrm_input.c
 * Miscellaneous Development Scratchpad
 This is an area for development notes. Please don't consider them current or
 relevant, they're just a place to keep notes while developing IPTFS.
+** Coverage, missing
 
+- ECN and DSCP for IPv4 and IPv6
+- multi packet frags for single inner (very large packet)
+- drop timer, in progress packet
+- drop timer, future saved in queue to output now
+- during reassembly:
+  - seq < want, drops packet, can only happen when reorder-window == 0
+  - seq > want, (will need to push past window), next fragment
+  - seq == want but no fragment
+    - all pad, ok
+    - not pad, abort and use next fragment
+  - all fragment into next packet
+- not during reassembly
+  - fragment start (unexpected), handle next fragment in packet
+- reorder past
+- reorder drop
+- reorder future
+  - dup of one we've received
+- reoder far future (larger that window)
+  - need something in saved window that also shifts out during middle of shifting
+  - need something at end of window that shifts into slot0 (will happend from the above).
+
+- was_gso == true in ingress/output collect function
 ** Sandbox
 *** CONFIG options for tracing
 CONFIG_DEBUG_INFO=y
