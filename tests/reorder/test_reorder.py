@@ -159,9 +159,9 @@ async def _test_tun_drop_XtoYofN(
     #
     psize = iptfs_payload_size(mtu, True)
     opkts = gen_pkts(unet, sa, ping=ping, mtu=mtu, psize=psize, count=count)
-    # tunpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=True)
-    tunpkts = iptfs.gen_encrypt_pktstream_pkts(
-        sa, mtu, opkts, dontfrag=False, fraghalf=True, pad=False
+    # tunpkts = iptfs.encrypt_pktstream_pkts(sa, opkts, mtu, dontfrag=True)
+    tunpkts = iptfs.encrypt_pktstream_pkts(
+        sa, opkts, mtu=mtu, dontfrag=False, fraghalf=True, pad=False
     )
     tunpkts = unet.tun_if.add_ether_encap(tunpkts)
 
@@ -227,7 +227,7 @@ async def _test_tun_reverse_XofYxZ(
     #
     psize = iptfs_payload_size(mtu, True)
     opkts = gen_pkts(unet, sa, ping=ping, mtu=mtu, psize=psize, count=count)
-    tunpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=True)
+    tunpkts = iptfs.encrypt_pktstream_pkts(sa, opkts, mtu=mtu, dontfrag=True)
     tunpkts = unet.tun_if.add_ether_encap(tunpkts)
 
     # Send one packet in order to establish seq num.

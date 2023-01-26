@@ -207,7 +207,7 @@ async def gen_pkt_test(
     tun_if, osa, sa, opkts = prep_gen_pkts(
         unet, addr, mtu, df, ipv6, tun_ipv6, sa_seq, **kwargs
     )
-    encpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=df)
+    encpkts = iptfs.encrypt_pktstream_pkts(sa, opkts, mtu=mtu, dontfrag=df)
     encpkts = tun_if.add_ether_encap(encpkts)
 
     #

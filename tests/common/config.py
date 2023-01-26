@@ -52,7 +52,7 @@ async def _network_up(unet, trex=False, r1only=False, ipv4=True, ipv6=False):
     h1 = unet.hosts["h1"] if "h1" in unet.hosts else None
     h2 = unet.hosts["h2"] if "h2" in unet.hosts else None
     r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"] if not r1only else None
+    r2 = unet.hosts["r2"] if not r1only and "r2" in unet.hosts else None
 
     await ethtool_disable_offloads(r1, g_offloads)
     if r2:
@@ -228,6 +228,7 @@ async def setup_policy_tun(
     trex=False,
     r1only=False,
     ipsec_intf="eth2",
+    esp_flags="",
     iptfs_opts="",
     ipv4=True,
     ipv6=False,
@@ -279,8 +280,14 @@ async def setup_policy_tun(
     # Start with a clean slate
     await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
 
+    if bool(tun_ipv6) != bool(ipv6):
+        esp_flags = "af-unspec " + esp_flags
+    if esp_flags:
+        esp_flags = "flag " + esp_flags
+
     for r in (r1, r2) if not r1only else (r1,):
         repl = r.conrepl
+
         #
         # SAs
         #
@@ -288,7 +295,8 @@ async def setup_policy_tun(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"flag af-unspec reqid {reqid_1to2} "
+                f"{esp_flags} reqid {reqid_1to2} "
+                # f"reqid {reqid_1to2} "
             )
             + iptfs_opts
         )
@@ -296,7 +304,8 @@ async def setup_policy_tun(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"flag af-unspec reqid {reqid_2to1} "
+                f"{esp_flags} reqid {reqid_2to1} "
+                # f"reqid {reqid_2to1} "
             )
             + iptfs_opts
         )
@@ -390,6 +399,7 @@ async def setup_routed_tun(
     r1only=False,
     ipsec_intf="eth2",
     iptfs_opts="",
+    esp_flags="",
     ipv4=True,
     ipv6=False,
     tun_ipv6=False,
@@ -440,6 +450,11 @@ async def setup_routed_tun(
     # Start with a clean slate
     await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
 
+    if bool(tun_ipv6) != bool(ipv6):
+        esp_flags = "af-unspec " + esp_flags
+    if esp_flags:
+        esp_flags = "flag " + esp_flags
+
     for r in (r1, r2) if not r1only else (r1,):
         repl = r.conrepl
         #
@@ -458,7 +473,7 @@ async def setup_routed_tun(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"flag af-unspec if_id 55 reqid {reqid_1to2} "
+                f"{esp_flags} if_id 55 reqid {reqid_1to2} "
             )
             + iptfs_opts
         )
@@ -466,7 +481,7 @@ async def setup_routed_tun(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"flag af-unspec if_id 55 reqid {reqid_2to1} "
+                f"{esp_flags} if_id 55 reqid {reqid_2to1} "
             )
             + iptfs_opts
         )

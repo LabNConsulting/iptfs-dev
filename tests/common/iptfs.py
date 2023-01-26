@@ -25,7 +25,6 @@ import socket
 import struct
 from functools import partial
 
-from common.scapy import ppp
 from scapy.compat import orb, raw
 from scapy.config import conf
 from scapy.data import IP_PROTOS
@@ -53,6 +52,10 @@ CRYPT_ALGOS["AES-GCM"].block_size = 1
 
 # This causes NAT and reassembly unit-tests to fail.
 # conf.debug_dissector = True
+
+
+def ppp(headline, pkt):
+    return f"{headline}: {pkt.show(dump=True)}"
 
 
 def sizeof(x):
@@ -330,8 +333,6 @@ def strip_all_pads(pkts):
     return pkts[: dlen - i]
 
 
-# XXX we should refactor this into a loop so we can defrag segments of a stream of
-# packets.
 def decap_frag_stream(pkts):
     """
     Given a list of IPTFS packets, join fragments and strip padding.
@@ -344,6 +345,11 @@ def decap_frag_stream(pkts):
     fdata = b""
     flen = None
     for epkt in pkts:
+        # If this is a normal ESP tunnel packet we're done
+        if IPTFSWithFrags not in epkt:
+            logger.warning("got plain IPsec (non-IPTFS) encapsulated packet")
+            ippkts.append(epkt)
+            continue
         ipkts = epkt.packets
         if first and epkt.block_offset:
             logger.warning(
@@ -380,8 +386,7 @@ def decap_frag_stream(pkts):
                     fdata += ipkt[fcls].load
                     break
             else:
-                logger.critical("Odd ipkt: %s", ipkt.show(dump=True))
-                print("Gah: ")
+                logger.warning("Odd ipkt: %s", ipkt.show(dump=True))
                 assert False
 
             if flen is None:
@@ -460,8 +465,8 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False, fraghalf=False, pad=Tr
     return tunpkts
 
 
-def gen_encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R0913
-    sa, mtu, pkts, dontfrag=False, fraghalf=False, pad=True
+def encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R0913
+    sa, pkts, mtu=1500, dontfrag=False, fraghalf=False, pad=True
 ):
 
     # for pkt in pkts:
@@ -741,13 +746,18 @@ class SecurityAssociation(ipsec.SecurityAssociation):
         newpkt = ip_header / esp
         return newpkt
 
-    def _encrypt_esp(self, pkt, seq_num=None, iv=None, esn_en=None, esn=None):
+    def _encrypt_esp(
+        self, pkt, seq_num=None, iv=None, esn_en=None, esn=None, pad=False
+    ):
         # This path (sa.encrypt) only supports a single IP[v6] internal packet.
         overhead = 4 + self.ipsec_overhead
         payload = raw(pkt)
         assert len(payload) <= (self.mtu - overhead)
-        pad = b"\x00" * (self.mtu - len(payload) - overhead)
-        payload = b"\x00\x00\x00\x00" + raw(payload) + pad
+        if pad:
+            padb = b"\x00" * (self.mtu - len(payload) - overhead)
+        else:
+            padb = b""
+        payload = b"\x00\x00\x00\x00" + raw(payload) + padb
         return self.encrypt_esp_raw(payload, seq_num, iv, esn_en, esn)
 
     def _decrypt_esp(
@@ -785,10 +795,12 @@ class SecurityAssociation(ipsec.SecurityAssociation):
                 cls = IPTFSWithFrags
         else:
             if pkt.version == 4:
-                pkt.proto = esp.nh
+                # pkt.proto = esp.nh
+                cls = IP
             else:
-                pkt.nh = esp.nh
-            cls = pkt.guess_payload_class(esp.data)
+                # pkt.nh = esp.nh
+                cls = IPv6
+            # cls = pkt.guess_payload_class(esp.data)
 
         # This swap is required b/c PacketFieldList only considers layers of this type
         # in a packet to be actually part of the next packet. We probably want to figure
@@ -798,7 +810,8 @@ class SecurityAssociation(ipsec.SecurityAssociation):
         # - Is this still a problem with frag fixes?
         # old = conf.padding_layer
         # conf.padding_layer = Raw
-        mypkt = cls(esp.data, prevpkts)
+        # mypkt = cls(esp.data, prevpkts)
+        mypkt = cls(esp.data)
         # conf.padding_layer = old
         return mypkt
 

@@ -84,7 +84,7 @@ def run(tun_if, args):
     )
     maxsz = max(len(x) for x in opkts)
     logging.info("GENERATED %s inner packets max size %s", len(opkts), maxsz)
-    encpkts = iptfs.gen_encrypt_pktstream_pkts(sa, mtu, opkts, dontfrag=args.df)
+    encpkts = iptfs.encrypt_pktstream_pkts(sa, opkts, mtu=mtu, dontfrag=args.df)
     encpkts = tun_if.add_ether_encap(encpkts)
 
     for chunk in chunkit(encpkts, 10):

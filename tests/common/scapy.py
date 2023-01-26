@@ -25,6 +25,8 @@ import logging
 import socket
 import time
 
+from common import iptfs
+
 # from common.util import Timeout, chunkit
 from common.util import get_intf_stats
 from scapy.arch import get_if_addr, get_if_hwaddr
@@ -32,30 +34,20 @@ from scapy.config import conf
 from scapy.data import ETH_P_IPV6
 from scapy.layers.inet import ICMP, IP
 from scapy.layers.inet6 import (
+    ICMPv6EchoReply,
     ICMPv6EchoRequest,
     ICMPv6ND_NA,
     ICMPv6ND_NS,
     ICMPv6NDOptSrcLLAddr,
     IPv6,
-    neighsol,
+    _ICMPv6,
 )
 from scapy.layers.ipsec import ESP
 from scapy.layers.l2 import ARP, Ether
 from scapy.packet import Raw
 from scapy.pton_ntop import inet_ntop, inet_pton
-from scapy.sendrecv import AsyncSniffer, sendp, srp, srp1
-from scapy.utils6 import (
-    Net6,
-    in6_getnsma,
-    in6_getnsmac,
-    in6_isaddr6to4,
-    in6_isaddrllallnodes,
-    in6_isaddrllallservers,
-    in6_isaddrTeredo,
-    in6_isllsnmaddr,
-    in6_ismaddr,
-    teredoAddrExtractInfo,
-)
+from scapy.sendrecv import AsyncSniffer, send, sendp, sr, sr1, srp, srp1
+from scapy.utils6 import in6_getnsma, in6_getnsmac
 
 
 def ppp(headline, pkt):
@@ -83,9 +75,14 @@ def neighsol_(addr, src, iface, timeout=1, chainCC=0):
     p = Ether(dst=dm, src=s) / IPv6(dst=d, src=src, hlim=255)
     p /= ICMPv6ND_NS(tgt=addr)
     p /= ICMPv6NDOptSrcLLAddr(lladdr=s)
-    for i in range(0, 10):
+    for _ in range(0, 10):
         res = srp1(
-            p, type=ETH_P_IPV6, iface=iface, timeout=timeout, verbose=0, chainCC=chainCC
+            p,
+            type=ETH_P_IPV6,
+            iface=iface,
+            timeout=timeout,
+            verbose=False,
+            chainCC=chainCC,
         )
         if not res:
             logging.info("IPv6 NDisc failed trying agian in 1s")
@@ -128,7 +125,7 @@ class Interface:
         pkt = Ether(src=self.local_mac, dst="ff:ff:ff:ff:ff:ff") / ARP(
             hwsrc=self.local_mac, psrc=self.local_addr, pdst=self.remote_addr
         )
-        ans, _ = srp(pkt, iface=self.name)
+        ans, _ = srp(pkt, iface=self.name, verbose=False)
         return ans
 
 
@@ -143,7 +140,58 @@ def send_gratuitous_arp(ip=None, mac=None, iface=None):
     arp = ARP(psrc=ip, hwsrc=mac, pdst=ip)
     p = Ether(dst=BCAST_MAC) / arp
     logging.info("Sending gratiutous ARP: %s", p.summary())
-    sendp(p, iface=iface)
+    sendp(p, iface=iface, verbose=False)
+
+
+def filter_non_ip_pkts(pkts):
+    def f(pkt):
+        if IP in pkt:
+            return True
+        if IPv6 in pkt:
+            # anything that's not ICMP is OK
+            if pkt[IPv6].nh != 58:
+                return True
+            # Filter out most ICMPv6 packets
+            if ICMPv6EchoRequest in pkt:
+                return True
+            if ICMPv6EchoReply in pkt:
+                return True
+        return False
+
+    # See if we need to decap an IPTFS pkt stream
+    if pkts and iptfs.IPTFSWithFrags in pkts[0]:
+        pkts = iptfs.decap_frag_stream(pkts)
+    inner_pkts = [x for x in pkts if f(x)]
+    other_inner_pkts = [x for x in pkts if not f(x)]
+    return inner_pkts, other_inner_pkts
+
+
+def decrypt_iptfs_pkts(sa, encpkts):
+    idx = 0
+    pkts = []
+    try:
+        for idx, epkt in enumerate(encpkts):
+            pkts.append(sa.decrypt_iptfs_pkt(epkt, prevpkts=pkts))
+    except Exception as error:
+        logging.error(
+            "Exception decrypting esp pkt index %s: %s\n", idx, error, exc_info=True
+        )
+        raise
+    return pkts
+
+
+def decrypt_esp_pkts(sa, encpkts):
+    idx = 0
+    pkts = []
+    try:
+        for idx, epkt in enumerate(encpkts):
+            pkts.append(sa.decrypt(epkt))
+    except Exception as error:
+        logging.error(
+            "Exception decrypting esp pkt index %s: %s\n", idx, error, exc_info=True
+        )
+        raise
+    return pkts
 
 
 def gen_ippkts(  # pylint: disable=W0221
@@ -159,14 +207,10 @@ def gen_ippkts(  # pylint: disable=W0221
         icmpcls = ICMPv6EchoRequest
 
     if not payload_spread and not payload_sizes:
-        try:
-            return [
-                ipcls(src=src, dst=dst) / icmpcls(seq=i) / Raw("X" * payload_size)
-                for i in range(count)
-            ]
-        except Exception as e:
-            breakpoint()
-            print("OOF")
+        return [
+            ipcls(src=src, dst=dst) / icmpcls(seq=i) / Raw("X" * payload_size)
+            for i in range(count)
+        ]
 
     if not payload_spread:
         pslen = len(payload_sizes)
@@ -281,7 +325,7 @@ def send_recv_esp_pkts(
     chunksize=30,
     faster=False,
     net0only=False,
-    process_recv_pkts=None,
+    process_recv_pkts=filter_non_ip_pkts,
     dolog=False,
 ):
     del chunksize
@@ -348,9 +392,15 @@ def send_recv_esp_pkts(
 
     # Really we want to check for kvm
     if faster or len(encpkts) <= 20:
-        sendp(encpkts, iface=iface, inter=0.001, verbose=False)
+        if Ether in encpkts[0]:
+            x = sendp(encpkts, iface=iface, inter=0.001, verbose=False)
+        else:
+            x = send(encpkts, iface=iface, inter=0.001, verbose=False)
     else:
-        sendp(encpkts, iface=iface, inter=0.01, verbose=False)
+        if Ether in encpkts[0]:
+            x = sendp(encpkts, iface=iface, inter=0.01, verbose=False)
+        else:
+            x = send(encpkts, iface=iface, inter=0.01, verbose=False)
 
     # nchunk = 0
     # for chunk in chunkit(encpkts, chunksize):
@@ -434,3 +484,73 @@ def send_recv_esp_pkts(
         len(outer_pkts),
     )
     return inner_pkts, outer_pkts, net0results
+
+
+def send_recv_pkts(
+    ippkts,
+    txiface,
+    sa,
+    rxiface,
+    faster=False,
+    process_recv_pkts=filter_non_ip_pkts,
+    dolog=False,
+    rxfilter="dst host 10.0.1.3 or dst host fc00:0:0:1::3",
+    delay=0.5,
+):
+    if dolog:
+        logf = logging.info
+    else:
+        logf = _nologf
+
+    rxs, _, rxerr, _ = get_intf_stats(rxiface)
+    assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
+    _, txs, _, txerr = get_intf_stats(txiface)
+    assert max(txerr) == 0, f"txerr not 0, is {max(txerr)}"
+
+    logf("receiving %spackets on %s", "ipsec " if sa else "", rxiface)
+    rxsniffer = AsyncSniffer(iface=rxiface, promisc=1, filter=rxfilter)
+    rxsniffer.start()
+    # This sleep seems required or the sniffer misses initial packets!?
+    time.sleep(delay)
+
+    logf("sending %s IP packets on %s", len(ippkts), txiface)
+    if faster or len(ippkts) <= 20:
+        if Ether in ippkts[0]:
+            x = sendp(ippkts, iface=txiface, inter=0.001, verbose=False)
+        else:
+            x = send(ippkts, iface=txiface, inter=0.001, verbose=False)
+    else:
+        if Ether in ippkts[0]:
+            x = sendp(ippkts, iface=txiface, inter=0.01, verbose=False)
+        else:
+            x = send(ippkts, iface=txiface, inter=0.01, verbose=False)
+
+    # XXX improve this, sleep 0.5 seconds for things to flush
+    time.sleep(delay)
+
+    rxresults = rxsniffer.stop()
+    if sa:
+        pkts = [x[IPv6] if IPv6 in x else x[IP] for x in rxresults if ESP in x]
+        decpkts = decrypt_esp_pkts(sa, pkts) if sa else pkts
+    else:
+        pkts = [x[IPv6] if IPv6 in x else x[IP] for x in rxresults]
+        decpkts = pkts
+    logf("received %s ipsec packets", len(pkts))
+
+    if process_recv_pkts:
+        inner_pkts, other_inner_pkts = process_recv_pkts(decpkts)
+    else:
+        inner_pkts, other_inner_pkts = decpkts, []
+
+    nrxs, _, rxerr, _ = get_intf_stats(rxiface)
+    assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
+    _, ntxs, _, txerr = get_intf_stats(txiface)
+    assert max(txerr) == 0, f"txerr not 0, is {max(txerr)}"
+    logf("stats for tx-%s: %s rx-%s: %s", txiface, nrxs - rxs, rxiface, ntxs - txs)
+    logf(
+        "decapped %s inner IPv[46] packets and %s other pkts from %s ipsec pkts",
+        len(inner_pkts),
+        len(other_inner_pkts),
+        len(pkts),
+    )
+    return inner_pkts, pkts

@@ -724,7 +724,7 @@ def fail_test(args, reason, trex_stats, vstats, dutlist=None):
         logger.info("%s", f"Pausing after {reason}")
         result = input('Pausing with testbed UP, RETURN to continue, "p" for PDB: ')
         if result.strip().lower() == "p":
-            breakpoint()
+            breakpoint()  # pylint: disable=forgotten-debug-statement
     raise Exception(reason)
 
 
