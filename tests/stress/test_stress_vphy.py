@@ -56,7 +56,13 @@ async def checkrun(pytestconfig):
 
 @pytest.fixture(scope="module", name="unet")
 async def _unet(rundir_module, pytestconfig):
-    async for x in _unet_impl(rundir_module, pytestconfig, param="munet_vphy"):
+    async for x in _unet_impl(
+        rundir_module,
+        pytestconfig,
+        param="munet_vphy",
+        unshare=True,
+        top_level_pidns=False,
+    ):
         yield x
 
 

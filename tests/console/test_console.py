@@ -38,8 +38,9 @@ async def _test_console(r, cmd, use_pty, will_echo=False):
     return repl
 
 
-async def test_console_pty(unet):
+async def test_console_pty(unet_share):
     "Test pty inside the VM"
+    unet = unet_share
     r1 = unet.hosts["r1"]
     cmd = [
         "socat",
@@ -70,8 +71,9 @@ async def test_console_pty(unet):
     logging.debug("'echo $?' output: %s", output)
 
 
-async def test_console_piped(unet):
+async def test_console_piped(unet_share):
     "Test inside the VM"
+    unet = unet_share
     r1 = unet.hosts["r1"]
     cmd = ["socat", "-", f"unix-connect:{r1.rundir}/s/console"]
     repl = await _test_console(r1, cmd, use_pty=False, will_echo=True)

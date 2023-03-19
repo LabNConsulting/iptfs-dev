@@ -26,7 +26,9 @@ import glob
 import os
 import sys
 
+import pytest
 from munet.testing.fixtures import *  # noqa
+from munet.testing.fixtures import _unet_impl, achdir
 from munet.testing.hooks import *  # noqa
 from munet.testing.hooks import pytest_addoption as _pytest_addoption
 

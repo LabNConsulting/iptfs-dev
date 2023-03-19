@@ -27,11 +27,23 @@ import time
 import pytest
 from common.config import setup_policy_tun, toggle_ipv6
 from common.tests import _test_net_up
+from munet.testing.fixtures import _unet_impl
 
 # All tests are coroutines
 pytestmark = pytest.mark.asyncio
 
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
+
+
+@pytest.fixture(scope="module", name="unet")
+async def _unet(rundir_module, pytestconfig):
+    async for x in _unet_impl(
+        rundir_module,
+        pytestconfig,
+        unshare=False,
+        top_level_pidns=False,
+    ):
+        yield x
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -43,7 +55,7 @@ async def network_up(unet):
     r1repl = r1.conrepl
 
     h1.cmd_raises("ip link set eth1 mtu 9000")
-    r1.cmd_raises("ip link set eth1 mtu 9000")
+    # r1.conrepl.cmd_raises("ip link set eth1 mtu 9000")
     r1.conrepl.cmd_raises("ip link set eth1 mtu 9000")
 
     await toggle_ipv6(unet, enable=False)

@@ -59,6 +59,16 @@ pytestmark = pytest.mark.asyncio
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
 
+@pytest.fixture(scope="module")
+async def unet(request, rundir_module, pytestconfig):  # pylint: disable=W0621
+    sdir = os.path.dirname(os.path.realpath(request.fspath))
+    async with achdir(sdir, "unet_unshare fixture"):
+        async for x in _unet_impl(
+            rundir_module, pytestconfig, unshare=True, top_level_pidns=False
+        ):
+            yield x
+
+
 @pytest.fixture(scope="module", autouse=True)
 async def network_up(unet):
     h1 = unet.hosts["h1"]

@@ -28,6 +28,7 @@ from functools import partial
 import pytest
 from common.config import _network_up, create_scapy_sa_pair, setup_policy_tun
 from common.scapy import Interface, send_recv_pkts
+from munet.testing.fixtures import _unet_impl, achdir
 from scapy.config import conf
 from scapy.layers.inet import IP, UDP
 from scapy.layers.inet6 import IPv6
@@ -38,6 +39,16 @@ from scapy.layers.inet6 import IPv6
 pytestmark = pytest.mark.asyncio
 
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
+
+
+@pytest.fixture(scope="module")
+async def unet(request, rundir_module, pytestconfig):  # pylint: disable=W0621
+    sdir = os.path.dirname(os.path.realpath(request.fspath))
+    async with achdir(sdir, "unet_unshare fixture"):
+        async for x in _unet_impl(
+            rundir_module, pytestconfig, unshare=True, top_level_pidns=False
+        ):
+            yield x
 
 
 @pytest.fixture(scope="module", autouse=True)
