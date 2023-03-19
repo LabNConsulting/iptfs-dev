@@ -201,27 +201,48 @@ This is an area for development notes. Please don't consider them current or
 relevant, they're just a place to keep notes while developing IPTFS.
 ** Coverage, missing
 
+- Large Packet Fragmenting Prior to ingress
+
+- No reordering window fast path
+  [[file:linux/net/xfrm/xfrm_iptfs.c::iptfs_input_ordered(gro_cells, x, skb);]]
 - ECN and DSCP for IPv4 and IPv6
+  [[file:linux/net/xfrm/xfrm_iptfs.c::if (x->props.flags & XFRM_STATE_DECAP_DSCP)]]
+
 - multi packet frags for single inner (very large packet)
+
 - drop timer, in progress packet
+  [[file:linux/net/xfrm/xfrm_iptfs.c::pr_devinf("dropping in-progress reassemble\n");]]
 - drop timer, future saved in queue to output now
+  [[file:linux/net/xfrm/xfrm_iptfs.c::count = xtfs->w_savedlen ? __reorder_drop(xtfs, &list) : 0;]]
+  [[file:linux/net/xfrm/xfrm_iptfs.c::pr_devinf("receiving ordered list of len %u\n", count);]]
+
+*** Reassembly
 - during reassembly:
   - seq < want, drops packet, can only happen when reorder-window == 0
+    code coverage shows no code here...
+    [[file:linux/net/xfrm/xfrm_iptfs.c::XFRM_INC_SA_STATS(xtfs, IPTFS_INPUT_OLD_SEQ);]]
   - seq > want, (will need to push past window), next fragment
+    [[file:linux/net/xfrm/xfrm_iptfs.c::pr_devinf("missed needed seq\n");]]
   - seq == want but no fragment
     - all pad, ok
+      [[file:linux/net/xfrm/xfrm_iptfs.c::XFRM_INC_SA_STATS(xtfs, IPTFS_INPUT_ALL_PAD_SKIP);]]
     - not pad, abort and use next fragment
+      [[file:linux/net/xfrm/xfrm_iptfs.c::pr_devinf("missing expected fragment\n");]]
   - all fragment into next packet
+
 - not during reassembly
   - fragment start (unexpected), handle next fragment in packet
+
+*** Reordering
 - reorder past
-- reorder drop
-- reorder future
-  - dup of one we've received
+  [[file:linux/net/xfrm/xfrm_iptfs.c::return __reorder_past(xtfs, inskb, freelist, fcount);]]
+- reorder future: dup of one we've received
+  [[file:linux/net/xfrm/xfrm_iptfs.c::/* a dup of a future */]]
 - reoder far future (larger that window)
   - need something in saved window that also shifts out during middle of shifting
+    [[file:linux/net/xfrm/xfrm_iptfs.c::pr_devinf("send slot0 during shift: %llu", s0seq);]]
   - need something at end of window that shifts into slot0 (will happend from the above).
-
+    [[file:linux/net/xfrm/xfrm_iptfs.c::extra_drops--; /* we aren't dropping what's in slot0 */]]
 - was_gso == true in ingress/output collect function
 ** Sandbox
 *** CONFIG options for tracing
