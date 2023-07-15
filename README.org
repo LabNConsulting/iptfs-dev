@@ -181,7 +181,7 @@ tunnel should run in.
   packets to arrive before considering those missing packets dropped. Default
   for fixed-rate send is 1. Default for demand-rate is 3. If the other endpoint
   is in dont-fragment mode then this value can be set to 0.
-- iptfs-drop-time :: The number microseconds to wait unti considering
+- iptfs-drop-time :: The number microseconds to wait before considering
   the next in sequence packet as lost.
 
 **** fixed-rate fixed-sized configuration
@@ -191,12 +191,11 @@ tunnel should run in.
 - iptfs-max-delay :: alternate config for max-queue-size, which is based on the fixed send rate.
 - iptfs-disable-congestion-control :: disble congestion control, should only be used
   when the user is in full administrative control of all paths the tunnel may take.
-- iptfs-no-pad-only :: dont' send all pad packets (debug option)
+- iptfs-no-pad-only :: don't send all pad packets (debug option)
 
 **** demand-rate configuration
-
-- iptfs-initial-delay :: amount of time in microseconds to wait after before servicing
-  the output queue when the initial packet arrives (first in queue). This time
+- iptfs-initial-delay :: amount of time in microseconds to wait before servicing
+  the output queue after the initial packet arrives (first in queue). This time
   allows for collecting more packets to take advantage of IPTFS packet aggregation.
 
 
