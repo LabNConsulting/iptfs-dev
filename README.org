@@ -7,6 +7,11 @@
 There's a Makefile that will git clone the needed repos.
 
 ** Usage Notes
+*** Building
+
+    make setup
+    make
+
 *** Launching a "Host <-> Router <-> Router <-> Host" setup.
 You can use the tests to bring up a working iptfs ipsec tunnel. You'll need to
 have installed ~qemu~, ~socat~, ~python~ and optional but highly recommended
@@ -124,7 +129,7 @@ In order for this to work seemlessly you need to do a couple steps:
 
   1. cd linux # kernel source directory
   2. run ./scripts/clang-tools/gen_compile_commands.py -d ../output-linux
-  3. printf "%compile_commands.json\n-D__IN_CCLS__\n" > .ccls
+  3. printf "%%compile_commands.json\n-D__IN_CCLS__\n" > .ccls
 
 ** CI Usage
 *** Testing.

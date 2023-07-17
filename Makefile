@@ -1,7 +1,6 @@
-# LINUXCONFIG ?= linux.config
+LINUXCONFIG ?= linux.config
 # LINUXCONFIG ?= linux-cov.config
-# LINUXCONFIG ?= linux-default.config
-LINUXCONFIG ?= linux-fast.config
+# LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
 # LINUXCONFIG ?= linux-nosmp.config
 
@@ -12,7 +11,7 @@ endif
 all: kernel rootfs tests/trex tests/external_libs
 
 setup:
-	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2022.08
+	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2023.05
 	([ -d iproute2 ] || [ -h iproute2 ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-iproute2.git iproute2 -b iptfs
 	([ -d linux ] || [ -h linux ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
@@ -28,6 +27,9 @@ linux-defconfig:
 
 linux-menuconfig:
 	make -C linux O=../output-linux menuconfig
+
+br-defconfig:
+	make -C buildroot O=../output-buildroot defconfig
 
 br-menuconfig:
 	make -C buildroot O=../output-buildroot menuconfig
