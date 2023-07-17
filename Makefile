@@ -62,9 +62,11 @@ output-linux:
 tests/ci:
 	sudo -E pytest -s tests/config tests/errors tests/frags tests/simplenet tests/utpkt/test_utpkt.py
 
-tests/trex tests/external_libs:
+tests-trex/trex tests-trex/external_libs:
 	scripts/extract-trex.sh
 
+clean-trex:
+	rm -rf tests-trex/podman-trex-extract tests-trex/trex tests-trex/trex_stl_lib tests-trex/external_libs
 
 #
 # CI Rules
@@ -73,7 +75,6 @@ ci-extract-cov:
 	bash scripts/extract-cov.sh
 	mkdir -p test-logs
 	cp *.info test-logs
-
 
 #
 # Personal

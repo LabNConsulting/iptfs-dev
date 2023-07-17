@@ -304,7 +304,6 @@ def get_payload_rate(bitrate, mtu, sa, is_cc=False):
 
 
 def get_max_queue_size(maxdelay, bitrate, mtu, sa, is_cc=False):
-
     prate = get_payload_rate(bitrate, mtu, sa, is_cc)
     r = (prate * maxdelay) / 1000000
     return r
@@ -404,48 +403,54 @@ def decap_frag_stream(pkts):
     return ippkts
 
 
-def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False, fraghalf=False, pad=True):
-    """raw_iptfs_stream - encapsulate ippkts in a stream of iptfs packes"""
+def raw_iptfs_stream(ippkts, pktsize, dontfrag=False, fraghalf=False, pad=True):
+    """
+    Encapsulate IP packets in a stream of IPTFS payloads
+
+    Args:
+        ippkts: list of ip packets
+        pktsize: the max size of resulting payloads
+        dontfrag: True to not fragment
+        fraghalf: fragment so the first payload is 1/2 of normal (and padded if pad is True)
+        pad: True to pad to pktsize payloads
+    """
     tunpkts = [IPTFSHeader() / Raw()]
     emptylen = len(tunpkts[-1])
 
-    payloadsize += emptylen
     for pkt in ippkts:
         again = True
         payload = Raw(pkt).load
-        if dontfrag and (emptylen + len(payload) > payloadsize):
+        if dontfrag and len(payload) > pktsize:
             raise ValueError(
                 f"dont frag with input packet size {len(payload)}"
-                f" larger than payload size {payloadsize-emptylen}"
+                f" larger than (max) payload size {pktsize - emptylen}"
             )
         fragsecond = False
         while again:
             clen = len(tunpkts[-1])
-            if clen + len(payload) > payloadsize and dontfrag:
-                # Try not padding just pack the packet
-                # if False:
-                #     # Pad out get a new packet.
-                #     tunpkts[-1][Raw].load += b"\x00" * (payloadsize - clen)
-
+            if clen + len(payload) > pktsize and dontfrag:
+                # Pad out existing packet if padding
+                if pad:
+                    tunpkts[-1][Raw].load += b"\x00" * (pktsize - clen)
                 tunpkts.append(IPTFSHeader() / Raw())
                 continue
 
             if not fragsecond:
-                pmax = payloadsize
+                pmax = pktsize
             else:
+                # WTH is this doing anyway? why do we want a full followed by a half
+                # full followed by full packets?
                 fragsecond = False
-                pmax = (payloadsize - emptylen) // 2 + emptylen
+                pmax = (pktsize - emptylen) // 2 + emptylen
 
             if fraghalf:
                 fragsecond = True
                 fraghalf = False
 
-            if clen + len(payload) < pmax:
+            if clen + len(payload) <= pmax:
                 tunpkts[-1][Raw].load += payload
-                again = False
-            elif clen + len(payload) == pmax:
-                tunpkts[-1][Raw].load += payload
-                tunpkts.append(IPTFSHeader() / Raw())
+                if len(tunpkts[-1]) == pmax:
+                    tunpkts.append(IPTFSHeader() / Raw())
                 again = False
             else:
                 tunpkts[-1][Raw].load += payload[: pmax - clen]
@@ -455,8 +460,8 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False, fraghalf=False, pad=Tr
                     again = False
 
     clen = len(tunpkts[-1])
-    if pad and clen != payloadsize:
-        tunpkts[-1][Raw].load += b"\x00" * (payloadsize - clen)
+    if pad and clen != pktsize:
+        tunpkts[-1][Raw].load += b"\x00" * (pktsize - clen)
     if clen == len(IPTFSHeader() / Raw()):
         tunpkts = tunpkts[:-1]
     # print("XXXLEN: raw_iptfs_stream length of payload: {}".format(
@@ -468,7 +473,6 @@ def raw_iptfs_stream(ippkts, payloadsize, dontfrag=False, fraghalf=False, pad=Tr
 def encrypt_pktstream_pkts(  # pylint: disable=W0612  # pylint: disable=R0913
     sa, pkts, mtu=1500, dontfrag=False, fraghalf=False, pad=True
 ):
-
     # for pkt in pkts:
     #     self.logger.debug(" XXX: len: {} pkt: {}".format(
     #         len(pkt), pkt.show(dump=True)))
@@ -491,7 +495,6 @@ def gen_encrypt_pktstream(  # pylint: disable=W0612  # pylint: disable=R0913,R09
     payload_spread=0,
     dontfrag=False,
 ):
-
     if ipaddress.ip_address(src).version == 6:
         ipcls = IP
         icmpcls = ICMP
@@ -520,8 +523,25 @@ def gen_encrypt_pktstream(  # pylint: disable=W0612  # pylint: disable=R0913,R09
     #     self.logger.debug(" XXX: len: {} pkt: {}".format(
     #         len(pkt), pkt.show(dump=True)))
 
+    # 4 // 4 * 4 == 4
+    # 5 // 4 * 4 == 4
+    # 6 // 4 * 4 == 4
+    # 7 // 4 * 4 == 4
+    # 8 // 4 * 4 == 8
+
+    # mtu = payload + 2 + (ipsecoverheader - 2)
+    # 1500 = X + ipsecoverheader
+    # ipsec_payload_size = mtu - sa.get_ipsec_overhead() - 2 + 2
+    # ipsec_payload_size + 2 = mtu - overheader + 2
+
+    # (ipsecpayload + 2) % 4 == 0
+    # ipsecpayload % 4 + 2 % 4 == 0
+
+    # IPsec payloads must be
     ipsec_payload_size = mtu - sa.get_ipsec_overhead()
-    ipsec_payload_size = (ipsec_payload_size // 4) * 4
+    # We want 2 minus the target payload divisible by 4 to account for 2 bytes of
+    # ipsec trailer that when added must be divisible by 4
+    ipsec_payload_size = ((ipsec_payload_size - 2) // 4) * 4 + 2
     pstream = raw_iptfs_stream(pstream, ipsec_payload_size, dontfrag)
     # self.logger.debug(" XXXPKT: len: {} pkt: {}".format(
     #     len(pstream[0]),
@@ -667,17 +687,20 @@ class SecurityAssociation(ipsec.SecurityAssociation):
 
     def _get_ipsec_overhead(self):
         # _ESPPlain includes the footer fields
+        # ipv4 tunnel header (20) + esplain (8 + 2) == 30
         ol = len(self.tunnel_header / _ESPPlain())
         if self.nat_t_header is not None:
             ol += len(self.nat_t_header())
 
-        # compensate for IPTFS header overhead
-        ol += 4
+        # This would make it IPTFS+IPsec overhead, dont do this
+        # # compensate for IPTFS header overhead
+        # ol += 4
 
         # print("XXXLEN: get_ipsec_overhead thlen: {} esp: {}".format(
         #     len(self.tunnel_header), len(_ESPPlain())))
         # print("XXXLEN: get_ipsec_overhead ol: {} icv: {} iv: {}".format(
         #     ol, self.crypt_algo.icv_size, self.crypt_algo.iv_size))
+        # gcm + 8 + 16 == 24 -> Total 54
         if self.crypt_algo.icv_size:
             return ol + (self.crypt_algo.icv_size + self.crypt_algo.iv_size)
         return ol + (self.auth_algo.icv_size + self.crypt_algo.iv_size)
@@ -763,7 +786,6 @@ class SecurityAssociation(ipsec.SecurityAssociation):
     def _decrypt_esp(
         self, pkt, verify=True, esn_en=None, esn=None, prevpkts=None
     ):  # pylint: disable=W0221
-
         _, high_seq_num = self.build_seq_num(self.seq_num)
         encrypted = pkt[ESP]
 

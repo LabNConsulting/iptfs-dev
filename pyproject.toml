@@ -27,23 +27,26 @@ max-line-length = 88
 
 addopts = "-s"
 asyncio_mode = "auto"
-norecursedirs = "tests/external_libs tests/manual tests/podman-trex-extract tests/trex*"
+norecursedirs = "tests-trex/external_libs tests/manual tests-trex/podman-trex-extract tests-trex/trex* tests-trex/trex_stl_lib"
 
 # The order of these really matters, and there's serious voodoo, it has to do
 # with trex's use of it's own earlier scapy. It's not enough for utpkt to be
 # before stress though, it has to be at the top (or somewhere more than just
 # above stress..) who knows...; this works.
 testpaths = [
-        # "tests/utpkt",
         "tests/config",
         "tests/console",
         "tests/errors",
         "tests/iperf",
         "tests/phynic",
+        "tests/reorder",
         "tests/simplenet",
+        "tests/utpkt",
         "tests/verify",
-        # need to put trex stuff last so normal scapy is not messed up
-        "tests/stress",
+
+        # can't run this together b/c trex custom python lib versions
+        # in particular scapy.
+        # "tests-trex/stress",
 ]
 
 log_level = "INFO"

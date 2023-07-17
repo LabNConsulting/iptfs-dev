@@ -10,7 +10,7 @@ kinds:
       sshkey: "%CONFIGDIR%/../../root-key"
       #cmdline-extra: "acpi=off idle=poll nokaslr"
       cmdline-extra: "idle=poll nokaslr"
-      memory: "4096M"
+      memory: "8192M"
       kvm: true
       ncpu: 1
       console:
@@ -18,7 +18,7 @@ kinds:
 
   - name: trex_phy
     privileged: true
-    # image: quay.io/chopps/trex:v2.98
+    # image: quay.io/chopps/trex:v3.03
     # cap_add:
     #   - ALL
     # podman:
@@ -42,7 +42,7 @@ kinds:
     merge: ["volumes"]
 
   - name: trex
-    # image: quay.io/chopps/trex:v3.00
+    # image: quay.io/chopps/trex:v3.03
     cmd: |
       ip addr
       NETH=$(ls -d /sys/class/net/eth* | wc -l)
