@@ -8,7 +8,7 @@ ifdef SHALLOW_CLONE
 DEPTH ?= --depth 1
 endif
 
-all: kernel rootfs tests/trex tests/external_libs
+all: kernel rootfs
 
 setup:
 	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2023.05
@@ -62,11 +62,15 @@ output-linux:
 tests/ci:
 	sudo -E pytest -s tests/config tests/errors tests/frags tests/simplenet tests/utpkt/test_utpkt.py
 
-tests-trex/trex tests-trex/external_libs:
+tests-trex/external_libs:
 	scripts/extract-trex.sh
 
 clean-trex:
 	rm -rf tests-trex/podman-trex-extract tests-trex/trex tests-trex/trex_stl_lib tests-trex/external_libs
+
+test: tests-trex/external_libs
+	sudo -E pytest -s tests
+	sudo -E pytest -s tests-trex
 
 #
 # CI Rules
