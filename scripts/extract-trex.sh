@@ -32,14 +32,15 @@ trap handler EXIT
 
 if [[ $1 ]]; then
     extract_dir=$1
-    SUDO=
+    PODSUDO=
 else
     extract_dir=$TESTSDIR/podman-trex-extract
+    PODSUDO=
 fi
 
 # else
 #     extract_dir=/opt/trex
-#     SUDO=sudo
+#     PODSUDO=sudo
 # fi
 
 
@@ -74,14 +75,13 @@ done
 
 if [[ ! -e $tdir ]]; then
     CID=$(podman create ${trex_image})
-    $SUDO mkdir -p $extract_dir
-    $SUDO podman cp $CID:/trex $tdir
+    $PODSUDO mkdir -p $extract_dir
+    $PODSUDO podman cp $CID:/trex $tdir
 else
     echo "$tdir already exists"
 fi
 
 echo "== Creating/Updating symlinks to trex libraries"
-# $SUDO ln -fs $libdir/trex $autovpp/
 for symdir in trex trex_stl_lib; do
     symlink=$TESTSDIR/$symdir
     set -x
