@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 export LTFSDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && cd .. && pwd )"
-export TESTSDIR=$LTFSDIR/tests
+export TESTSDIR=$LTFSDIR/tests-trex
 
 CID=""
 
@@ -32,18 +32,19 @@ trap handler EXIT
 
 if [[ $1 ]]; then
     extract_dir=$1
-    SUDO=
+    PODSUDO=
 else
     extract_dir=$TESTSDIR/podman-trex-extract
+    PODSUDO=
 fi
 
 # else
 #     extract_dir=/opt/trex
-#     SUDO=sudo
+#     PODSUDO=sudo
 # fi
 
 
-trex_image=$(sed -e '/image: quay.io\/chopps\/trex.*/!d;s/.*image: *//' $TESTSDIR/kinds.yaml)
+trex_image=$(sed -e '/image: quay.io\/chopps\/trex.*/!d;s/.*image: *//; /quay.io/q' $TESTSDIR/kinds.yaml)
 trex_version=${trex_image#*trex:}
 tdir=$extract_dir/$trex_version
 libdir=$tdir/automation/trex_control_plane/interactive
@@ -74,14 +75,13 @@ done
 
 if [[ ! -e $tdir ]]; then
     CID=$(podman create ${trex_image})
-    $SUDO mkdir -p $extract_dir
-    $SUDO podman cp $CID:/trex $tdir
+    $PODSUDO mkdir -p $extract_dir
+    $PODSUDO podman cp $CID:/trex $tdir
 else
     echo "$tdir already exists"
 fi
 
 echo "== Creating/Updating symlinks to trex libraries"
-# $SUDO ln -fs $libdir/trex $autovpp/
 for symdir in trex trex_stl_lib; do
     symlink=$TESTSDIR/$symdir
     set -x

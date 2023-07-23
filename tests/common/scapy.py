@@ -317,7 +317,12 @@ def _nologf(*args, **kwargs):
     del kwargs
 
 
-# XXX There's a few hard coded values in here that probably need cleaning up
+# XXX There's a few hard coded values in here that probably need cleaning up.
+
+# this function is setup to send encrypted packets to router A and then tap the reply
+# stream coming from the host H1 and then the encrypted packets from the IPsec router A
+#
+#  H1 - RA - RB - H2
 def send_recv_esp_pkts(
     osa,
     encpkts,
@@ -327,6 +332,8 @@ def send_recv_esp_pkts(
     net0only=False,
     process_recv_pkts=filter_non_ip_pkts,
     dolog=False,
+    # echo reply
+    net0filter="icmp[0] == 0 or icmp6[0] == 129",
 ):
     del chunksize
 
@@ -364,9 +371,7 @@ def send_recv_esp_pkts(
             raise
         return pkts
 
-    net0sniffer = AsyncSniffer(
-        iface="net0", promisc=1, filter="icmp[0] == 0 or icmp6[0] == 129"
-    )
+    net0sniffer = AsyncSniffer(iface="net0", promisc=1, filter=net0filter)
     net0sniffer.start()
 
     if net0only:
@@ -460,7 +465,8 @@ def send_recv_esp_pkts(
         # XXX should use iface ip local addr
         _esppkts = [x for x in pkts if x.src != "10.0.1.3"]
 
-    logf("RECEIVED %s ipsec packets", len(_esppkts))
+    if not net0only:
+        logf("RECEIVED %s ipsec packets", len(_esppkts))
 
     outer_pkts.extend(_esppkts)
     if _esppkts:
@@ -478,12 +484,72 @@ def send_recv_esp_pkts(
     logf("STATS for %s: RX %s TX %s", iface, nrxs - rxs, ntxs - txs)
 
     logf(
-        "DECAP %s inner ICMP replies and %s other pkts from %s ipsec pkts",
+        "DECAP %s inner filter selected packets and %s other pkts from %s ipsec pkts",
         len(inner_pkts),
         len(other_inner_pkts),
-        len(outer_pkts),
+        len(encpkts) if net0only else len(outer_pkts),
     )
     return inner_pkts, outer_pkts, net0results
+
+
+# this function is setup to send encrypted packets to router A and then tap the
+# un-encrypted traffic on net0 towards H1, no replies are expected.
+#
+#  H1 - RA - RB - H2
+def send_recv_esp_pkts_simple(
+    encpkts,
+    send_intf="net1",
+    recv_intf="net0",
+    faster=False,
+    dolog=False,
+    # echo requests
+    net0filter="icmp[0] == 8 or icmp6[0] == 128",
+):
+    if dolog:
+        logf = logging.info
+    else:
+        logf = _nologf
+
+    rxs, txs, rxerr, txerr = get_intf_stats(recv_intf)
+    assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
+    assert max(txerr) == 0, f"txerr not 0, is {max(txerr)}"
+
+    net0sniffer = AsyncSniffer(iface=recv_intf, promisc=1, filter=net0filter)
+    net0sniffer.start()
+
+    # This sleep seems required or the sniffer misses initial packets!?
+    time.sleep(0.5)
+
+    logf("SENDING %s ipsec/iptfs packets", len(encpkts))
+
+    # Really we want to check for kvm
+    if faster or len(encpkts) <= 20:
+        if Ether in encpkts[0]:
+            _ = sendp(encpkts, iface=send_intf, inter=0.001, verbose=False)
+        else:
+            _ = send(encpkts, iface=send_intf, inter=0.001, verbose=False)
+    else:
+        if Ether in encpkts[0]:
+            _ = sendp(encpkts, iface=send_intf, inter=0.01, verbose=False)
+        else:
+            _ = send(encpkts, iface=send_intf, inter=0.01, verbose=False)
+
+    # XXX improve this, sleep 2 seconds for things to flush
+    time.sleep(2.0)
+
+    net0results = net0sniffer.stop()
+
+    nrxs, ntxs, rxerr, txerr = get_intf_stats(recv_intf)
+    assert max(rxerr) == 0, f"rxerr not 0, is {max(rxerr)}"
+    assert max(txerr) == 0, f"txerr not 0, is {max(txerr)}"
+    logf("STATS for %s: RX %s TX %s", recv_intf, nrxs - rxs, ntxs - txs)
+
+    logf(
+        "received %s RED packets from %s BLACK pkts",
+        len(net0results),
+        len(encpkts),
+    )
+    return net0results
 
 
 def send_recv_pkts(

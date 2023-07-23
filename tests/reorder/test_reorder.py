@@ -30,22 +30,12 @@ import time
 from datetime import datetime, timedelta
 
 import pytest
-
-# So gross.. but trex plays stupid games with embedded pkgs and path
-SRCDIR = os.path.dirname(os.path.abspath(__file__))
-trexlib = os.path.join(os.path.dirname(SRCDIR), "external_libs")
-
-try:
-    scapydir = glob.glob(trexlib + "/scapy*")[0]
-    sys.path[0:0] = [scapydir]
-except:
-    pass
-
 from common import iptfs
 from common.config import create_scapy_sa_pair, setup_policy_tun, toggle_ipv6
 from common.scapy import Interface, gen_pkts, send_recv_esp_pkts
 from common.util import iptfs_payload_size
 from munet.base import BaseMunet, comm_error
+from munet.testing.fixtures import _unet_impl, achdir
 from scapy.config import conf
 from scapy.layers.inet import ICMP, IP
 from scapy.layers.ipsec import ESP

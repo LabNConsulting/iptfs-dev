@@ -1,7 +1,6 @@
-# LINUXCONFIG ?= linux.config
+LINUXCONFIG ?= linux.config
 # LINUXCONFIG ?= linux-cov.config
-# LINUXCONFIG ?= linux-default.config
-LINUXCONFIG ?= linux-fast.config
+# LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
 # LINUXCONFIG ?= linux-nosmp.config
 
@@ -9,10 +8,10 @@ ifdef SHALLOW_CLONE
 DEPTH ?= --depth 1
 endif
 
-all: kernel rootfs tests/trex tests/external_libs
+all: kernel rootfs
 
 setup:
-	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2022.08
+	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2023.05
 	([ -d iproute2 ] || [ -h iproute2 ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-iproute2.git iproute2 -b iptfs
 	([ -d linux ] || [ -h linux ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
@@ -28,6 +27,9 @@ linux-defconfig:
 
 linux-menuconfig:
 	make -C linux O=../output-linux menuconfig
+
+br-defconfig:
+	make -C buildroot O=../output-buildroot defconfig
 
 br-menuconfig:
 	make -C buildroot O=../output-buildroot menuconfig
@@ -60,9 +62,15 @@ output-linux:
 tests/ci:
 	sudo -E pytest -s tests/config tests/errors tests/frags tests/simplenet tests/utpkt/test_utpkt.py
 
-tests/trex tests/external_libs:
+tests-trex/external_libs:
 	scripts/extract-trex.sh
 
+clean-trex:
+	rm -rf tests-trex/podman-trex-extract tests-trex/trex tests-trex/trex_stl_lib tests-trex/external_libs
+
+test: tests-trex/external_libs
+	sudo -E pytest -s tests
+	sudo -E pytest -s tests-trex
 
 #
 # CI Rules
@@ -71,7 +79,6 @@ ci-extract-cov:
 	bash scripts/extract-cov.sh
 	mkdir -p test-logs
 	cp *.info test-logs
-
 
 #
 # Personal

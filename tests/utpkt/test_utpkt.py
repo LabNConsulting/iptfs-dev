@@ -27,11 +27,11 @@ import os
 import pytest
 from common import iptfs
 from common.config import _network_up, create_scapy_sa_pair, setup_policy_tun
-from common.scapy import Interface, gen_pkts, send_recv_esp_pkts
+from common.scapy import Interface, gen_pkts, send_recv_esp_pkts_simple
 from munet.testing.fixtures import _unet_impl, achdir
 from scapy.config import conf
 from scapy.layers.inet import ICMP
-from scapy.layers.inet6 import ICMPv6EchoReply
+from scapy.layers.inet6 import ICMPv6EchoRequest
 
 # from munet.cli import async_cli
 
@@ -40,9 +40,20 @@ pytestmark = pytest.mark.asyncio
 
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
+#                             192.168.0.0/24
+# ---+--------------------+------ mgmt0 -------+------
+#    | .1                 | .2                 | .254
+# ........              +----+              ........
+# . unet . --- net0 --- | r1 | --- net1 --- . unet .
+# ........ .1        .2 +----+ .2        .3 ........
+#          10.0.0.0/24         10.0.1.0/24
+#
+# Normally we look for echo replies but for this test suite since we are scapy sitting
+# on each end of the inline network
 
-@pytest.fixture(scope="module")
-async def unet(request, rundir_module, pytestconfig):  # pylint: disable=W0621
+
+@pytest.fixture(scope="module", name="unet")
+async def _unet(request, rundir_module, pytestconfig):  # pylint: disable=W0621
     sdir = os.path.dirname(os.path.realpath(request.fspath))
     async with achdir(sdir, "unet_unshare fixture"):
         async for x in _unet_impl(
@@ -52,7 +63,7 @@ async def unet(request, rundir_module, pytestconfig):  # pylint: disable=W0621
 
 
 @pytest.fixture(scope="module", autouse=True)
-async def network_up(unet, pytestconfig):
+async def network_up(unet):
     await _network_up(unet, r1only=True, ipv6=unet.ipv6_enable)
 
     #
@@ -89,24 +100,15 @@ async def network_up(unet, pytestconfig):
     # unet.cmd_raises("ip -6 addr del fc00:0:0:1::3/64 dev net1")
 
 
-#                             192.168.0.0/24
-#   --+-------------------+------ mgmt0 -------+------
-#     | .1                | .2                 | .254
-#   +----+              +----+              +------+
-#   | h1 | --- net0 --- | r1 | --- net1 --- | unet |
-#   +----+ .1        .2 +----+ .2        .3 +------+
-#          10.0.0.0/24         10.0.1.0/24
-
-
 async def test_net_up(unet, pytestconfig):
     ipv6 = pytestconfig.getoption("--enable-ipv6", False)
     r1repl = unet.hosts["r1"].conrepl
-    h1 = unet.hosts["h1"]
+    h1 = unet  # unet.hosts["h1"]
 
     # h1 pings r1 (qemu side)
     logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.0.2"))
-    # h1 pings r1 (other side)
-    logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
+    # # h1 pings r1 (other side)
+    # logging.debug(h1.cmd_raises("ping -w1 -i.2 -c1 10.0.1.2"))
     # r1 (qemu side) pings h1
     logging.debug(r1repl.cmd_raises("ping -w1 -i.2 -c1 10.0.0.1"))
 
@@ -125,29 +127,29 @@ async def test_net_up(unet, pytestconfig):
     # unet.hosts["r1"].cmd_raises("ping -w1 -i.2 -c1 192.168.0.2")
 
 
-def send_recv_pkts(osa, encpkts, iface, chunksize=30, faster=False, ipv6=False):
+def send_recv_pkts(encpkts, faster=False, ipv6=False):
     def process_pkts(decpkts):
-        _pkts = iptfs.decap_frag_stream(decpkts)
-        # Greb echo replies.
+        # Greb echo requests.
         if ipv6:
-            inner_pkts = [x for x in _pkts if ICMPv6EchoReply in x]
-            other_inner_pkts = [x for x in _pkts if ICMPv6EchoReply not in x]
+            inner_pkts = [x for x in decpkts if ICMPv6EchoRequest in x]
+            other_inner_pkts = [x for x in decpkts if ICMPv6EchoRequest not in x]
         else:
-            inner_pkts = [x for x in _pkts if x.haslayer(ICMP) and x[ICMP].type == 0]
+            inner_pkts = [x for x in decpkts if x.haslayer(ICMP) and x[ICMP].type == 8]
             other_inner_pkts = [
-                x for x in _pkts if not x.haslayer(ICMP) or x[ICMP].type != 0
+                x for x in decpkts if not x.haslayer(ICMP) or x[ICMP].type != 8
             ]
         return inner_pkts, other_inner_pkts
 
-    return send_recv_esp_pkts(
-        osa,
+    net0results = send_recv_esp_pkts_simple(
         encpkts,
-        iface,
-        chunksize=chunksize,
+        send_intf="net1",
+        recv_intf="net0",
         faster=faster,
-        process_recv_pkts=process_pkts,
         dolog=True,
+        # echo request
+        net0filter="icmp[0] == 8 or icmp6[0] == 128",
     )
+    return process_pkts(net0results)
 
 
 def prep_gen_pkts(
@@ -160,6 +162,7 @@ def prep_gen_pkts(
     sa_seq=None,
     **kwargs,
 ):
+    del df
     tun_if = unet.tun_if6 if tun_ipv6 else unet.tun_if
 
     if remote_addr is None:
@@ -182,22 +185,17 @@ def prep_gen_pkts(
     return tun_if, osa, sa, opkts
 
 
-def analyze_pkts(opkts, pkts, net0pkts, nofail):
+def analyze_pkts(opkts, net0pkts, nofail):
     nnet0pkts = len(net0pkts)
-    npkts = len(pkts)
     nopkts = len(opkts)
-    if nnet0pkts != nopkts:
-        logging.error("host replies (%s) != sent pings (%s)", nnet0pkts, nopkts)
-    if npkts != nopkts and not nofail:
-        logging.error("received replies (%s) != sent pings (%s)", npkts, nopkts)
-    elif nofail:
-        logging.debug("received replies (%s) != sent pings (%s)", npkts, nopkts)
 
+    if nnet0pkts != nopkts:
+        logging.error("after decaps (%s) != before (%s)", nnet0pkts, nopkts)
     if not nofail:
         assert (
-            nnet0pkts == nopkts and npkts == nopkts
-        ), f"inner packets, sent {nopkts} host replies {nnet0pkts} received {npkts}"
-    return npkts, nopkts, nnet0pkts
+            nnet0pkts == nopkts
+        ), f"inner packets sent {nopkts}, inner packets received {nnet0pkts}"
+    return nnet0pkts
 
 
 async def gen_pkt_test(
@@ -205,7 +203,6 @@ async def gen_pkt_test(
     addr=None,
     mtu=1500,
     df=False,
-    iface="net1",
     nofail=False,
     ipv6=False,
     tun_ipv6=False,
@@ -215,10 +212,11 @@ async def gen_pkt_test(
     #
     # Generate packets
     #
-    tun_if, osa, sa, opkts = prep_gen_pkts(
+    tun_if, _, sa, opkts = prep_gen_pkts(
         unet, addr, mtu, df, ipv6, tun_ipv6, sa_seq, **kwargs
     )
-    encpkts = iptfs.encrypt_pktstream_pkts(sa, opkts, mtu=mtu, dontfrag=df)
+    # Did we really want pad == True here?
+    encpkts = iptfs.encrypt_pktstream_pkts(sa, opkts, mtu=mtu, dontfrag=df, pad=True)
     encpkts = tun_if.add_ether_encap(encpkts)
 
     #
@@ -226,12 +224,13 @@ async def gen_pkt_test(
     #
     is_kvm = unet.hosts["r1"].is_kvm if hasattr(unet.hosts["r1"], "is_kvm") else False
     is_kvm = False
-    pkts, _, net0pkts = send_recv_pkts(osa, encpkts, iface, faster=is_kvm, ipv6=ipv6)
+    net0inner, net0_other_inner = send_recv_pkts(encpkts, faster=is_kvm, ipv6=ipv6)
+    del net0_other_inner
 
     #
     # Analyze results
     #
-    return analyze_pkts(opkts, pkts, net0pkts, nofail)
+    return analyze_pkts(opkts, net0inner, nofail)
 
 
 # @pytest.mark.parametrize("ipv6", [False, True])
@@ -265,7 +264,7 @@ async def test_spread_recv_frag_toobig_reply(unet, astepf, ipv6, tun_ipv6):
 
     await astepf("Prior to too big gen_pkt_test")
     toobig = 1423 if tun_ipv6 else 1443
-    npkts, nopkts, nnet0pkts = await gen_pkt_test(
+    nnet0pkts = await gen_pkt_test(
         unet,
         psize=toobig - 1,
         pmax=toobig,
@@ -275,7 +274,14 @@ async def test_spread_recv_frag_toobig_reply(unet, astepf, ipv6, tun_ipv6):
         tun_ipv6=tun_ipv6,
     )
     # one echo reply is too big
-    assert npkts == 1 and nnet0pkts == 2 and nopkts == 2
+    assert nnet0pkts == 2
+
+
+# async def test_recv_frag(unet, astepf):
+#     ipv6 = False
+#     await setup_policy_tun(unet, r1only=True, iptfs_opts="init-delay 10000", ipv6=ipv6)
+#     await astepf("Prior to gen_pkt_test")
+#     await gen_pkt_test(unet, psize=411, mtu=500, pstep=1, count=2, ipv6=ipv6)
 
 
 @pytest.mark.parametrize("ipv6", [False, True])

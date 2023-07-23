@@ -34,14 +34,17 @@ import pytest
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 trexlib = os.path.join(os.path.dirname(SRCDIR), "external_libs")
 scapydir = glob.glob(trexlib + "/scapy*")[0]
+# sys.path[0:0] = [trexlib, scapydir]
 sys.path[0:0] = [scapydir]
 
-from common import trexlib, trexutil
 from common.config import (  # pylint: disable=unused-import
     setup_policy_tun,
     setup_routed_tun,
     toggle_ipv6,
 )
+
+print("XXX scapydir ", scapydir)
+from commontrex import trexlib, trexutil
 from munet.cli import remote_cli
 from trex_stl_lib.api import STLClient
 
