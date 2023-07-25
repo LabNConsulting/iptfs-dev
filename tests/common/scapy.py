@@ -334,6 +334,7 @@ def send_recv_esp_pkts(
     dolog=False,
     # echo reply
     net0filter="icmp[0] == 0 or icmp6[0] == 129",
+    waittime=2.0,
 ):
     del chunksize
 
@@ -448,8 +449,7 @@ def send_recv_esp_pkts(
     # pkts = sniff(timeout=timeout, promisc=1, nofilter=1, iface=iface)
     # logf("Final sniff returns %s", pkts)
 
-    # XXX improve this, sleep 2 seconds for things to flush
-    time.sleep(0.5)
+    time.sleep(waittime)
 
     net0results = net0sniffer.stop()
     net1results = net1sniffer.stop() if not net0only else []
@@ -504,6 +504,7 @@ def send_recv_esp_pkts_simple(
     dolog=False,
     # echo requests
     net0filter="icmp[0] == 8 or icmp6[0] == 128",
+    waittime=2.0,
 ):
     if dolog:
         logf = logging.info
@@ -534,8 +535,8 @@ def send_recv_esp_pkts_simple(
         else:
             _ = send(encpkts, iface=send_intf, inter=0.01, verbose=False)
 
-    # XXX improve this, sleep 2 seconds for things to flush
-    time.sleep(2.0)
+    # wait for packets to be sent (and thus received by the sniffer)
+    time.sleep(waittime)
 
     net0results = net0sniffer.stop()
 
