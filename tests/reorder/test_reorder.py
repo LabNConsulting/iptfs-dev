@@ -32,7 +32,12 @@ from datetime import datetime, timedelta
 import pytest
 from common import iptfs
 from common.config import create_scapy_sa_pair, setup_policy_tun, toggle_ipv6
-from common.scapy import Interface, gen_pkts, send_recv_esp_pkts
+from common.scapy import (
+    Interface,
+    gen_pkts,
+    send_recv_esp_pkts,
+    send_recv_esp_pkts_simple,
+)
 from common.util import iptfs_payload_size
 from munet.base import BaseMunet, comm_error
 from munet.testing.fixtures import _unet_impl, achdir
@@ -254,7 +259,14 @@ async def _test_tun_reverse_XofYxZ(
     r1 = unet.hosts["r1"]
     is_kvm = r1.is_kvm if hasattr(r1, "is_kvm") else False
 
-    _, _, ippkts = send_recv_esp_pkts(osa, tunpkts, iface, faster=is_kvm, net0only=True)
+    if n > 1:
+        # test against R1 output (echo requests) for large multi-run runs
+        ippkts = send_recv_esp_pkts_simple(tunpkts, faster=is_kvm)
+    else:
+        # test against H1 output (echo replies)
+        _, _, ippkts = send_recv_esp_pkts(
+            osa, tunpkts, iface, faster=is_kvm, net0only=True
+        )
 
     verify_inorder(ippkts, seqnos)
 
@@ -366,11 +378,11 @@ async def test_tun_reverse_5of5x30(unet):
 
 
 async def test_tun_reverse_7of7(unet):
-    await _test_tun_reverse_XofYxZ(unet, 7, 7, 1)
+    await _test_tun_reverse_XofYxZ(unet, 7, 7, 1, reorder_window=7)
 
 
 async def test_tun_reverse_7of7x30(unet):
-    await _test_tun_reverse_XofYxZ(unet, 7, 7, 30)
+    await _test_tun_reverse_XofYxZ(unet, 7, 7, 30, reorder_window=7)
 
 
 # # Generate more tests.
