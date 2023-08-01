@@ -163,7 +163,6 @@ This works in the ~iptfs-dev~ directory as well as in ~iptfs-linux~ as they both
 use this repo for CI.
 
 ** Design Notes
-
 *** Config
 
 The most basic configuration is to select "iptfs" as the mode rather than
@@ -279,6 +278,66 @@ relevant, they're just a place to keep notes while developing IPTFS.
   - need something at end of window that shifts into slot0 (will happend from the above).
     [[file:linux/net/xfrm/xfrm_iptfs.c::extra_drops--; /* we aren't dropping what's in slot0 */]]
 - was_gso == true in ingress/output collect function
+
+** Implementation Catalog
+
+*** Utility
+_proto
+_seq
+__esp_seq
+
+*** State Management
+xfrm_iptfs_get_rtt_and_delays
+xfrm_iptfs_init_state
+xfrm_iptfs_state_destroy
+xfrm_iptfs_user_init
+xfrm_iptfs_copy_to_user_state
+
+*** Egress (receive) functions
+skb_copy_bits_seq
+iptfs_alloc_header_skb
+iptfs_alloc_skb
+iptfs_pskb_extract_seq
+iptfs_input_save_runt
+__iptfs_iplen
+__iptfs_iphdrlen
+
+**** Reassembly
+iptfs_complete_inner_skb
+_iptfs_reassem_done
+iptfs_reassem_abort
+iptfs_reassem_done
+iptfs_reassem_cont
+iptfs_input_ordered
+
+**** Reordering
+__vec_shift
+__reorder_past
+__reorder_drop
+__reorder_this
+iptfs_set_window_drop_times
+__reorder_future_fits
+__reorder_future_shifts
+iptfs_input_reorder
+
+**** Input
+iptfs_drop_timer
+xfrm_iptfs_input
+
+*** Ingress (sending) functions
+**** From xfrm
+iptfs_enqueue
+xfrm_iptfs_output_collect
+
+**** Dequeue and send
+iptfs_xfrm_output
+iptfs_output_prepare_skb
+iptfs_first_skb
+iptfs_rehome_fraglist
+iptfs_should_fragment
+iptfs_output_queued
+iptfs_delay_timer
+
 
 ** Sandbox
 
