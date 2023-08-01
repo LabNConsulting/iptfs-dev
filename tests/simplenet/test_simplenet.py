@@ -146,7 +146,7 @@ async def test_policy_tun_up(unet, astepf, pytestconfig):
 
     ipv6 = pytestconfig.getoption("--enable-ipv6", False)
     opts = pytestconfig.getoption("--iptfs-opts", "")
-    await setup_policy_tun(unet, iptfs_opts=opts, ipv6=ipv6)
+    await setup_policy_tun(unet, mode="iptfs", iptfs_opts=opts, ipv6=ipv6)
 
     if ipv6:
         await astepf("first IPv6 ping")
