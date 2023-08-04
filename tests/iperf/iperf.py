@@ -26,6 +26,12 @@ from common.util import start_profile, stop_profile
 from munet.base import cmd_error
 
 
+def std_result(o, e):
+    o = "\n\tstdout: " + o.strip() if o and o.strip() else ""
+    e = "\n\tstderr: " + e.strip() if e and e.strip() else ""
+    return o + e
+
+
 async def _test_iperf(
     unet,
     astepf,
@@ -130,13 +136,14 @@ async def _test_iperf(
         iperfc = await h1.async_popen(args)
         try:
             rc = await iperfc.wait()
-            if rc:
-                logging.info("iperf client completed")
+
+            o, e = await iperfc.communicate()
+            o = o.decode("utf-8")
+            e = e.decode("utf-8")
+            if not rc:
+                logging.info("iperf client completed%s", std_result(o, e))
             else:
                 logging.warning("iperf client (on h1) exited with code: %s", rc)
-                o, e = await iperfc.communicate()
-                o = o.decode("utf-8")
-                e = e.decode("utf-8")
                 assert not rc, f"client failed: {cmd_error(rc, o, e)}"
 
             if perfc:

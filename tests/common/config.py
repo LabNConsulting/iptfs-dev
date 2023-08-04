@@ -192,6 +192,7 @@ def get_sa_values(use_gcm=True, use_nullnull=False, enc_null=False, tun_ipv6=Fal
         sa_auth = ""
         sa_enc = (
             'aead "rfc4106(gcm(aes))" '
+            # 'aead "seqiv(rfc4106(gcm(aes)))" '
             "0x4a506a794f574265564551694d6537681A2B1A2B "
             "128"
             # "0x4a506a794f574265564551694d6537684a"
@@ -601,6 +602,7 @@ def create_scapy_sa_pair(
 
     linux_algo_to_scapy = {
         "rfc4106(gcm(aes))": "AES-GCM",
+        "seqiv(rfc4106(gcm(aes)))": "AES-GCM",
         "cipher_null": "NULL",
         "cbc(aes)": "AES-CBC",
         "hmac(sha1)": "HMAC-SHA1-96",

@@ -26,6 +26,12 @@ from common.config import setup_policy_tun
 from munet.base import cmd_error
 
 
+def std_result(o, e):
+    o = "\n\tstdout: " + o.strip() if o and o.strip() else ""
+    e = "\n\tstderr: " + e.strip() if e and e.strip() else ""
+    return o + e
+
+
 async def _test_profile(unet, astepf, ipsec_intf):
     h1 = unet.hosts["h1"]
     h2 = unet.hosts["h2"]

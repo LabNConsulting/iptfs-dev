@@ -148,6 +148,8 @@ def send_recv_pkts(encpkts, faster=False, ipv6=False):
         dolog=True,
         # echo request
         net0filter="icmp[0] == 8 or icmp6[0] == 128",
+        # useful if we have lots of kernel debug
+        # waittime=2.0 if len(encpkts) < 2 else 6.0,
     )
     return process_pkts(net0results)
 
