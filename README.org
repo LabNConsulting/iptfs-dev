@@ -338,7 +338,372 @@ iptfs_should_fragment
 iptfs_output_queued
 iptfs_delay_timer
 
+** header_len usages:
+*** Initializing
+**** AH (ah[46].c)
+  - ah_init_state():
+  - ah6_init_state():
 
+#+begin_src C
+  if (x->props.flags & XFRM_STATE_ALIGN4)
+      x->props.header_len = XFRM_ALIGN4(sizeof(struct ip_auth_hdr) + ahp->icv_trunc_len);
+  else
+      x->props.header_len = XFRM_ALIGN8(sizeof(struct ip_auth_hdr) + ahp->icv_trunc_len);
+  if (x->props.mode == XFRM_MODE_TUNNEL)
+       x->props.header_len += sizeof(struct iphdr);
+
+       x->props.header_len += sizeof(struct ipv6hdr);
+#+end_src
+
+**** ESP (esp[46].c)
+  - esp_init_state():
+  - esp6_init_state():
+#+begin_src C
+  /* TRANSPORT mode only has ESP header/trailer + crypto, no IP */
+  x->props.header_len = sizeof(struct ip_esp_hdr) + crypto_aead_ivsize(aead);
+  if (x->props.mode == XFRM_MODE_TUNNEL) {
+      /* v4 */
+      x->props.header_len += sizeof(struct ipv6hdr);
+      /* v6 */
+      x->props.header_len += sizeof(struct iphdr);
+      /* v4 */
+  } else if (x->props.mode == XFRM_MODE_BEET && x->sel.family != AF_INET6)
+      x->props.header_len += IPV4_BEET_PHMAXLEN;
+  /* v6 */
+  else if (x->sel.family != AF_INET6)
+      x->props.header_len += IPV4_BEET_PHMAXLEN + (sizeof(struct ipv6hdr) - sizeof(struct iphdr));
+  if (x->encap) { switch (encap->encap_type) {
+      case UDP_ENCAP_ESPINUDP:
+          x->props.header_len += sizeof(struct udphdr);
+      case UDP_ENCAP_ESPINUDP_NON_IKE:
+          x->props.header_len += sizeof(struct udphdr) + 2 * sizeof(u32);
+      case TCP_ENCAP_ESPINTCP:
+          /* only the length field, TCP encap is done by the socket */
+          x->props.header_len += 2;
+  } }
+  align = ALIGN(crypto_aead_blocksize(aead), 4);
+  x->props.trailer_len = align + 1 + crypto_aead_authsize(aead);
+#+end_src
+
+**** ESP Offload (esp[46]_offload.c)
+- pcode:
+#+begin_src C
+  static struct sk_buff *xfrm4_transport_gso_segment(struct xfrm_state *x,
+                                                     struct sk_buff *skb,
+                                                     netdev_features_t features)
+  {
+      skb->transport_header += x->props.header_len;
+      ops = rcu_dereference(inet_offloads[xo->proto]);
+      return ops->callbacks.gso_segment(skb, features);
+  }
+
+  static struct sk_buff *xfrm4_beet_gso_segment(struct xfrm_state *x,
+                                                struct sk_buff *skb,
+                                                netdev_features_t features)
+  {
+      skb->transport_header += x->props.header_len;
+      if (x->sel.family != AF_INET6) {
+          if (proto == IPPROTO_BEETPH) {
+              struct ip_beet_phdr *ph = (struct ip_beet_phdr *)skb->data;
+              skb->transport_header += ph->hdrlen * 8;
+              proto = ph->nexthdr;
+          } else {
+              skb->transport_header -= IPV4_BEET_PHMAXLEN;
+          }
+      } else {
+          __be16 frag;
+          skb->transport_header += ipv6_skip_exthdr(skb, 0, &proto, &frag);
+          if (proto == IPPROTO_TCP)
+              skb_shinfo(skb)->gso_type |= SKB_GSO_TCPV4;
+      }
+
+      if (proto == IPPROTO_IPV6)
+          skb_shinfo(skb)->gso_type |= SKB_GSO_IPXIP4;
+      __skb_pull(skb, skb_transport_offset(skb));
+      ops = rcu_dereference(inet_offloads[xo->proto]);
+      return ops->callbacks.gso_segment(skb, features);
+  }
+#+end_src
+
+**** IPCOMP (ipcomp.c)
+- pcode:
+#+begin_src C
+  static int ipcomp4_init_state(struct xfrm_state *x, struct netlink_ext_ack *extack)
+  {
+      x->props.header_len = 0;
+      if (x->props.mode == XFRM_MODE_TUNNEL)
+          x->props.header_len += sizeof(struct iphdr);
+  }
+#+end_src
+**** IPIP (xfrm4_tunnel.c)
+- pcode:
+#+begin_src C
+  static int ipip_init_state(struct xfrm_state *x, struct netlink_ext_ack *extack)
+  {
+      x->props.header_len = sizeof(struct iphdr);
+  }
+#+end_src
+*** Using
+**** xfrm_state:
+- pcode: xfrm_state_mtu
+- This is used as a pad-to target maybe along with configured pad-to size
+the padding added to the trailer will be (this value - skb->len)
+#+begin_src C
+  u32 xfrm_state_mtu(struct xfrm_state *x, int mtu)
+  {
+      if (x->km.state != XFRM_STATE_VALID || !type || type->proto != IPPROTO_ESP)
+          return mtu - x->props.header_len;
+      blksize = ALIGN(crypto_aead_blocksize(aead), 4);
+      switch (x->props.mode) {
+      case XFRM_MODE_TRANSPORT:
+      case XFRM_MODE_BEET:
+          if (x->props.family == AF_INET)
+              net_adj = sizeof(struct iphdr);
+          else if (x->props.family == AF_INET6)
+              net_adj = sizeof(struct ipv6hdr);
+          break;
+      case XFRM_MODE_TUNNEL:
+      case XFRM_MODE_IPTFS:
+          break;
+      default:
+          WARN_ON_ONCE(1);
+          break;
+      }
+      return ((mtu - x->props.header_len - crypto_aead_authsize(aead) - net_adj) & ~(blksize - 1))
+             + net_adj - 2;
+      /* TUNNEL is this right what is this value? */
+      /* ((1500 - size(IP+ESP) - size(CRYPTAUTH) - 0) & 0xFFFFFFFc) + 0 - 2;
+
+      /* TRANSPORT */
+      /* ((1500 - size(ESP) - size(CRYPTAUTH) - size(IP)) & 0xFFFFFFFc) + size(IP) - 2; */
+  }
+
+
+#+end_src
+**** xfrm_device
+- pcode: prepping skb's for???
+
+This code is going to `skb_pull` `skb_data` down over the mac header and
+header_len of data. For IPTFS we want it to leave the IPTFS header in the data
+area for encryption.
+
+#+begin_src C
+
+  static void __xfrm_transport_prep(struct xfrm_state *x, struct sk_buff *skb)
+  {
+      if (xo->flags & XFRM_GSO_SEGMENT)
+          skb->transport_header = skb->network_header + sizeof(struct iphdr) || sizeof(struct ipv6hdr);
+      pskb_pull(skb, skb_transport_offset(skb) + x->props.header_len);
+  }
+  static void __xfrm_mode_tunnel_prep(struct xfrm_state *x, struct sk_buff *skb)
+  {
+      if (xo->flags & XFRM_GSO_SEGMENT)
+          skb->transport_header = skb->network_header + sizeof(struct iphdr) || sizeof(struct ipv6hdr);
+      pskb_pull(skb, skb->mac_len + x->props.header_len);
+  }
+  static void __xfrm_mode_iptfs_prep(struct xfrm_state *x, struct sk_buff *skb)
+  {
+      if (xo->flags & XFRM_GSO_SEGMENT)
+          skb->transport_header = skb->network_header + sizeof(struct iphdr) || sizeof(struct ipv6hdr);
+      pskb_pull(skb, skb->mac_len + x->props.header_len - sizeof(struct iptfs_header));
+  }
+  static void __xfrm_mode_beet_prep(struct xfrm_state *x, struct sk_buff *skb)
+  {
+      if (xo->flags & XFRM_GSO_SEGMENT)
+          skb->transport_header = skb->network_header + sizeof(struct iphdr) || sizeof(struct ipv6hdr);
+      /* this is reversing something done earlier */
+      if (x->sel.family != AF_INET6) {
+          phlen = IPV4_BEET_PHMAXLEN;
+          if (x->outer_mode.family == AF_INET6)
+              phlen += sizeof(struct ipv6hdr) - sizeof(struct iphdr);
+      }
+      pskb_pull(skb, skb->mac_len + hsize + (x->props.header_len - phlen));
+  }
+#+end_src
+
+**** Call path for xfrm_outer_mode_prep:
+static const struct proto_ops packet_ops = {
+	.sendmsg =	packet_sendmsg,
+packet_sendmsg(struct socket *sock, struct msghdr *msg, size_t len)
+packet_snd(struct socket *sock, struct msghdr *msg, size_t len) || tpacket_snd(struct packet_sock *po, struct msghdr *msg)
+packet_xmit(const struct packet_sock *po, struct sk_buff *skb)
+dev_direct_xmit(struct sk_buff *skb, u16 queue_id)
+__dev_direct_xmit(struct sk_buff *skb, u16 queue_id) || sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
+validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev, bool *again)
+validate_xmit_skb(struct sk_buff *skb, struct net_device *dev, bool *again)
+validate_xmit_xfrm
+xfrm_outer_mode_prep
+**** xfrm_policy
+
+** Offload vs No offload backtrace
+**** No ESP offload
+#0  esp_output (x=0xffff888107a8a000, skb=0xffff888109584b40) at /home/chopps/w/iptfs-dev/linux/net/ipv4/esp4.c:655
+#1  0xffffffff827a5f8c in xfrm_output_one (err=0, skb=0xffff888109584b40) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:600
+
+
+#2  xfrm_output_resume (sk=sk@entry=0x0 <fixed_percpu_data>, skb=skb@entry=0xffff888109584b40, err=<optimized out>, err@entry=1)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:635
+#3  0xffffffff827a6483 in xfrm_output2 (skb=0xffff888109584b40, sk=0x0 <fixed_percpu_data>, net=0xffffffff849f7e40 <init_net>)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:662
+#4  xfrm_output (sk=sk@entry=0x0 <fixed_percpu_data>, skb=skb@entry=0xffff888109584b40) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:826
+#5  0xffffffff827b9052 in iptfs_xfrm_output (skb=skb@entry=0xffff888109584b40, remaining=remaining@entry=1358)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:1648
+#6  0xffffffff827bc427 in iptfs_output_queued (list=0xffff888237609db0, x=<optimized out>) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2080
+#7  iptfs_delay_timer (me=<optimized out>) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2129
+
+
+
+#8  0xffffffff812431fe in __run_hrtimer (flags=642, now=0xffff888237609ec0, timer=0xffff888107a8f468, base=0xffff88823762b3c0,
+    cpu_base=0xffff88823762b240) at /home/chopps/w/iptfs-dev/linux/kernel/time/hrtimer.c:1685
+#9  __hrtimer_run_queues (cpu_base=cpu_base@entry=0xffff88823762b240, now=now@entry=39634970245, flags=flags@entry=642, active_mask=active_mask@entry=240)
+    at /home/chopps/w/iptfs-dev/linux/kernel/time/hrtimer.c:1749
+#10 0xffffffff8124358b in hrtimer_run_softirq (h=<optimized out>) at /home/chopps/w/iptfs-dev/linux/kernel/time/hrtimer.c:1766
+#11 0xffffffff82b50b0c in __do_softirq () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:571
+#12 0xffffffff8113a70c in invoke_softirq () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:445
+#13 __irq_exit_rcu () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:650
+#14 irq_exit_rcu () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:662
+#15 0xffffffff82b3b5ca in common_interrupt (regs=0xffffffff83a07d58, error_code=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/arch/x86/kernel/irq.c:240
+#16 0xffffffff82c0146b in asm_common_interrupt () at /home/chopps/w/iptfs-dev/linux/arch/x86/include/asm/idtentry.h:636
+#17 0x0000000000000000 in ?? ()
+(gdb)
+
+**** ESP offload (INET_ESP_OFFLOAD)
+
+#0  esp_xmit (x=0xffff888107a8e000, skb=0xffff888109589b40, features=0)
+    at /home/chopps/w/iptfs-dev/linux/net/ipv4/esp4_offload.c:257
+#1  0xffffffff827bcfd4 in validate_xmit_xfrm (skb=skb@entry=0xffff888109589b40, features=features@entry=1,
+    again=again@entry=0xffff888237609658) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_device.c:187
+
+#2  0xffffffff825766db in validate_xmit_skb (skb=skb@entry=0xffff888109589b40, dev=dev@entry=0xffff8881053be000,
+    again=again@entry=0xffff888237609658) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:3687
+#3  0xffffffff82576a1b in validate_xmit_skb_list (skb=0xffff888109589b40, dev=dev@entry=0xffff8881053be000,
+    again=again@entry=0xffff888237609658) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:3709
+#4  0xffffffff82608321 in sch_direct_xmit (skb=skb@entry=0xffff888109589b40, q=q@entry=0xffff8881084e6000,
+    dev=dev@entry=0xffff8881053be000, txq=txq@entry=0xffff888104990c00, root_lock=root_lock@entry=0x0 <fixed_percpu_data>,
+    validate=validate@entry=true) at /home/chopps/w/iptfs-dev/linux/net/sched/sch_generic.c:327
+#5  0xffffffff82577b8d in __dev_xmit_skb (txq=0xffff888104990c00, dev=0xffff8881053be000, q=0xffff8881084e6000,
+    skb=0xffff888109589b40) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:3805
+#6  __dev_queue_xmit (skb=skb@entry=0xffff888109589b40, sb_dev=sb_dev@entry=0x0 <fixed_percpu_data>)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:4210
+#7  0xffffffff82590b8d in dev_queue_xmit (skb=0xffff888109589b40)
+    at /home/chopps/w/iptfs-dev/linux/include/linux/netdevice.h:3085
+
+
+#8  neigh_resolve_output (neigh=0xffff8881092ac000, skb=0xffff888109589b40)
+    at /home/chopps/w/iptfs-dev/linux/net/core/neighbour.c:1552
+#9  0xffffffff826a844d in neigh_output (skip_cache=false, skb=0xffff888109589b40, n=0xffff8881092ac000)
+    at /home/chopps/w/iptfs-dev/linux/include/net/neighbour.h:544
+#10 ip_finish_output2 (net=net@entry=0xffffffff849fcec0 <init_net>, sk=sk@entry=0x0 <fixed_percpu_data>,
+    skb=<optimized out>, skb@entry=0xffff888109589b40) at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_output.c:229
+#11 0xffffffff826aa7d6 in __ip_finish_output (net=net@entry=0xffffffff849fcec0 <init_net>,
+    sk=sk@entry=0x0 <fixed_percpu_data>, skb=skb@entry=0xffff888109589b40)
+    at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_output.c:307
+#12 0xffffffff826aaa72 in ip_finish_output (skb=0xffff888109589b40, sk=0x0 <fixed_percpu_data>,
+    net=0xffffffff849fcec0 <init_net>) at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_output.c:317
+#13 NF_HOOK_COND (pf=2 '\002', hook=4, okfn=0xffffffff826aa910 <ip_finish_output>, cond=<optimized out>,
+    out=0xffff8881053be000, in=0xffff8881053aa000, skb=0xffff888109589b40, sk=0x0 <fixed_percpu_data>,
+    net=0xffffffff849fcec0 <init_net>) at /home/chopps/w/iptfs-dev/linux/include/linux/netfilter.h:292
+#14 ip_output (net=net@entry=0xffffffff849fcec0 <init_net>, sk=sk@entry=0x0 <fixed_percpu_data>,
+    skb=skb@entry=0xffff888109589b40) at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_output.c:431
+#15 0xffffffff827b7bd9 in dst_output (skb=0xffff888109589b40, sk=0x0 <fixed_percpu_data>, net=0xffffffff849fcec0 <init_net>)
+    at /home/chopps/w/iptfs-dev/linux/include/net/dst.h:458
+
+
+#16 xfrm_output_resume (sk=sk@entry=0x0 <fixed_percpu_data>, skb=skb@entry=0xffff888109589b40, err=err@entry=1)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:643
+#17 0xffffffff827b97dd in xfrm_output2 (skb=0xffff888109589b40, sk=0x0 <fixed_percpu_data>, net=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:662
+#18 xfrm_output (sk=sk@entry=0x0 <fixed_percpu_data>, skb=skb@entry=0xffff888109589b40)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:826
+#19 0xffffffff827ce922 in iptfs_xfrm_output (skb=skb@entry=0xffff888109589b40, remaining=remaining@entry=1358)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:1648
+#20 0xffffffff827d1cf7 in iptfs_output_queued (list=0xffff888237609db0, x=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2080
+#21 iptfs_delay_timer (me=<optimized out>) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2129
+
+
+
+#22 0xffffffff812431fe in __run_hrtimer (flags=642, now=0xffff888237609ec0, timer=0xffff888107a91c68,
+    base=0xffff88823762b3c0, cpu_base=0xffff88823762b240) at /home/chopps/w/iptfs-dev/linux/kernel/time/hrtimer.c:1685
+#23 __hrtimer_run_queues (cpu_base=cpu_base@entry=0xffff88823762b240, now=now@entry=123664696935, flags=flags@entry=642,
+    active_mask=active_mask@entry=240) at /home/chopps/w/iptfs-dev/linux/kernel/time/hrtimer.c:1749
+#24 0xffffffff8124358b in hrtimer_run_softirq (h=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/kernel/time/hrtimer.c:1766
+#25 0xffffffff82b67b0c in __do_softirq () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:571
+#26 0xffffffff8113a70c in invoke_softirq () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:445
+#27 __irq_exit_rcu () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:650
+#28 irq_exit_rcu () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:662
+#29 0xffffffff82b525ca in common_interrupt (regs=0xffffffff83a07d58, error_code=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/arch/x86/kernel/irq.c:240
+#30 0xffffffff82c0146b in asm_common_interrupt () at /home/chopps/w/iptfs-dev/linux/arch/x86/include/asm/idtentry.h:636
+#31 0x0000000000000000 in ?? ()
+(gdb) c
+
+ARP
+
+
+#0  esp_xmit (x=0xffff888107a8e000, skb=0xffff8881095893c0, features=0)
+    at /home/chopps/w/iptfs-dev/linux/net/ipv4/esp4_offload.c:270
+#1  0xffffffff827bcfd4 in validate_xmit_xfrm (skb=skb@entry=0xffff8881095893c0, features=features@entry=1,
+    again=again@entry=0xffff8882376094a8) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_device.c:187
+#2  0xffffffff825766db in validate_xmit_skb (skb=skb@entry=0xffff8881095893c0, dev=dev@entry=0xffff8881053be000,
+    again=again@entry=0xffff8882376094a8) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:3687
+#3  0xffffffff82576a1b in validate_xmit_skb_list (skb=0xffff8881095893c0, dev=dev@entry=0xffff8881053be000,
+    again=again@entry=0xffff8882376094a8) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:3709
+#4  0xffffffff82608321 in sch_direct_xmit (skb=skb@entry=0xffff8881095893c0, q=q@entry=0xffff8881084e6000,
+    dev=dev@entry=0xffff8881053be000, txq=txq@entry=0xffff888104990c00, root_lock=root_lock@entry=0x0 <fixed_percpu_data>,
+    validate=validate@entry=true) at /home/chopps/w/iptfs-dev/linux/net/sched/sch_generic.c:327
+#5  0xffffffff82577b8d in __dev_xmit_skb (txq=0xffff888104990c00, dev=0xffff8881053be000, q=0xffff8881084e6000,
+    skb=0xffff8881095893c0) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:3805
+#6  __dev_queue_xmit (skb=skb@entry=0xffff8881095893c0, sb_dev=sb_dev@entry=0x0 <fixed_percpu_data>)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:4210
+#7  0xffffffff82590b8d in dev_queue_xmit (skb=0xffff8881095893c0)
+    at /home/chopps/w/iptfs-dev/linux/include/linux/netdevice.h:3085
+#8  neigh_resolve_output (neigh=0xffff8881092ac000, skb=0xffff8881095893c0)
+    at /home/chopps/w/iptfs-dev/linux/net/core/neighbour.c:1552
+#9  0xffffffff82590fa0 in __neigh_update (neigh=neigh@entry=0xffff8881092ac000, lladdr=<optimized out>,
+    lladdr@entry=0xffff8881058ff056 "\002\252\252\252\002\003\n", new=<optimized out>, flags=0, nlmsg_pid=nlmsg_pid@entry=0,
+    extack=extack@entry=0x0 <fixed_percpu_data>) at /home/chopps/w/iptfs-dev/linux/net/core/neighbour.c:1450
+#10 0xffffffff82591c93 in neigh_update (neigh=neigh@entry=0xffff8881092ac000,
+    lladdr=lladdr@entry=0xffff8881058ff056 "\002\252\252\252\002\003\n", new=<optimized out>, flags=<optimized out>,
+    nlmsg_pid=nlmsg_pid@entry=0) at /home/chopps/w/iptfs-dev/linux/net/core/neighbour.c:1477
+#11 0xffffffff8271fbc5 in arp_process (net=net@entry=0xffffffff849fcec0 <init_net>, sk=sk@entry=0x0 <fixed_percpu_data>,
+    skb=skb@entry=0xffff888109589640) at /home/chopps/w/iptfs-dev/linux/net/ipv4/arp.c:932
+#12 0xffffffff827206d4 in NF_HOOK (pf=3 '\003', sk=0x0 <fixed_percpu_data>, okfn=0xffffffff8271f700 <arp_process>,
+    out=0x0 <fixed_percpu_data>, in=0xffff8881053be000, skb=0xffff888109589640, net=0xffffffff849fcec0 <init_net>, hook=0)
+    at /home/chopps/w/iptfs-dev/linux/include/linux/netfilter.h:303
+#13 arp_rcv (skb=0xffff888109589640, dev=0xffff8881053be000, pt=<optimized out>, orig_dev=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/net/ipv4/arp.c:988
+#14 0xffffffff8257b1bc in __netif_receive_skb_list_ptype (orig_dev=0xffff8881053be000,
+    pt_prev=0xffffffff842766c0 <arp_packet_type>, head=0xffff888237609a48)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5539
+#15 __netif_receive_skb_list_core (head=head@entry=0xffff8881053c2110, pfmemalloc=pfmemalloc@entry=false)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5582
+#16 0xffffffff8257bd97 in __netif_receive_skb_list (head=0xffff8881053c2110)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5634
+#17 netif_receive_skb_list_internal (head=head@entry=0xffff8881053c2110)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5725
+#18 0xffffffff8257c983 in gro_normal_list (napi=0xffff8881053c2008) at /home/chopps/w/iptfs-dev/linux/include/net/gro.h:433
+#19 napi_complete_done (n=n@entry=0xffff8881053c2008, work_done=work_done@entry=1)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:6065
+#20 0xffffffff81f70300 in virtqueue_napi_complete (processed=<optimized out>, vq=0xffff888105357800, napi=0xffff8881053c2008)
+    at /home/chopps/w/iptfs-dev/linux/drivers/net/virtio_net.c:406
+#21 virtnet_poll (napi=<optimized out>, budget=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/drivers/net/virtio_net.c:1965
+#22 0xffffffff8257cc91 in __napi_poll (n=n@entry=0xffff8881053c2008, repoll=repoll@entry=0xffff888237609ed0)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:6496
+#23 0xffffffff8257d964 in napi_poll (repoll=0xffff888237609f00, n=0xffff8881053c2008)
+    at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:6563
+#24 net_rx_action (h=<optimized out>) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:6696
+#25 0xffffffff82b67b0c in __do_softirq () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:571
+#26 0xffffffff8113a70c in invoke_softirq () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:445
+#27 __irq_exit_rcu () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:650
+#28 irq_exit_rcu () at /home/chopps/w/iptfs-dev/linux/kernel/softirq.c:662
+#29 0xffffffff82b525ca in common_interrupt (regs=0xffffffff83a07d58, error_code=<optimized out>)
+    at /home/chopps/w/iptfs-dev/linux/arch/x86/kernel/irq.c:240
+#30 0xffffffff82c0146b in asm_common_interrupt () at /home/chopps/w/iptfs-dev/linux/arch/x86/include/asm/idtentry.h:636
+#31 0x0000000000000000 in ?? ()
 ** Sandbox
 
 *** CONFIG options for tracing
