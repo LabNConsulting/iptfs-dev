@@ -98,7 +98,7 @@ async def _test_profile(unet, astepf, ipsec_intf):
                 *cargs,
                 # "-w", "2M",
                 "-c",  # client
-                f"{h2.intf_addrs['eth1'].ip}",
+                f"{h2.get_intf_addr('eth1').ip}",
             ]
         else:
             args = [
@@ -115,7 +115,7 @@ async def _test_profile(unet, astepf, ipsec_intf):
                 "-z",  # req realtime schedule
                 # "-w4m",
                 "-c",  # client
-                f"{h2.intf_addrs['eth1'].ip}",
+                f"{h2.get_intf_addr('eth1').ip}",
             ]
 
         iperfc = await h1.async_popen(args)
@@ -176,7 +176,7 @@ async def _test_tcp(unet, astepf):
             script,
             "-l",
             size,
-            f"{h2.intf_addrs['eth1'].ip}",
+            f"{h2.get_intf_addr('eth1').ip}",
         ]
         tcpc = await h1.async_popen(args, stderr=subprocess.STDOUT)
         try:
