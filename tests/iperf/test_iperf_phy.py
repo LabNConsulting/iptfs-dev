@@ -22,7 +22,7 @@
 import os
 
 import pytest
-from common.config import _network_up
+from common.config import _network_up, setup_policy_tun
 from common.tests import _test_net_up
 from iperf import _test_iperf
 from munet.testing.fixtures import _unet_impl
@@ -50,7 +50,7 @@ async def _unet(rundir_module, pytestconfig):
 
 @pytest.fixture(scope="module", autouse=True)
 async def network_up(unet):
-    await _network_up(unet, ipv6=True)
+    await _network_up(unet, ipv6=unet.ipv6_enable)
 
 
 #                       192.168.0.0/24  fd00::/64
@@ -64,7 +64,31 @@ async def network_up(unet):
 
 
 async def test_net_up(unet):
-    await _test_net_up(unet, ipv6=True)
+    await _test_net_up(unet, ipv6=unet.ipv6_enable)
+
+
+async def test_tun_up(unet, astepf):
+    # iptfs_opts = "dont-frag"
+    await setup_policy_tun(
+        unet,
+        mode="iptfs",
+        ipsec_intf="eth1",
+        iptfs_opts="",
+        ipv6=unet.ipv6_enable,
+    )
+
+    h1 = unet.hosts["h1"]
+    r1 = unet.hosts["r1"]
+
+    await astepf("Before R2R ping")
+    # r1 (qemu side) pings r2 (qemu side)
+    r1.conrepl.cmd_nostatus("ping -w1 -i.2 -c1 10.0.1.3")
+    r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3")
+
+    await astepf("Before H2H ping")
+    # h1 pings h2
+    h1.cmd_nostatus("ping -w1 -i.2 -c1 10.0.2.4")
+    h1.cmd_raises("ping -w1 -i.2 -c1 10.0.2.4")
 
 
 @pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
@@ -83,7 +107,7 @@ async def test_iperf(unet, astepf, pytestconfig, iptfs_opts, pktsize, routed, ip
     await _test_iperf(
         unet,
         astepf,
-        "eth2",
+        "eth1",
         iptfs_opts=iptfs_opts,
         pktsize=pktsize,
         routed=routed,
