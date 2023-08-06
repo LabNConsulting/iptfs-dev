@@ -22,9 +22,14 @@
 # pylint: disable=wrong-import-position
 """Fixtures and other utilities imported from munet for testing."""
 
+import os
+import time
+
+from munet.base import Commander, proc_error
 from munet.testing.fixtures import *  # noqa
 from munet.testing.hooks import *  # noqa
 from munet.testing.hooks import pytest_addoption as _pytest_addoption
+from munet.testing.hooks import pytest_configure as _pytest_configure
 
 
 def pytest_addoption(parser):  # pylint: disable=E0102
@@ -51,7 +56,35 @@ def pytest_addoption(parser):  # pylint: disable=E0102
         help="Enable profiling if supported by test",
     )
 
+    rundir_help = "directory for running in and log files"
+    parser.addini("rundir", rundir_help, default="/tmp/unet-test")
+    parser.addoption("--rundir", metavar="DIR", help=rundir_help)
+
     return _pytest_addoption(parser)
+
+
+def pytest_configure(config):
+
+    rdir = config.option.rundir
+    if not rdir:
+        rdir = config.getini("rundir")
+    if not rdir:
+        rdir = "/tmp/unet-test"
+    config.option.rundir = rdir
+
+    if not config.getoption("--junitxml"):
+        config.option.xmlpath = os.path.join(rdir, "unet-test.xml")
+    xmlpath = config.option.xmlpath
+
+    # Save an existing unet-test.xml
+    if os.path.exists(xmlpath):
+        fmtime = time.localtime(os.path.getmtime(xmlpath))
+        suffix = "-" + time.strftime("%Y%m%d%H%M%S", fmtime)
+        commander = Commander("pytest")
+        mv_path = commander.get_exec_path("mv")
+        commander.cmd_status([mv_path, xmlpath, xmlpath + suffix])
+
+    return _pytest_configure(config)
 
 
 # This still doesn't work and
