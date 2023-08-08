@@ -31,6 +31,8 @@ pytestmark = pytest.mark.asyncio
 
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
+MODE = "iptfs"
+
 
 @pytest.fixture(scope="module", autouse=True)
 async def network_up(unet):
@@ -53,25 +55,38 @@ async def test_net_up(unet):
 @pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
 @pytest.mark.parametrize("pktsize", [None, 64, 536, 1442])
 @pytest.mark.parametrize("ipv6", [False, True])
+@pytest.mark.parametrize("tun_ipv6", [False, True])
 @pytest.mark.parametrize("routed", [False, True])
-async def test_iperf(unet, astepf, pytestconfig, iptfs_opts, pktsize, routed, ipv6):
-    if not unet.ipv6_enable and ipv6:
+async def test_iperf(
+    unet, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
+):
+    if not unet.ipv6_enable and tun_ipv6:
         pytest.skip("skipping ipv6 as --enable-ipv6 not specified")
 
-    if ipv6 and pktsize and pktsize < 536:
+    if tun_ipv6 and pktsize and pktsize < 536:
         pytest.skip("Can't run IPv6 iperf with MSS < 536")
         return
 
+    if tun_ipv6 and pktsize and pktsize == 1442:
+        pktsize = 1428
+
     test_iperf.count += 1
+
+    use_iperf3 = True
+    if use_iperf3 and pktsize and pktsize < 88:
+        pktsize = 88
 
     await _test_iperf(
         unet,
         astepf,
-        "eth2",
+        mode=MODE,
+        ipsec_intf="eth2",
+        use_iperf3=use_iperf3,
         iptfs_opts=iptfs_opts,
         pktsize=pktsize,
         routed=routed,
         ipv6=ipv6,
+        tun_ipv6=tun_ipv6,
         profile=pytestconfig.getoption("--profile", False),
         profcount=test_iperf.count,
     )

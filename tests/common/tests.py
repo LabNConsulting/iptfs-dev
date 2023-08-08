@@ -131,3 +131,81 @@ async def _test_net_up(unet, mgmt0=True, ipv4=True, ipv6=False):
         # h2 pings h1
         logging.debug(h2.cmd_nostatus("ping -c1 fc00:0:0:0::1"))
         logging.debug(h2.cmd_raises("ping -c1 fc00:0:0:0::1"))
+
+
+async def _test_net_up3(unet, mgmt0=True, ipv4=True, ipv6=False, minimal=False):
+    h1 = unet.hosts.get("h1")
+    h2 = unet.hosts.get("h2")
+    r1 = unet.hosts.get("r1")
+    r2 = unet.hosts.get("r2")
+    rm = unet.hosts.get("rm")
+
+    r1con = r1.conrepl if r1 else None
+    r2con = r2.conrepl if r2 else None
+
+    if ipv4:
+        # pings mgmt0 bridge
+        if mgmt0:
+            logging.debug(h1.cmd_nostatus("ping -c1 192.168.0.254"))
+            logging.debug(h1.cmd_raises("ping -c1 192.168.0.254"))
+            logging.debug(rm.cmd_nostatus("ping -c1 192.168.0.254"))
+            logging.debug(rm.cmd_raises("ping -c1 192.168.0.254"))
+            logging.debug(h2.cmd_nostatus("ping -c1 192.168.0.254"))
+            logging.debug(h2.cmd_raises("ping -c1 192.168.0.254"))
+            logging.debug(r1con.cmd_nostatus("ping -c1 192.168.0.254"))
+            logging.debug(r1con.cmd_raises("ping -c1 192.168.0.254"))
+            logging.debug(r2con.cmd_nostatus("ping -c1 192.168.0.254"))
+            logging.debug(r2con.cmd_raises("ping -c1 192.168.0.254"))
+
+        logging.debug(h1.cmd_nostatus("ping -c1 10.0.0.2"))
+        logging.debug(h1.cmd_raises("ping -c1 10.0.0.2"))
+
+        logging.debug(h1.cmd_nostatus("ping -c1 10.0.1.2"))
+        logging.debug(h1.cmd_raises("ping -c1 10.0.1.2"))
+
+        if not minimal:
+            logging.debug(h1.cmd_nostatus("ping -c1 10.0.2.3"))
+            logging.debug(h1.cmd_raises("ping -c1 10.0.2.3"))
+
+            logging.debug(h1.cmd_nostatus("ping -c1 10.0.2.4"))
+            logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
+
+            logging.debug(h1.cmd_nostatus("ping -c1 10.0.3.4"))
+            logging.debug(h1.cmd_raises("ping -c1 10.0.3.4"))
+
+            logging.debug(h1.cmd_nostatus("ping -c1 10.0.3.5"))
+            logging.debug(h1.cmd_raises("ping -c1 10.0.3.5"))
+
+    if ipv6:
+        # Don't use short deadlines NDisc requires more time than arp.
+        if mgmt0:
+            # pings mgmt0 bridge
+            logging.debug(h1.cmd_nostatus("ping -c1 fd00::ff"))
+            logging.debug(h1.cmd_raises("ping -c1 fd00::ff"))
+            logging.debug(h2.cmd_nostatus("ping -c1 fd00::ff"))
+            logging.debug(h2.cmd_raises("ping -c1 fd00::ff"))
+            logging.debug(rm.cmd_nostatus("ping -c1 fd00::ff"))
+            logging.debug(rm.cmd_raises("ping -c1 fd00::ff"))
+            logging.debug(r1con.cmd_nostatus("ping -c1 fd00::ff"))
+            logging.debug(r1con.cmd_raises("ping -c1 fd00::ff"))
+            logging.debug(r2con.cmd_nostatus("ping -c1 fd00::ff"))
+            logging.debug(r2con.cmd_raises("ping -c1 fd00::ff"))
+
+        logging.debug(h1.cmd_nostatus("ping -c1 fc00:0:0:0::2"))
+        logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:0::2"))
+
+        logging.debug(h1.cmd_nostatus("ping -c1 fc00:0:0:1::2"))
+        logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:1::2"))
+
+        if not minimal:
+            logging.debug(h1.cmd_nostatus("ping -c1 fc00:0:0:2::3"))
+            logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::3"))
+
+            logging.debug(h1.cmd_nostatus("ping -c1 fc00:0:0:2::4"))
+            logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
+
+            logging.debug(h1.cmd_nostatus("ping -c1 fc00:0:0:3::4"))
+            logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:3::4"))
+
+            logging.debug(h1.cmd_nostatus("ping -c1 fc00:0:0:3::5"))
+            logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:3::5"))

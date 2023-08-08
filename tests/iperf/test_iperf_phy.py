@@ -19,6 +19,8 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 "Test iptfs tunnel using iperf with various configurations"
+import asyncio
+import logging
 import os
 
 import pytest
@@ -67,11 +69,14 @@ async def test_net_up(unet):
     await _test_net_up(unet, ipv6=unet.ipv6_enable)
 
 
+MODE = "iptfs"
+
+
 async def test_tun_up(unet, astepf):
     # iptfs_opts = "dont-frag"
     await setup_policy_tun(
         unet,
-        mode="iptfs",
+        mode=MODE,
         ipsec_intf="eth1",
         iptfs_opts="",
         ipv6=unet.ipv6_enable,
@@ -92,29 +97,52 @@ async def test_tun_up(unet, astepf):
 
 
 @pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
-@pytest.mark.parametrize("pktsize", [None, 64, 536, 1442])
+@pytest.mark.parametrize("pktsize", [None, 88, 536, 1442])
 @pytest.mark.parametrize("ipv6", [False, True])
+@pytest.mark.parametrize("tun_ipv6", [False, True])
 @pytest.mark.parametrize("routed", [False, True])
-async def test_iperf(unet, astepf, pytestconfig, iptfs_opts, pktsize, routed, ipv6):
-    if not unet.ipv6_enable and ipv6:
+async def test_iperf(
+    unet, rundir, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
+):
+    if not unet.ipv6_enable and tun_ipv6:
         pytest.skip("skipping ipv6 as --enable-ipv6 not specified")
-    if ipv6 and pktsize and pktsize < 536:
+    if tun_ipv6 and pktsize and pktsize < 536:
         pytest.skip("Can't run IPv6 iperf with MSS < 536")
         return
 
     test_iperf.count += 1
 
-    await _test_iperf(
+    use_iperf3 = True
+    if use_iperf3 and pktsize and pktsize < 88:
+        pktsize = 88
+
+    # Leak cases tun_ipv6 = True | False, ipv6 = True
+    # Non-Leak cases tun_ipv6 = True | False, ipv6 = False
+
+    result = await _test_iperf(
         unet,
         astepf,
-        "eth1",
+        mode=MODE,
+        ipsec_intf="eth1",
+        use_iperf3=use_iperf3,
         iptfs_opts=iptfs_opts,
         pktsize=pktsize,
         routed=routed,
         ipv6=ipv6,
+        tun_ipv6=tun_ipv6,
         profile=pytestconfig.getoption("--profile", False),
         profcount=test_iperf.count,
     )
+    if result:
+        fname = os.path.join(rundir, "../speed.csv")
+        fmode = "w+" if test_iperf.count == 0 else "a+"
+        tunstr = "routed" if routed else "policy"
+        vstr = "IPv6" if tun_ipv6 else "IPv4"
+        with open(fname, fmode, encoding="ascii") as f:
+            print(
+                f"{result[0]},{result[1]},{pktsize},{tunstr},{vstr},{iptfs_opts}\n",
+                file=f,
+            )
 
 
 test_iperf.count = -1

@@ -48,11 +48,13 @@ async def ethtool_disable_offloads(node, offloads):
         await ethtool_disable_if_offloads(node, ifname, offloads)
 
 
-async def _network_up(unet, trex=False, r1only=False, ipv4=True, ipv6=False):
-    h1 = unet.hosts["h1"] if "h1" in unet.hosts else None
-    h2 = unet.hosts["h2"] if "h2" in unet.hosts else None
-    r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"] if not r1only and "r2" in unet.hosts else None
+async def _network_up(
+    unet, trex=False, r1only=False, ipv4=True, ipv6=False, minimal=False
+):
+    h1 = unet.hosts.get("h1")
+    h2 = unet.hosts.get("h2")
+    r1 = unet.hosts.get("r1")
+    r2 = unet.hosts.get("r2") if not r1only else None
 
     await ethtool_disable_offloads(r1, g_offloads)
     if r2:
@@ -65,16 +67,16 @@ async def _network_up(unet, trex=False, r1only=False, ipv4=True, ipv6=False):
             h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
             h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")
 
-        if not trex:
-            r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
-        else:
-            r1.conrepl.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
-            r1.conrepl.cmd_raises("ip route add 48.0.0.0/8 via 10.0.1.3")
+        if not minimal:
+            if r1 and not trex:
+                r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
+            elif r1:
+                r1.conrepl.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
+                r1.conrepl.cmd_raises("ip route add 48.0.0.0/8 via 10.0.1.3")
 
-        if r2:
-            if not trex:
+            if r2 and not trex:
                 r2.conrepl.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
-            else:
+            elif r2:
                 r2.conrepl.cmd_raises("ip route add 11.0.0.0/24 via 10.0.1.2")
                 r2.conrepl.cmd_raises("ip route add 16.0.0.0/8 via 10.0.1.2")
 
@@ -87,18 +89,20 @@ async def _network_up(unet, trex=False, r1only=False, ipv4=True, ipv6=False):
             h1.cmd_raises("ip -6 route add fc00:0:0:2::/64 via fc00:0:0:0::2")
             h1.cmd_raises("ip -6 route add fc00:0:0:1::/64 via fc00:0:0:0::2")
 
-        if not trex:
-            r1.conrepl.cmd_raises("ip -6 route add fc00:0:0:2::/64 via fc00:0:0:1::3")
-        else:
-            r1.conrepl.cmd_raises("ip -6 route add 2012::/64 via fc00:0:0:1::3")
-            r1.conrepl.cmd_raises("ip -6 route add 2048::/16 via fc00:0:0:1::3")
+        if not minimal:
+            if r1 and not trex:
+                r1.conrepl.cmd_raises(
+                    "ip -6 route add fc00:0:0:2::/64 via fc00:0:0:1::3"
+                )
+            elif r1:
+                r1.conrepl.cmd_raises("ip -6 route add 2012::/64 via fc00:0:0:1::3")
+                r1.conrepl.cmd_raises("ip -6 route add 2048::/16 via fc00:0:0:1::3")
 
-        if r2:
-            if not trex:
+            if r2 and not trex:
                 r2.conrepl.cmd_raises(
                     "ip -6 route add fc00:0:0:0::/64 via fc00:0:0:1::2"
                 )
-            else:
+            elif r2:
                 r2.conrepl.cmd_raises("ip -6 route add 2011::/64 via fc00:0:0:1::2")
                 r2.conrepl.cmd_raises("ip -6 route add 2016::/16 via fc00:0:0:1::2")
 
@@ -108,8 +112,8 @@ async def _network_up(unet, trex=False, r1only=False, ipv4=True, ipv6=False):
 
 
 async def cleanup_config(unet, r1only=False, ipv4=True, ipv6=False):
-    r1 = unet.hosts["r1"]
-    r2 = unet.hosts["r2"] if not r1only else None
+    r1 = unet.hosts.get("r1")
+    r2 = unet.hosts.get("r2") if not r1only else None
 
     r1.conrepl.cmd_nostatus("ip link del ipsec0")
     if not r1only:
@@ -161,11 +165,190 @@ async def cleanup_config(unet, r1only=False, ipv4=True, ipv6=False):
         r2.conrepl.cmd_nostatus("ip x p deleteall")
 
 
+#                             192.168.0.0/24
+#   --+-----------------+------ mgmt0 ----+-----------------+-----------------------
+#     | .1              | .2              | .3              | .4              | .5
+#   +----+            +----+            +----+            +----+            +----+
+#   | h1 | -- net0 -- | r1 | -- net1 -- | rm | -- net2 -- | r2 | -- net2 -- | h1 |
+#   +----+ .1      .2 +----+ .2      .3 +----+ .3      .4 +----+ .4      .5 +----+
+#          10.0.0.0/24       10.0.1.0/24       10.0.2.0/24       10.0.3.0/24
+
+
+async def _network_up3(unet, ipv4=True, ipv6=False, trex=False, minimal=False):
+    h1 = unet.hosts.get("h1")
+    h2 = unet.hosts.get("h2")
+    r1 = unet.hosts.get("r1")
+    rm = unet.hosts.get("rm")
+    r2 = unet.hosts.get("r2")
+
+    await ethtool_disable_offloads(r1, g_offloads)
+    await ethtool_disable_offloads(r2, g_offloads)
+
+    await toggle_ipv6(unet, enable=ipv6)
+    await toggle_forward_pmtu(unet, enable=False)
+
+    if h1:
+        if ipv4:
+            h1.cmd_raises("ip route add 10.0.3.0/24 via 10.0.0.2")
+            h1.cmd_raises("ip route add 10.0.2.0/24 via 10.0.0.2")
+            h1.cmd_raises("ip route add 10.0.1.0/24 via 10.0.0.2")
+
+        if ipv6:
+            h1.cmd_raises("ip -6 route add fc00:0:0:3::/64 via fc00:0:0:0::2")
+            h1.cmd_raises("ip -6 route add fc00:0:0:2::/64 via fc00:0:0:0::2")
+            h1.cmd_raises("ip -6 route add fc00:0:0:1::/64 via fc00:0:0:0::2")
+
+    # minimal routing between r1 and r2 though rm
+    r1con = r1.conrepl if r1 else None
+    if r1:
+        if ipv4:
+            r1con.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
+        if ipv6:
+            r1con.cmd_raises("ip -6 route add fc00:0:0:2::/64 via fc00:0:0:1::3")
+
+    if r1 and not minimal:
+        if ipv4:
+            if not trex:
+                r1con.cmd_raises("ip route add 10.0.3.0/24 via 10.0.1.3")
+            else:
+                r1con.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
+                r1con.cmd_raises("ip route add 48.0.0.0/8 via 10.0.1.3")
+        if ipv6:
+            if not trex:
+                r1con.cmd_raises("ip -6 route add fc00:0:0:3::/64 via fc00:0:0:1::3")
+            else:
+                r1con.cmd_raises("ip -6 route add 2012::/64 via fc00:0:0:1::3")
+                r1con.cmd_raises("ip -6 route add 2048::/16 via fc00:0:0:1::3")
+
+    if rm and not minimal:
+        if ipv4:
+            if not trex:
+                rm.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
+                rm.cmd_raises("ip route add 10.0.3.0/24 via 10.0.2.4")
+            else:
+                rm.cmd_raises("ip route add 11.0.0.0/24 via 10.0.1.2")
+                rm.cmd_raises("ip route add 16.0.0.0/8 via 10.0.1.2")
+                rm.cmd_raises("ip route add 12.0.0.0/24 via 10.0.2.4")
+                rm.cmd_raises("ip route add 48.0.0.0/8 via 10.0.2.4")
+        if ipv6:
+            if not trex:
+                rm.cmd_raises("ip -6 route add fc00:0:0:0::/64 via fc00:0:0:1::2")
+                rm.cmd_raises("ip -6 route add fc00:0:0:3::/64 via fc00:0:0:2::4")
+            else:
+                rm.cmd_raises("ip -6 route add 2011::/64 via fc00:0:0:1::2")
+                rm.cmd_raises("ip -6 route add 2016::/16 via fc00:0:0:1::2")
+                rm.cmd_raises("ip -6 route add 2012::/64 via fc00:0:0:2::4")
+                rm.cmd_raises("ip -6 route add 2048::/16 via fc00:0:0:2::4")
+
+    # minimal routing between r1 and r2 though rm
+    r2con = r2.conrepl if r2 else None
+    if r2:
+        if ipv4:
+            r2con.cmd_raises("ip route add 10.0.1.0/24 via 10.0.2.3")
+        if ipv6:
+            r2con.cmd_raises("ip -6 route add fc00:0:0:1::/64 via fc00:0:0:2::3")
+
+    if r2 and not minimal:
+        if ipv4:
+            if not trex:
+                r2con.cmd_raises("ip route add 10.0.0.0/24 via 10.0.2.3")
+            else:
+                r2con.cmd_raises("ip route add 11.0.0.0/24 via 10.0.2.3")
+                r2con.cmd_raises("ip route add 16.0.0.0/8 via 10.0.2.3")
+        if ipv6:
+            if not trex:
+                r2con.cmd_raises("ip -6 route add fc00:0:0:0::/64 via fc00:0:0:2::3")
+                r2con.cmd_raises("ip -6 route add fc00:0:0:1::/64 via fc00:0:0:2::3")
+            else:
+                r2con.cmd_raises("ip -6 route add 2011::/64 via fc00:0:0:2::3")
+                r2con.cmd_raises("ip -6 route add 2016::/16 via fc00:0:0:2::3")
+    if h2:
+        if ipv4:
+            h2.cmd_raises("ip route add 10.0.2.0/24 via 10.0.3.4")
+            h2.cmd_raises("ip route add 10.0.1.0/24 via 10.0.3.4")
+            h2.cmd_raises("ip route add 10.0.0.0/24 via 10.0.3.4")
+        if ipv6:
+            h2.cmd_raises("ip -6 route add fc00:0:0:2::/64 via fc00:0:0:3::4")
+            h2.cmd_raises("ip -6 route add fc00:0:0:1::/64 via fc00:0:0:3::4")
+            h2.cmd_raises("ip -6 route add fc00:0:0:0::/64 via fc00:0:0:3::4")
+
+
+async def cleanup_config3(unet, ipv4=True, ipv6=False):
+    r1 = unet.hosts.get("r1")
+    r2 = unet.hosts.get("r2")
+    if r1 := unet.hosts.get("r1"):
+        r1con = r1.conrepl
+        if ipv4:
+            r1con.cmd_nostatus("ip route del 10.0.2.0/24 dev ipsec0")
+            r1con.cmd_nostatus("ip route del 10.0.3.0/24 dev ipsec0")
+            r1con.cmd_nostatus("ip route del 12.0.0.0/24 dev ipsec0")
+            r1con.cmd_nostatus("ip route del 48.0.0.0/8 dev ipsec0")
+
+            r1con.cmd_nostatus("ip route del 10.0.2.0/24 via 10.0.1.3")
+            r1con.cmd_nostatus("ip route del 10.0.3.0/24 via 10.0.1.3")
+            r1con.cmd_nostatus("ip route del 12.0.0.0/24 via 10.0.1.3")
+            r1con.cmd_nostatus("ip route del 48.0.0.0/8 via 10.0.1.3")
+
+        if ipv6:
+            r1con.cmd_nostatus("ip route del fc00:0:0:2::/64 dev ipsec0")
+            r1con.cmd_nostatus("ip route del fc00:0:0:3::/64 dev ipsec0")
+            r1con.cmd_nostatus("ip route del 2012::/64 dev ipsec0")
+            r1con.cmd_nostatus("ip route del 2048::/16 dev ipsec0")
+
+            r1con.cmd_nostatus("ip -6 route del fc00:0:0:2::/64 via fc00:0:0:1::3")
+            r1con.cmd_nostatus("ip -6 route del fc00:0:0:3::/64 via fc00:0:0:1::3")
+            r1con.cmd_nostatus("ip -6 route del 2012::/64 via fc00:0:0:1::3")
+            r1con.cmd_nostatus("ip -6 route del 2048::/16 via fc00:0:0:1::3")
+
+        r1con.cmd_nostatus("ip link del ipsec0")
+        r1con.cmd_nostatus("ip x s deleteall")
+        r1con.cmd_nostatus("ip x p deleteall")
+
+    if r2 := unet.hosts.get("r2"):
+        r2con = r2.conrepl
+        if ipv4:
+            r2con.cmd_nostatus("ip route del 10.0.0.0/24 dev ipsec0")
+            r2con.cmd_nostatus("ip route del 10.0.1.0/24 dev ipsec0")
+            r2con.cmd_nostatus("ip route del 11.0.0.0/24 dev ipsec0")
+            r2con.cmd_nostatus("ip route del 16.0.0.0/8 dev ipsec0")
+
+            r2con.cmd_nostatus("ip route del 10.0.0.0/24 via 10.0.2.3")
+            r2con.cmd_nostatus("ip route del 10.0.1.0/24 via 10.0.2.3")
+            r2con.cmd_nostatus("ip route del 11.0.0.0/24 via 10.0.2.3")
+            r2con.cmd_nostatus("ip route del 16.0.0.0/8 via 10.0.2.3")
+
+        if ipv6:
+            r2con.cmd_nostatus("ip route del fc00:0:0:0::/64 dev ipsec0")
+            r2con.cmd_nostatus("ip route del fc00:0:0:1::/64 dev ipsec0")
+            r2con.cmd_nostatus("ip route del 2011::/64 dev ipsec0")
+            r2con.cmd_nostatus("ip route del 2016::/16 dev ipsec0")
+
+            r2con.cmd_nostatus("ip -6 route del fc00:0:0:0::/64 via fc00:0:0:2::3")
+            r2con.cmd_nostatus("ip -6 route del fc00:0:0:1::/64 via fc00:0:0:2::3")
+            r2con.cmd_nostatus("ip -6 route del 2011::/64 via fc00:0:0:2::3")
+            r2con.cmd_nostatus("ip -6 route del 2016::/16 via fc00:0:0:2::3")
+
+        r2con.cmd_nostatus("ip link del ipsec0")
+        r2con.cmd_nostatus("ip x s deleteall")
+        r2con.cmd_nostatus("ip x p deleteall")
+
+
+async def toggle_forward_pmtu(unet, enable=False):
+    nodes = list(unet.hosts.values())
+    if unet.isolated:
+        nodes.append(unet)
+    for node in nodes:
+        if enable:
+            node.cmd_raises("sysctl -w net.ipv4.ip_forward_use_pmtu=1")
+        else:
+            node.cmd_raises("sysctl -w net.ipv4.ip_forward_use_pmtu=0")
+
+
 async def toggle_ipv6(unet, enable=False):
     nodes = list(unet.hosts.values())
     if unet.isolated:
         nodes.append(unet)
-    for node in list(unet.hosts.values()) + [unet]:
+    for node in nodes:
         if hasattr(node, "conrepl") and node.conrepl:
             node = node.conrepl
         if enable:
@@ -234,6 +417,7 @@ async def setup_policy_tun(
     ipv4=True,
     ipv6=False,
     tun_ipv6=False,
+    network3=False,
 ):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"] if "r2" in unet.hosts else None
@@ -279,7 +463,10 @@ async def setup_policy_tun(
     r2ipp = r2ipp.network
 
     # Start with a clean slate
-    await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
+    if network3:
+        await cleanup_config3(unet, ipv4=ipv4, ipv6=ipv6)
+    else:
+        await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
 
     if bool(tun_ipv6) != bool(ipv6):
         esp_flags = "af-unspec " + esp_flags
@@ -332,7 +519,7 @@ async def setup_policy_tun(
                     )
 
         iplist = []
-        if ipv4:
+        if ipv4 and not network3:
             if not trex:
                 iplist += [
                     ("10.0.0.0/24", "10.0.1.0/24"),  # host to router
@@ -346,7 +533,7 @@ async def setup_policy_tun(
                     ("11.0.0.0/24", "12.0.0.0/24"),  # host to host
                     ("16.0.0.0/8", "48.0.0.0/8"),  # host to host
                 ]
-        if ipv6:
+        if ipv6 and not network3:
             if not trex:
                 iplist += [
                     ("fc00:0:0:0::/64", "fc00:0:0:1::/64"),  # host to router
@@ -361,33 +548,104 @@ async def setup_policy_tun(
                     ("2016::/16", "2048::/16"),  # host to host
                 ]
 
+        # KISS this and only support host network to host network encap
+        if ipv4 and network3:
+            if not trex:
+                iplist += [
+                    ("10.0.0.0/24", "10.0.3.0/24"),  # host to host
+                    ("10.0.0.0/24", "10.0.2.0/24"),  # host to router
+                    ("10.0.1.0/24", "10.0.2.0/24"),  # host to router
+                    ("10.0.1.0/24", "10.0.3.0/24"),  # host to host
+                ]
+            else:
+                iplist += [
+                    ("11.0.0.0/24", "12.0.0.0/24"),  # host to host
+                    ("16.0.0.0/8", "48.0.0.0/8"),  # host to host
+                ]
+        if ipv6 and network3:
+            if not trex:
+                iplist += [
+                    ("fc00:0:0:0::/64", "fc00:0:0:3::/64"),  # host to host
+                    ("fc00:0:0:0::/64", "fc00:0:0:2::/64"),  # host to router
+                    ("fc00:0:0:1::/64", "fc00:0:0:2::/64"),  # host to router
+                    ("fc00:0:0:1::/64", "fc00:0:0:3::/64"),  # host to router
+                ]
+            else:
+                iplist += [
+                    ("2011::/64", "2012::/64"),  # host to host
+                    ("2016::/16", "2048::/16"),  # host to host
+                ]
+
         policy_add(iplist, r, repl)
 
-    if ipv4:
+    r1con = r1.conrepl if r1 else None
+    r2con = r2.conrepl if r2 and not r1only else None
+
+    #
+    # Setup indirect nexthop routes
+    #
+    if ipv4 and network3:
         if not trex:
-            r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
-            if not r1only:
-                r2.conrepl.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
+            if r1con:
+                r1con.cmd_raises("ip route add 10.0.2.4/32 via 10.0.1.3")
+                # r1con.cmd_raises("ip route add 10.0.3.0/24 via 10.0.1.3")
+            if r2con:
+                r2con.cmd_raises("ip route add 10.0.1.2/32 via 10.0.2.3")
+                # r2con.cmd_raises("ip route add 10.0.0.0/24 via 10.0.2.3")
         else:
-            r1.conrepl.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
-            r1.conrepl.cmd_raises("ip route add 48.0.0.0/8 via 10.0.1.3")
+            if r1con:
+                r1con.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
+                r1con.cmd_raises("ip route add 48.0.0.0/8 via 10.0.1.3")
+            if r2con:
+                r2con.cmd_raises("ip route add 11.0.0.0/24 via 10.0.2.3")
+                r2con.cmd_raises("ip route add 16.0.0.0/8 via 10.0.2.3")
 
-            if not r1only:
-                r2.conrepl.cmd_raises("ip route add 11.0.0.0/24 via 10.0.1.2")
-                r2.conrepl.cmd_raises("ip route add 16.0.0.0/8 via 10.0.1.2")
-
-    if ipv6:
+    if ipv6 and network3:
         if not trex:
-            r1.conrepl.cmd_raises("ip route add fc00:0:0:2::/64 via fc00:0:0:1::3")
-            if not r1only:
-                r2.conrepl.cmd_raises("ip route add fc00:0:0:0::/64 via fc00:0:0:1::2")
+            if r1con:
+                r1con.cmd_raises("ip route add fc00:0:0:2::/64 via fc00:0:0:1::3")
+                r1con.cmd_raises("ip route add fc00:0:0:3::/64 via fc00:0:0:1::3")
+            if r2con:
+                r2con.cmd_raises("ip route add fc00:0:0:1::/64 via fc00:0:0:2::3")
+                r2con.cmd_raises("ip route add fc00:0:0:0::/64 via fc00:0:0:2::3")
         else:
-            r1.conrepl.cmd_raises("ip route add 2012::/64 via fc00:0:0:1::3")
-            r1.conrepl.cmd_raises("ip route add 2048::/16 via fc00:0:0:1::3")
+            if r1con:
+                r1con.cmd_raises("ip route add 2012::/64 via fc00:0:0:1::3")
+                r1con.cmd_raises("ip route add 2048::/16 via fc00:0:0:1::3")
 
-            if not r1only:
-                r2.conrepl.cmd_raises("ip route add 2011::/64 via fc00:0:0:1::2")
-                r2.conrepl.cmd_raises("ip route add 2016::/16 via fc00:0:0:1::2")
+            if r2con:
+                r2con.cmd_raises("ip route add 2011::/64 via fc00:0:0:2::3")
+                r2con.cmd_raises("ip route add 2016::/16 via fc00:0:0:2::3")
+
+    # Setup indirect nexthop routes
+    if ipv4 and not network3:
+        if not trex:
+            if r1con:
+                r1con.cmd_raises("ip route add 10.0.2.0/24 via 10.0.1.3")
+            if r2con:
+                r2con.cmd_raises("ip route add 10.0.0.0/24 via 10.0.1.2")
+        else:
+            if r1con:
+                r1con.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
+                r1con.cmd_raises("ip route add 48.0.0.0/8 via 10.0.1.3")
+            if r2con:
+                r2con.cmd_raises("ip route add 11.0.0.0/24 via 10.0.1.2")
+                r2con.cmd_raises("ip route add 16.0.0.0/8 via 10.0.1.2")
+
+    if ipv6 and not network3:
+        if not trex:
+            if r1con:
+                r1con.cmd_raises("ip route add fc00:0:0:2::/64 via fc00:0:0:1::3")
+            if r2con:
+                r2con.cmd_raises("ip route add fc00:0:0:0::/64 via fc00:0:0:1::2")
+        else:
+            if r1con:
+                r1con.cmd_raises("ip route add 2012::/64 via fc00:0:0:1::3")
+                r1con.cmd_raises("ip route add 2048::/16 via fc00:0:0:1::3")
+
+            if r2con:
+                r2con.cmd_raises("ip route add 2011::/64 via fc00:0:0:1::2")
+                r2con.cmd_raises("ip route add 2016::/16 via fc00:0:0:1::2")
 
 
 async def setup_routed_tun(
@@ -404,6 +662,7 @@ async def setup_routed_tun(
     ipv4=True,
     ipv6=False,
     tun_ipv6=False,
+    network3=False,
 ):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"] if "r2" in unet.hosts else None
@@ -449,7 +708,10 @@ async def setup_routed_tun(
     r2ipp = r2ipp.network
 
     # Start with a clean slate
-    await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
+    if network3:
+        await cleanup_config3(unet, ipv4=ipv4, ipv6=ipv6)
+    else:
+        await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
 
     if bool(tun_ipv6) != bool(ipv6):
         esp_flags = "af-unspec " + esp_flags
@@ -490,14 +752,21 @@ async def setup_routed_tun(
         # repl.cmd_raises(f"ip add vti0 local {lip} remote {rip} mode vti key 55")
         # repl.cmd_raises("sysctl -w net.ipv4.conf.vti0.disable_policy=1")
         # repl.cmd_raises("ip link set vti0 up")
-        if "net1" in r.net_intfs:
+
+        if r == r1 or not network3:
+            ipsec_net = "net1"
+        else:
+            ipsec_net = "net2"
+
+        if ipsec_net in r.net_intfs:
             repl.cmd_raises(
-                f"ip link add ipsec0 type xfrm dev {r.net_intfs['net1']} if_id 55"
+                f"ip link add ipsec0 type xfrm dev {r.net_intfs[ipsec_net]} if_id 55"
             )
         else:
             repl.cmd_raises(f"ip link add ipsec0 type xfrm dev {ipsec_intf} if_id 55")
+
         # repl.cmd_raises("sysctl -w net.ipv4.conf.ipsec0.disable_policy=1")
-        repl.cmd_raises("ip link set ipsec0 up")
+        repl.cmd_raises("ip link set ipsec0 mtu 9000 up")
 
         #
         # Policy
@@ -531,7 +800,47 @@ async def setup_routed_tun(
                 f"tmpl src {rip} dst {lip} proto esp mode {mode} reqid {ireqid}"
             )
 
-    if ipv4:
+    r1con = r1.conrepl if r1 else None
+    r2con = r2.conrepl if r2 and not r1only else None
+
+    if ipv4 and network3:
+        if not trex:
+            # Add ipsec0 based routes
+            if r1con:
+                r1con.cmd_raises("ip route add 10.0.2.0/24 dev ipsec0 src 10.0.1.2")
+                r1con.cmd_raises("ip route add 10.0.3.0/24 dev ipsec0 src 10.0.1.2")
+            if r2con:
+                r2con.cmd_raises("ip route add 10.0.0.0/24 dev ipsec0 src 10.0.2.4")
+                r2con.cmd_raises("ip route add 10.0.1.0/24 dev ipsec0 src 10.0.2.4")
+        else:
+            if r1con:
+                r1con.cmd_raises("ip route add 12.0.0.0/24 dev ipsec0 src 10.0.1.2")
+                r1con.cmd_raises("ip route add 48.0.0.0/8 dev ipsec0 src 10.0.1.2")
+
+            if r2con:
+                r2con.cmd_raises("ip route add 11.0.0.0/24 dev ipsec0 src 10.0.2.4")
+                r2con.cmd_raises("ip route add 16.0.0.0/8 dev ipsec0 src 10.0.2.4")
+
+    if ipv6 and network3:
+        if not trex:
+            # Add ipsec0 based routes
+            if r1con:
+                # "ip route add fc00:0:0:2::/64 dev ipsec0 src fc00:0:0:1::3"
+                r1con.cmd_raises("ip route add fc00:0:0:2::/64 dev ipsec0")
+                r1con.cmd_raises("ip route add fc00:0:0:3::/64 dev ipsec0")
+            if r2con:
+                # "ip route add fc00:0:0:0::/64 dev ipsec0 src fc00:0:0:2::3"
+                r2con.cmd_raises("ip route add fc00:0:0:0::/64 dev ipsec0")
+                r2con.cmd_raises("ip route add fc00:0:0:1::/64 dev ipsec0")
+        else:
+            if r1con:
+                r1con.cmd_raises("ip route add 2012::/64 dev ipsec0 src fc00:0:0:0::2")
+                r1con.cmd_raises("ip route add 2048::/16 dev ipsec0 src fc00:0:0:0::2")
+            if r2con:
+                r2con.cmd_raises("ip route add 2011::/64 dev ipsec0 src fc00:0:0:3::4")
+                r2con.cmd_raises("ip route add 2016::/16 dev ipsec0 src fc00:0:0:3::4")
+
+    if ipv4 and not network3:
         if not trex:
             # Add ipsec0 based routes
             r1.conrepl.cmd_raises("ip route add 10.0.2.0/24 dev ipsec0 src 10.0.1.2")
@@ -551,7 +860,8 @@ async def setup_routed_tun(
             r1.conrepl.cmd_raises("ip route add 48.0.0.0/8 dev ipsec0 src 10.0.1.2")
             if not r1only:
                 r2.conrepl.cmd_raises("ip route add 16.0.0.0/8 dev ipsec0 src 10.0.1.3")
-    if ipv6:
+
+    if ipv6 and not network3:
         if not trex:
             # Add ipsec0 based routes
             r1.conrepl.cmd_raises(

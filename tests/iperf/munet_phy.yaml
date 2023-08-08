@@ -1,0 +1,70 @@
+topology:
+  ipv6-enable: true
+  networks-autonumber: true
+  dns-network: "mgmt0"
+  networks:
+    - name: mgmt0
+      ip: 192.168.0.254/24
+      ipv6: "fd00::ff/24"
+      nat: true
+  nodes:
+    - name: h1
+      connections:
+        - to: mgmt0
+        - to: r1
+          hostintf: "enp27s0f0v0"
+          ip: 10.0.0.1/24
+          ipv6: "fc00:0:0:0::1/64"
+    - name: r1
+      kind: linux
+      connections:
+        - to: mgmt0
+        - to: r2
+          # physical: "0000:5e:10.0"
+          physical: "0000:5e:00.0"
+          ip: 10.0.1.2/24
+          ipv6: "fc00:0:0:1::2/64"
+        - to: h1
+          physical: "0000:d8:02.0"
+          ip: 10.0.0.2/24
+          ipv6: "fc00:0:0:0::2/64"
+    - name: r2
+      kind: linux
+      connections:
+        - to: mgmt0
+        - to: r1
+          # physical: "0000:5e:10.1"
+          physical: "0000:5e:00.1"
+          ip: 10.0.1.3/24
+          ipv6: "fc00:0:0:1::3/64"
+        - to: h2
+          physical: "0000:d8:0a.0"
+          ip: 10.0.2.3/24
+          ipv6: "fc00:0:0:2::3/64"
+    - name: h2
+      connections:
+        - to: mgmt0
+        - to: r2
+          hostintf: "enp27s0f1v0"
+          ip: 10.0.2.4/24
+          ipv6: "fc00:0:0:2::4/64"
+
+kinds:
+  - name: linux
+    merge: [ "qemu" ]
+    gdb-cmd: "/usr/bin/sudo -E gdb %CONFIGDIR%/../../output-linux/vmlinux"
+    gdb-target-cmds: ["target remote %RUNDIR%/s/gdbserver"]
+    gdb-run-cmds: ["c"]
+    qemu:
+      kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
+      initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
+      sshkey: "%CONFIGDIR%/../../root-key"
+      #cmdline-extra: "acpi=off nokaslr idle=poll"
+      # cmdline-extra: "nokaslr slub_debug=U,kmalloc-256,kmalloc-128"
+      cmdline-extra: "nokaslr"
+      # memory: "8192M"
+      memory: "16384M"
+      kvm: true
+      ncpu: 3
+      console:
+        timeout: 180
