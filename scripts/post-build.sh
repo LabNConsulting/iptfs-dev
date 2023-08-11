@@ -56,6 +56,18 @@ for ((i=0; i<2; i++)); do
     fi
 done
 
+fstab=$TARGET/etc/fstab
+
+if ! grep "debugfs" $fstab; then
+    echo "$0: adding debugfs to /etc/fstab"
+    echo "debugfs         /sys/kernel/debug       debugfs defaults 0 0" >> $fstab
+fi
+
+if ! grep "tracefs" $fstab; then
+    echo "$0: adding tracefs to /etc/fstab"
+    echo "tracefs         /sys/kernel/tracing       tracefs defaults 0 0" >> $fstab
+fi
+
 echo "$0: copying root-key.pub in post-build script."
 mkdir -p $TARGET/root/.ssh
 if [[ ! -e ../root-key.pub ]]; then
