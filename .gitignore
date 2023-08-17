@@ -1,3 +1,5 @@
+.dir-locals.el
+.flake8rc
 *~
 *.decode
 *.log
@@ -7,6 +9,8 @@
 *.svg
 /.ccls-cache/
 /buildroot/
+/coverage.info
+/iptfs.info
 /exec-pytest.log
 /output-buildroot/
 /iproute2/
@@ -15,6 +19,7 @@
 __pycache__/
 /linux-torvalds/
 /linux-stk/
+/saved*
 /test-logs/
 /tests-trex/trex
 /tests-trex/external_libs

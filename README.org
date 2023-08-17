@@ -1864,3 +1864,479 @@ NPI:          0          0          0          0   Nested posted-interrupt event
 PIW:          0          0          0          0   Posted-interrupt wakeup event
 b
 but even moving the IRQ didn't change anything maybe b/c rx-2 is being shared?
+
+
+
+* New Perfs
+** NO GRO
+    no "generic-receive-offload",
+    no "rx-gro-hw",
+*** legacy IPsec - no iptfs
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 52900 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0196 sec  6.17 GBytes  5.29 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1#
+
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 49186 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0113 sec  6.32 GBytes  5.42 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1#
+
+
+*** iptfs
+
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 51934 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0103 sec  5.31 GBytes  4.55 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 45320 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0115 sec  5.32 GBytes  4.57 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1#
+
+** GRO
+*** legacy IPsec - no iptfs
+
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 33940 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0075 sec  9.59 GBytes  8.23 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 45524 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0136 sec  9.04 GBytes  7.76 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 36432 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0125 sec  8.28 GBytes  7.10 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 40362 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0113 sec  8.79 GBytes  7.54 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1#
+
+*** iptfs
+
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 58158 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0092 sec  3.52 GBytes  3.03 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 33260 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0095 sec  6.31 GBytes  5.42 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 57584 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0105 sec  5.34 GBytes  4.58 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1# iperf -c 10.0.2.4
+------------------------------------------------------------
+Client connecting to 10.0.2.4, TCP port 5001
+TCP window size: 85.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.1 port 44142 connected with 10.0.2.4 port 5001
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-10.0099 sec  4.43 GBytes  3.80 Gbits/sec
+root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1#
+
+
+
+
+
+* Debugging SLAB
+
+  5s IPv6
+
+# name            <active_objs> <objsize> <pagesperslab>       <batchcount> : # slabdata    <num_slabs>
+#                        <num_objs> <objperslab> : tunables <limit> # <sharedfactor> <active_slabs>   <sharedavail>
+
+kmalloc-8k           282    294  16384    2    8 : tunables    0    0    0 : slabdata    147    147      0
+kmalloc-4k         40861  40980   8192    4    8 : tunables    0    0    0 : slabdata  10245  10245      0
+kmalloc-2k           377    528   4096    8    8 : tunables    0    0    0 : slabdata     66     66      0
+kmalloc-1k           714    912   2048   16    8 : tunables    0    0    0 : slabdata     57     57      0
+kmalloc-512        76535  76688   1024   16    4 : tunables    0    0    0 : slabdata   4793   4793      0
+kmalloc-256          880    880    512   16    2 : tunables    0    0    0 : slabdata     55     55      0
+kmalloc-192          492    544    256   16    1 : tunables    0    0    0 : slabdata     34     34      0
+kmalloc-128          521    592    256   16    1 : tunables    0    0    0 : slabdata     37     37      0
+kmalloc-96          6241   6656    128   32    1 : tunables    0    0    0 : slabdata    208    208      0
+kmalloc-64          2984   3968    128   32    1 : tunables    0    0    0 : slabdata    124    124      0
+kmalloc-32          1873   3328     64   64    1 : tunables    0    0    0 : slabdata     52     52      0
+kmalloc-16          1285   2048     32  128    1 : tunables    0    0    0 : slabdata     16     16      0
+kmalloc-8           2026   4386     40  102    1 : tunables    0    0    0 : slabdata     43     43      0
+kmem_cache_node      288    288    128   32    1 : tunables    0    0    0 : slabdata      9      9      0
+kmem_cache           240    240    320   12    1 : tunables    0    0    0 : slabdata     20     20      0
+bash-5.2# grep skb /proc/slabinfo
+skbuff_ext_cache  118994 166304    128   32    1 : tunables    0    0    0 : slabdata   5197   5197      0
+skbuff_small_head    315    336    768   21    4 : tunables    0    0    0 : slabdata     16     16      0
+skbuff_fclone_cache    108    108    640   12    2 : tunables    0    0    0 : slabdata      9      9      0
+skbuff_head_cache 187671 284244    320   12    1 : tunables    0    0    0 : slabdata  23687  23687      0
+
+15s IPv4
+
+kmalloc-8k           263    274  16384    2    8 : tunables    0    0    0 : slabdata    137    137      0
+kmalloc-4k           426    508   8192    4    8 : tunables    0    0    0 : slabdata    127    127      0
+kmalloc-2k          8544   8592   4096    8    8 : tunables    0    0    0 : slabdata   1074   1074      0
+kmalloc-1k           666    880   2048   16    8 : tunables    0    0    0 : slabdata     55     55      0
+kmalloc-512       275412 275504   1024   16    4 : tunables    0    0    0 : slabdata  17219  17219      0
+kmalloc-256          782    832    512   16    2 : tunables    0    0    0 : slabdata     52     52      0
+kmalloc-192          463    528    256   16    1 : tunables    0    0    0 : slabdata     33     33      0
+kmalloc-128          514    576    256   16    1 : tunables    0    0    0 : slabdata     36     36      0
+kmalloc-96         13940  14080    128   32    1 : tunables    0    0    0 : slabdata    440    440      0
+kmalloc-64          3077   4000    128   32    1 : tunables    0    0    0 : slabdata    125    125      0
+kmalloc-32          1672   2944     64   64    1 : tunables    0    0    0 : slabdata     46     46      0
+kmalloc-16          1198   2176     32  128    1 : tunables    0    0    0 : slabdata     17     17      0
+kmalloc-8           1892   4182     40  102    1 : tunables    0    0    0 : slabdata     41     41      0
+kmem_cache_node      256    256    128   32    1 : tunables    0    0    0 : slabdata      8      8      0
+kmem_cache           240    240    320   12    1 : tunables    0    0    0 : slabdata     20     20      0
+bash-5.2# grep skb /proc/slabinfo
+skbuff_ext_cache  273929 275136    128   32    1 : tunables    0    0    0 : slabdata   8598   8598      0
+skbuff_small_head  50568  50589    768   21    4 : tunables    0    0    0 : slabdata   2409   2409      0
+skbuff_fclone_cache     96     96    640   12    2 : tunables    0    0    0 : slabdata      8      8      0
+skbuff_head_cache 175134 175716    320   12    1 : tunables    0    0    0 : slabdata  14643  14643      0
+b
+
+** Why policy route failing
+   * Unknown packet hist ip_route_input_noref
+   * ip_route_input_rcu(struct sk_buff *skb, __be32 daddr, __be32 saddr,
+   * ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
+
+
+#0  ip_route_input_slow (skb=0xffff888104718b00, daddr=<optimized out>, saddr=<optimized out>, tos=tos@entry=0 '\000',
+    dev=0xffff888102a74000, res=0xffffc90000003b90) at /home/chopps/w/iptfs-dev/linux/net/ipv4/route.c:2303
+#1  0xffffffff81e8cfe3 in ip_route_input_rcu (skb=skb@entry=0xffff888104718b00, daddr=daddr@entry=84082698, saddr=saddr@entry=16777226,
+    tos=tos@entry=0 '\000', dev=dev@entry=0xffff888102a74000, res=res@entry=0xffffc90000003b90)
+    at /home/chopps/w/iptfs-dev/linux/net/ipv4/route.c:2481
+#2  0xffffffff81e8d086 in ip_route_input_noref (skb=skb@entry=0xffff888104718b00, daddr=84082698, saddr=16777226, tos=<optimized out>,
+    dev=dev@entry=0xffff888102a74000) at /home/chopps/w/iptfs-dev/linux/net/ipv4/route.c:2492
+#3  0xffffffff81e8fa1a in ip_rcv_finish_core (net=net@entry=0xffffffff833e60c0 <init_net>, skb=skb@entry=0xffff888104718b00,
+    dev=0xffff888102a74000, hint=hint@entry=0x0 <fixed_percpu_data>, sk=0x0 <fixed_percpu_data>)
+    at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_input.c:365
+#
+*** working from strongswan
+
+    #0  __xfrm_route_forward (skb=skb@entry=0xffff888104c3c600, family=family@entry=2) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_policy.c:3794
+    #1  0xffffffff81e9241a in xfrm_route_forward (family=2, skb=0xffff888104c3c600) at /home/chopps/w/iptfs-dev/linux/include/net/xfrm.h:1273
+    #2  xfrm4_route_forward (skb=0xffff888104c3c600) at /home/chopps/w/iptfs-dev/linux/include/net/xfrm.h:1278
+    #3  ip_forward (skb=0xffff888104c3c600) at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_forward.c:124
+    #4  0xffffffff81e9080f in dst_input (skb=0xffff888104e70501) at /home/chopps/w/iptfs-dev/linux/include/net/dst.h:468
+    #5  ip_sublist_rcv_finish (head=head@entry=0xffffc90000003c48) at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_input.c:580
+    #6  0xffffffff81e90946 in ip_list_rcv_finish (sk=0x0 <fixed_percpu_data>, head=0xffffc90000003cd0, net=0xffffffff833e60c0 <init_net>)
+        at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_input.c:630
+    #7  ip_sublist_rcv (head=head@entry=0xffffc90000003cd0, dev=dev@entry=0xffff888102f24000, net=net@entry=0xffffffff833e60c0 <init_net>)
+        at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_input.c:638
+    #8  0xffffffff81e90cbd in ip_list_rcv (head=0xffffc90000003d50, pt=<optimized out>, orig_dev=<optimized out>)
+        at /home/chopps/w/iptfs-dev/linux/net/ipv4/ip_input.c:673
+    #9  0xffffffff81dd8dc8 in __netif_receive_skb_list_ptype (orig_dev=0xffff888102f24000, pt_prev=0xffffffff82ec4e60 <ip_packet_type>, head=0xffffc90000003d50)
+        at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5534
+    #10 __netif_receive_skb_list_core (head=head@entry=0xffff888102940110, pfmemalloc=pfmemalloc@entry=false) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5582
+    #11 0xffffffff81dd93cf in __netif_receive_skb_list (head=0xffff888102940110) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5634
+    #12 netif_receive_skb_list_internal (head=head@entry=0xffff888102940110) at /home/chopps/w/iptfs-dev/linux/net/core/dev.c:5725
+    #13 0xffffffff81dd9b7e in gro_normal_list (napi=0xffff888102940008) at /home/chopps/w/iptfs-dev/linux/include/net/gro.h:433
+
+
+sh-5.2# ip -d route list table 220
+unicast 10.0.0.0/24 dev eth2 proto static scope link src 10.0.3.4
+
+unicast 10.0.3.0/24 via 10.0.1.3 dev eth2 proto static scope global src 10.0.0.2
+
+sh-5.2# ip -d  route list table 220
+unicast 10.0.0.0/24 via 10.0.2.3 dev eth2 proto static scope global src 10.0.3.4
+
+
+
+
+BAD:
+------ Host: r1 ------
+unicast 10.0.3.0/24 via 10.0.1.3 dev eth2 proto static scope global
+------- End: r1 ------
+------ Host: r2 ------
+unicast 10.0.0.0/24 via 10.0.2.3 dev eth2 proto static scope global
+------- End: r2 ------
+
+munet> sh ip -d route list table main
+------ Host: h1 ------
+unicast 10.0.0.0/24 dev eth1 proto kernel scope link src 10.0.0.1
+unicast 10.0.1.0/24 via 10.0.0.2 dev eth1 proto boot scope global
+unicast 10.0.2.0/24 via 10.0.0.2 dev eth1 proto boot scope global
+unicast 10.0.3.0/24 via 10.0.0.2 dev eth1 proto boot scope global
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.1
+------- End: h1 ------
+------ Host: h2 ------
+unicast 10.0.0.0/24 via 10.0.3.4 dev eth1 proto boot scope global
+unicast 10.0.1.0/24 via 10.0.3.4 dev eth1 proto boot scope global
+unicast 10.0.2.0/24 via 10.0.3.4 dev eth1 proto boot scope global
+unicast 10.0.3.0/24 dev eth1 proto kernel scope link src 10.0.3.5
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.5
+------- End: h2 ------
+------ Host: r1 ------
+unicast 10.0.0.0/24 dev eth1 proto kernel scope link src 10.0.0.2
+unicast 10.0.1.0/24 dev eth2 proto kernel scope link src 10.0.1.2
+unicast 10.0.2.4 via 10.0.1.3 dev eth2 proto boot scope global
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.2
+------- End: r1 ------
+------ Host: r2 ------
+unicast 10.0.1.2 via 10.0.2.3 dev eth2 proto boot scope global
+unicast 10.0.2.0/24 dev eth2 proto kernel scope link src 10.0.2.4
+unicast 10.0.3.0/24 dev eth1 proto kernel scope link src 10.0.3.4
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.4
+------- End: r2 ------
+------ Host: rm ------
+unicast 10.0.1.0/24 dev eth1 proto kernel scope link src 10.0.1.3
+unicast 10.0.2.0/24 dev eth2 proto kernel scope link src 10.0.2.3
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.3
+------- End: rm ------
+
+
+GOOD:
+------ Host: r1 ------
+unicast 10.0.3.0/24 via 10.0.1.3 dev eth2 proto static scope global src 10.0.0.2
+unicast 12.12.12.0/24 via 10.0.1.3 dev eth2 proto static scope global src 10.0.0.2
+------- End: r1 ------
+------ Host: r2 ------
+unicast 10.0.0.0/24 via 10.0.2.3 dev eth2 proto static scope global src 10.0.3.4
+unicast 11.11.11.0/24 via 10.0.2.3 dev eth2 proto static scope global src 10.0.3.4
+------- End: r2 ------
+
+munet> sh ip -d route list table main
+------ Host: h1 ------
+unicast 10.0.0.0/24 dev eth1 proto kernel scope link src 10.0.0.1
+unicast 10.0.1.0/24 via 10.0.0.2 dev eth1 proto boot scope global
+unicast 10.0.2.0/24 via 10.0.0.2 dev eth1 proto boot scope global
+unicast 10.0.3.0/24 via 10.0.0.2 dev eth1 proto boot scope global
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.1
+------- End: h1 ------
+------ Host: h2 ------
+unicast 10.0.0.0/24 via 10.0.3.4 dev eth1 proto boot scope global
+unicast 10.0.1.0/24 via 10.0.3.4 dev eth1 proto boot scope global
+unicast 10.0.2.0/24 via 10.0.3.4 dev eth1 proto boot scope global
+unicast 10.0.3.0/24 dev eth1 proto kernel scope link src 10.0.3.5
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.5
+------- End: h2 ------
+------ Host: r1 ------
+unicast 10.0.0.0/24 dev eth1 proto kernel scope link src 10.0.0.2
+unicast 10.0.1.0/24 dev eth2 proto kernel scope link src 10.0.1.2
+unicast 10.0.2.0/24 via 10.0.1.3 dev eth2 proto boot scope global
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.2
+------- End: r1 ------
+------ Host: r2 ------
+unicast 10.0.1.0/24 via 10.0.2.3 dev eth2 proto boot scope global
+unicast 10.0.2.0/24 dev eth2 proto kernel scope link src 10.0.2.4
+unicast 10.0.3.0/24 dev eth1 proto kernel scope link src 10.0.3.4
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.4
+------- End: r2 ------
+------ Host: rm ------
+unicast 10.0.1.0/24 dev eth1 proto kernel scope link src 10.0.1.3
+unicast 10.0.2.0/24 dev eth2 proto kernel scope link src 10.0.2.3
+unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.3
+------- End: rm ------
+
+
+
+
+*** BAD FULLuTABLE
+munet> sh ip -d route list table all
+------ Host: h1 ------
+unicast 10.0.0.0/24 dev eth1 table main proto kernel scope link src 10.0.0.1
+unicast 10.0.1.0/24 via 10.0.0.2 dev eth1 table main proto boot scope global
+unicast 10.0.2.0/24 via 10.0.0.2 dev eth1 table main proto boot scope global
+unicast 10.0.3.0/24 via 10.0.0.2 dev eth1 table main proto boot scope global
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.1
+local 10.0.0.1 dev eth1 table local proto kernel scope host src 10.0.0.1
+broadcast 10.0.0.255 dev eth1 table local proto kernel scope link src 10.0.0.1
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.1 dev eth0 table local proto kernel scope host src 192.168.0.1
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.1
+------- End: h1 ------
+------ Host: h2 ------
+unicast 10.0.0.0/24 via 10.0.3.4 dev eth1 table main proto boot scope global
+unicast 10.0.1.0/24 via 10.0.3.4 dev eth1 table main proto boot scope global
+unicast 10.0.2.0/24 via 10.0.3.4 dev eth1 table main proto boot scope global
+unicast 10.0.3.0/24 dev eth1 table main proto kernel scope link src 10.0.3.5
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.5
+local 10.0.3.5 dev eth1 table local proto kernel scope host src 10.0.3.5
+broadcast 10.0.3.255 dev eth1 table local proto kernel scope link src 10.0.3.5
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.5 dev eth0 table local proto kernel scope host src 192.168.0.5
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.5
+------- End: h2 ------
+------ Host: r1 ------
+unicast 10.0.3.0/24 via 10.0.1.3 dev eth2 table 220 proto static scope global src 10.0.0.2
+
+unicast 10.0.0.0/24 dev eth1 table main proto kernel scope link src 10.0.0.2
+unicast 10.0.1.0/24 dev eth2 table main proto kernel scope link src 10.0.1.2
+unicast 10.0.2.4 via 10.0.1.3 dev eth2 table main proto boot scope global
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.2
+
+local 10.0.0.2 dev eth1 table local proto kernel scope host src 10.0.0.2
+broadcast 10.0.0.255 dev eth1 table local proto kernel scope link src 10.0.0.2
+local 10.0.1.2 dev eth2 table local proto kernel scope host src 10.0.1.2
+broadcast 10.0.1.255 dev eth2 table local proto kernel scope link src 10.0.1.2
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.2 dev eth0 table local proto kernel scope host src 192.168.0.2
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.2
+------- End: r1 ------
+------ Host: r2 ------
+unicast 10.0.0.0/24 via 10.0.2.3 dev eth2 table 220 proto static scope global src 10.0.3.4
+unicast 10.0.1.2 via 10.0.2.3 dev eth2 table main proto boot scope global
+unicast 10.0.2.0/24 dev eth2 table main proto kernel scope link src 10.0.2.4
+unicast 10.0.3.0/24 dev eth1 table main proto kernel scope link src 10.0.3.4
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.4
+local 10.0.2.4 dev eth2 table local proto kernel scope host src 10.0.2.4
+broadcast 10.0.2.255 dev eth2 table local proto kernel scope link src 10.0.2.4
+local 10.0.3.4 dev eth1 table local proto kernel scope host src 10.0.3.4
+broadcast 10.0.3.255 dev eth1 table local proto kernel scope link src 10.0.3.4
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.4 dev eth0 table local proto kernel scope host src 192.168.0.4
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.4
+------- End: r2 ------
+------ Host: rm ------
+unicast 10.0.1.0/24 dev eth1 table main proto kernel scope link src 10.0.1.3
+unicast 10.0.2.0/24 dev eth2 table main proto kernel scope link src 10.0.2.3
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.3
+local 10.0.1.3 dev eth1 table local proto kernel scope host src 10.0.1.3
+broadcast 10.0.1.255 dev eth1 table local proto kernel scope link src 10.0.1.3
+local 10.0.2.3 dev eth2 table local proto kernel scope host src 10.0.2.3
+broadcast 10.0.2.255 dev eth2 table local proto kernel scope link src 10.0.2.3
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.3 dev eth0 table local proto kernel scope host src 192.168.0.3
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.3
+------- End: rm ------
+munet>
+
+GOOD
+
+munet> sh ip -d route list table all
+------ Host: h1 ------
+unicast 10.0.0.0/24 dev eth1 table main proto kernel scope link src 10.0.0.1
+unicast 10.0.1.0/24 via 10.0.0.2 dev eth1 table main proto boot scope global
+unicast 10.0.2.0/24 via 10.0.0.2 dev eth1 table main proto boot scope global
+unicast 10.0.3.0/24 via 10.0.0.2 dev eth1 table main proto boot scope global
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.1
+local 10.0.0.1 dev eth1 table local proto kernel scope host src 10.0.0.1
+broadcast 10.0.0.255 dev eth1 table local proto kernel scope link src 10.0.0.1
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.1 dev eth0 table local proto kernel scope host src 192.168.0.1
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.1
+------- End: h1 ------
+------ Host: h2 ------
+unicast 10.0.0.0/24 via 10.0.3.4 dev eth1 table main proto boot scope global
+unicast 10.0.1.0/24 via 10.0.3.4 dev eth1 table main proto boot scope global
+unicast 10.0.2.0/24 via 10.0.3.4 dev eth1 table main proto boot scope global
+unicast 10.0.3.0/24 dev eth1 table main proto kernel scope link src 10.0.3.5
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.5
+local 10.0.3.5 dev eth1 table local proto kernel scope host src 10.0.3.5
+broadcast 10.0.3.255 dev eth1 table local proto kernel scope link src 10.0.3.5
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.5 dev eth0 table local proto kernel scope host src 192.168.0.5
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.5
+------- End: h2 ------
+------ Host: r1 ------
+unicast 10.0.3.0/24 via 10.0.1.3 dev eth2 table 220 proto static scope global src 10.0.0.2
+unicast 12.12.12.0/24 via 10.0.1.3 dev eth2 table 220 proto static scope global src 10.0.0.2
+
+unicast 10.0.0.0/24 dev eth1 table main proto kernel scope link src 10.0.0.2
+unicast 10.0.1.0/24 dev eth2 table main proto kernel scope link src 10.0.1.2
+unicast 10.0.2.0/24 via 10.0.1.3 dev eth2 table main proto boot scope global
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.2
+
+local 10.0.0.2 dev eth1 table local proto kernel scope host src 10.0.0.2
+broadcast 10.0.0.255 dev eth1 table local proto kernel scope link src 10.0.0.2
+local 10.0.1.2 dev eth2 table local proto kernel scope host src 10.0.1.2
+broadcast 10.0.1.255 dev eth2 table local proto kernel scope link src 10.0.1.2
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.2 dev eth0 table local proto kernel scope host src 192.168.0.2
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.2
+------- End: r1 ------
+------ Host: r2 ------
+unicast 10.0.0.0/24 via 10.0.2.3 dev eth2 table 220 proto static scope global src 10.0.3.4
+unicast 11.11.11.0/24 via 10.0.2.3 dev eth2 table 220 proto static scope global src 10.0.3.4
+unicast 10.0.1.0/24 via 10.0.2.3 dev eth2 table main proto boot scope global
+unicast 10.0.2.0/24 dev eth2 table main proto kernel scope link src 10.0.2.4
+unicast 10.0.3.0/24 dev eth1 table main proto kernel scope link src 10.0.3.4
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.4
+local 10.0.2.4 dev eth2 table local proto kernel scope host src 10.0.2.4
+broadcast 10.0.2.255 dev eth2 table local proto kernel scope link src 10.0.2.4
+local 10.0.3.4 dev eth1 table local proto kernel scope host src 10.0.3.4
+broadcast 10.0.3.255 dev eth1 table local proto kernel scope link src 10.0.3.4
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.4 dev eth0 table local proto kernel scope host src 192.168.0.4
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.4
+------- End: r2 ------
+------ Host: rm ------
+unicast 10.0.1.0/24 dev eth1 table main proto kernel scope link src 10.0.1.3
+unicast 10.0.2.0/24 dev eth2 table main proto kernel scope link src 10.0.2.3
+unicast 192.168.0.0/24 dev eth0 table main proto kernel scope link src 192.168.0.3
+local 10.0.1.3 dev eth1 table local proto kernel scope host src 10.0.1.3
+broadcast 10.0.1.255 dev eth1 table local proto kernel scope link src 10.0.1.3
+local 10.0.2.3 dev eth2 table local proto kernel scope host src 10.0.2.3
+broadcast 10.0.2.255 dev eth2 table local proto kernel scope link src 10.0.2.3
+local 127.0.0.0/8 dev lo table local proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0.1
+local 192.168.0.3 dev eth0 table local proto kernel scope host src 192.168.0.3
+broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.3
+------- End: rm ------
