@@ -78,3 +78,36 @@ chmod -R =0000,u=rwX $TARGET/root/.ssh
 
 # echo 'PS1="XXPROMPTXX$ "' > $TARGET/etc/profile.d/promptprefix.sh
 # rm -f $TARGET/etc/profile.d/promptprefix.sh
+
+
+chlogf = $TARGET/etc/strongswan.d/charon-logging.conf
+if [ -e $chlogf ]; then
+    cat <<EOF > $TARGET/etc/strongswan.d/charon-logging.conf
+charon {
+    filelog {
+        debug-log {
+            path = "/tmp/charon-debug.log"
+            time_format = %b %e %T
+            ike_name = yes
+            default = 1
+            flush_line = yes
+
+            ike = 3
+            net = 4
+            cfg = 1
+            lib = 4
+            knl = 4
+        }
+    }
+    syslog {
+        identifier = charon-custom
+        daemon {
+        }
+        auth {
+            default = -1
+            ike = 0
+        }
+    }
+}
+EOF
+    fi
