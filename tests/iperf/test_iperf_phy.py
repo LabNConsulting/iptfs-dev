@@ -19,14 +19,12 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 "Test iptfs tunnel using iperf with various configurations"
-import asyncio
-import logging
 import os
 
 import pytest
 from common.config import _network_up, setup_policy_tun
 from common.tests import _test_net_up
-from iperf import _test_iperf
+from iperf import _test_iperf, check_logs
 from munet.testing.fixtures import _unet_impl
 
 # All tests are coroutines
@@ -53,6 +51,9 @@ async def _unet(rundir_module, pytestconfig):
 @pytest.fixture(scope="module", autouse=True)
 async def network_up(unet):
     await _network_up(unet, ipv6=unet.ipv6_enable)
+    unet.hosts["r1"].add_watch_log("qemu.out")
+    unet.hosts["r2"].add_watch_log("qemu.out")
+    yield
 
 
 #                       192.168.0.0/24  fd00::/64
@@ -65,13 +66,16 @@ async def network_up(unet):
 #           fc00::/64         fc00:0:0:1::/64     fc00:0:0:2::/64
 
 
+@pytest.mark.asyncio
 async def test_net_up(unet):
     await _test_net_up(unet, ipv6=unet.ipv6_enable)
+    check_logs(unet)
 
 
 MODE = "iptfs"
 
 
+@pytest.mark.asyncio
 async def test_tun_up(unet, astepf):
     # iptfs_opts = "dont-frag"
     await setup_policy_tun(
@@ -94,6 +98,7 @@ async def test_tun_up(unet, astepf):
     # h1 pings h2
     h1.cmd_nostatus("ping -w1 -i.2 -c1 10.0.2.4")
     h1.cmd_raises("ping -w1 -i.2 -c1 10.0.2.4")
+    check_logs(unet)
 
 
 @pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
@@ -101,6 +106,7 @@ async def test_tun_up(unet, astepf):
 @pytest.mark.parametrize("ipv6", [False, True])
 @pytest.mark.parametrize("tun_ipv6", [False, True])
 @pytest.mark.parametrize("routed", [False, True])
+@pytest.mark.asyncio
 async def test_iperf(
     unet, rundir, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
 ):
@@ -134,7 +140,7 @@ async def test_iperf(
         profcount=test_iperf.count,
     )
     if result:
-        fname = os.path.join(rundir, "../speed.csv")
+        fname = os.path.join(rundir, "../speed-phy.csv")
         fmode = "w+" if test_iperf.count == 0 else "a+"
         tunstr = "routed" if routed else "policy"
         vstr = "IPv6" if tun_ipv6 else "IPv4"

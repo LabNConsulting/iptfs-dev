@@ -21,17 +21,36 @@
 "Test iptfs tunnel using iperf with various configurations"
 import logging
 import re
+import subprocess
 from pathlib import Path
 
+import pytest
 from common.config import setup_policy_tun, setup_routed_tun
 from common.util import start_profile, stop_profile
 from munet.base import cmd_error
+from munet.watchlog import MatchFoundError
+
+skip_future = False
 
 
 def std_result(o, e):
     o = "\n\tstdout: " + o.strip() if o and o.strip() else ""
     e = "\n\tstderr: " + e.strip() if e and e.strip() else ""
     return o + e
+
+
+def check_logs(unet):
+    for rname in unet.hosts:
+        r = unet.hosts[rname]
+        regex = re.compile("(Kernel panic|BUG:|Oops:) ")
+        for wl in r.watched_logs.values():
+            added = wl.snapshot()
+            if added:
+                logging.debug("check_logs %s on %s added content", wl.path, rname)
+                m = regex.search(wl.content)
+                if m:
+                    return r, wl, m
+    return None, None, None
 
 
 async def _test_iperf(
@@ -53,6 +72,10 @@ async def _test_iperf(
     h1 = unet.hosts["h1"]
     h2 = unet.hosts["h2"]
     r2 = unet.hosts["r2"]
+
+    global skip_future  # pylint: disable=global-statement
+    if skip_future:
+        pytest.skip("Skipping test due to earlier failure")
 
     if routed:
         await setup_routed_tun(
@@ -87,10 +110,12 @@ async def _test_iperf(
         if use_udp:
             sargs.append("-u")
         sargs.append("-V")  # ipv4 or ipv6
-    iperfs = await h2.async_popen(sargs)
+
+    iperfs = h2.popen(sargs)
 
     tracing = True
     leakcheck = True
+    # watch "awk '/^kmalloc-128/{print \$2}'" /proc/slabinfo
     # perfs = None
     try:
         # And then runt he client
@@ -106,19 +131,21 @@ async def _test_iperf(
             afpath = trpath / "available_filter_functions"
 
             evp = evpath / "enable"
-            r2.cmd_nostatus(f"echo 1 > {evp}")
+            for rname in ["r1", "r2"]:
+                r = unet.hosts[rname]
+                r.cmd_nostatus(f"echo 1 > {evp}")
 
-            # sfpath = trpath / "set_ftrace_filter"
-            # r2.cmd_nostatus(f"grep ^iptfs {afpath} > {sfpath}")
-            # ctpath = trpath / "current_tracer"
-            # r2.cmd_status(f"echo function > {ctpath}")
+                # sfpath = trpath / "set_ftrace_filter"
+                # r2.cmd_nostatus(f"grep ^iptfs {afpath} > {sfpath}")
+                # ctpath = trpath / "current_tracer"
+                # r2.cmd_status(f"echo function > {ctpath}")
 
-            # sfpath = trpath / "set_graph_function"
-            # r2.cmd_nostatus(f"grep ^iptfs {afpath} > {sfpath}")
-            # ctpath = trpath / "current_tracer"
-            # r2.cmd_status(f"echo function_graph > {ctpath}")
+                # sfpath = trpath / "set_graph_function"
+                # r2.cmd_nostatus(f"grep ^iptfs {afpath} > {sfpath}")
+                # ctpath = trpath / "current_tracer"
+                # r2.cmd_status(f"echo function_graph > {ctpath}")
 
-            r2.cmd_status(f"echo 1 > {tronpath}")
+                r.cmd_status(f"echo 1 > {tronpath}")
 
         #
         # Enable leak detect
@@ -127,7 +154,9 @@ async def _test_iperf(
         leakpath = dbgpath / "kmemleak"
         if leakcheck:
             # r2.cmd_status(f"echo scan=off > {leakpath}")
-            r2.cmd_status(f"echo clear > {leakpath}")
+            for rname in ["r1", "r2"]:
+                r = unet.hosts[rname]
+                r.cmd_status(f"echo clear > {leakpath}")
 
         if use_udp:
             cargs = ["-u", "-b", udp_brate, "-l", pktsize]
@@ -183,24 +212,46 @@ async def _test_iperf(
         # -M 682 fast, -M 681 superslow, probably the point we aggregate
 
         result = None
-
-        iperfc = await h1.async_popen(args)
+        iperfc = h1.popen(args)
+        # iperfc = await h1.async_popen(args)
         try:
-            rc = await iperfc.wait()
+            # try:
+            #     rc = await asyncio.wait_for(iperfc.wait(), timeout=tval + 5)
+            #     timeout = False
+            # except asyncio.exceptions.CancelledError:
+            #     iperfc.terminate()
+            #     rc = await iperfc.wait()
+            #     timeout = True
+            # o, e = await iperfc.communicate()
 
-            o, e = await iperfc.communicate()
-            o = o.decode("utf-8")
-            e = e.decode("utf-8")
-            if not rc:
-                logging.info("iperf client completed%s", std_result(o, e))
-                # [  5]   0.00-10.00  sec  6.82 GBytes  5.86 Gbits/sec  368             sender
-                i3re = r"\[\s*[\d]+\]\s+[-0-9\.]+\s+sec\s+[\d\.]+\s+[A-Za-z]+\s+([\d\.]+ [A-Z]bits/sec)\s+(\d+)?\s*sender"
-                m = re.search(i3re, o)
-                if m:
-                    result = m.groups()
-            else:
-                logging.warning("iperf client (on h1) exited with code: %s", rc)
-                assert not rc, f"client failed: {cmd_error(rc, o, e)}"
+            try:
+                rc = iperfc.wait(timeout=tval + 5)
+                timeout = False
+            except subprocess.TimeoutExpired:
+                logging.error("XXX timeout expired!")
+                iperfc.kill()
+                timeout = True
+            # Apparently iperfc is really hanging hard b/c kill is still leaving it around
+            try:
+                o, e = iperfc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                logging.error("XXX timeout expired after kill!")
+                logging.error(unet.cmd_nostatus("ps xaww"))
+                timeout = True
+
+            # Look for leak
+            vals = r2.cmd_nostatus(
+                "awk '/^kmalloc-(128|256)/{print $2;}' /proc/slabinfo"
+            )
+            vals = [int(x.strip()) for x in vals.split("\n") if x.strip()]
+            assert (
+                vals[0] < 50000 and vals[1] < 50000
+            ), f"leak found on r2 kmalloc-128|256 == {vals}"
+
+            # o = o.decode("utf-8")
+            # e = e.decode("utf-8")
+            assert not timeout, f"client TIMEOUT: {cmd_error(rc, o, e)}"
+            assert not rc, f"client FAILED: {cmd_error(rc, o, e)}"
 
             if perfc:
                 await stop_profile(perfc, filebase=f"perf-{profcount}.data")
@@ -213,15 +264,33 @@ async def _test_iperf(
                 perfc = None
             if tracing:
                 # disable tracing
-                r2.cmd_status(f"echo 0 > {tronpath}")
+                for rname in ["r1", "r2"]:
+                    r = unet.hosts[rname]
+                    r.cmd_status(f"echo 0 > {tronpath}")
+                    # ur2.cmd_status("gzip -c /sys/kernel/tracing/trace > /tmp/trace.gz")
+                    trfile = unet.rundir.joinpath(f"{r.name}-trace.txt")
+                    with open(trfile, "w+", encoding="ascii") as f:
+                        rc, _, e = r.cmd_status(
+                            "cat /sys/kernel/tracing/trace", stdout=f
+                        )
 
             if leakcheck:
-                r2.cmd_status(f"echo scan > {leakpath}")
+                for rname in ["r1", "r2"]:
+                    r = unet.hosts[rname]
+                    r.cmd_status(f"echo scan > {leakpath}")
                 # r2.cmd_status(f"echo scan=off > {leakpath}")
 
             if iperfc.returncode is None:
                 iperfc.terminate()
     finally:
         if iperfs.returncode is None:
-            iperfs.terminate()
+            iperfs.kill()
+
+        rname, wl, m = check_logs(unet)
+        if m:
+            skip_future = True
+            startpos = m.span()[0]
+            content_after = wl.content[startpos:]
+            pytest.fail(f"failed log check: {rname}:{wl.path}: {content_after}")
+
     return result
