@@ -22,9 +22,9 @@
 import os
 
 import pytest
-from common.config import _network_up
+from common.config import _network_up, cleanup_config
 from common.tests import _test_net_up
-from iperf import _test_iperf, check_logs
+from iperf import _test_iperf, check_logs, skip_future
 from munet.testing.fixtures import _unet_impl
 
 # All tests are coroutines
@@ -75,20 +75,13 @@ MODE = "iptfs"
 #     [<00000000780ac000>] virtnet_poll+0x408/0x590
 
 
-@pytest.fixture(scope="function", name="unetf")
+@pytest.fixture(scope="module", name="unet")
 async def _unet(rundir_module, pytestconfig):
     async for x in _unet_impl(rundir_module, pytestconfig):
+        await _network_up(x, ipv6=True)
+        x.hosts["r1"].add_watch_log("qemu.out")
+        x.hosts["r2"].add_watch_log("qemu.out")
         yield x
-
-
-@pytest.fixture(scope="function", autouse=True)
-async def network_up(unetf):
-    unet = unetf
-    await _network_up(unet, ipv6=True)
-    print("XXX network is up")
-    unet.hosts["r1"].add_watch_log("qemu.out")
-    unet.hosts["r2"].add_watch_log("qemu.out")
-    yield
 
     # try:
     #     print("XXX adding watch task")
@@ -123,15 +116,14 @@ async def network_up(unetf):
 # @pytest.mark.parametrize("pktsize", [None, 64, 536, 1442])
 
 # Leaks only with no dont-frag
-
 # IPv4 tunnel with IPv4 inner, Fails start at 1403  -- 1442 - 1402 ==  40 works 1403 == 39 doesn't
 # @pytest.mark.parametrize("pktsize", [1400, 1401, 1402, 1403, 1404, 1405])
-
 # IPv6 tunnel with IPv4 inner or vice versa, fails start at 1383
 # @pytest.mark.parametrize("pktsize", [1380, 1381, 1382, 1383, 1384, 1385, 1386])
-
 # IPv6 Tunnel with IPv6 inner fails start at 1363
 # @pytest.mark.parametrize("pktsize", [1360, 1361, 1362, 1363, 1364, 1365])
+# [    4.504257] INGRESS: LINEARIZE skb->len=2956 skb->data_len=2916 skb->nr_frags=1 skb->frag_list=0000000000000000
+# pktsize == 2916 works, 2917+ doesn't
 
 
 @pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
@@ -140,11 +132,20 @@ async def network_up(unetf):
 @pytest.mark.parametrize("tun_ipv6", [False, True])
 @pytest.mark.parametrize("routed", [False, True])
 async def test_iperf(
-    unetf, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
+    unet, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
 ):
-    unet = unetf
+    if skip_future:
+        pytest.skip("Skipping test due to earlier failure")
 
-    await _test_net_up(unet, ipv6=True)
+    unet.hosts["r1"].cmd_nostatus(
+        f"echo test start: routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
+    )
+    unet.hosts["r2"].cmd_nostatus(
+        f"echo test start: routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
+    )
+
+    await cleanup_config(unet, ipv4=True, ipv6=True)
+    await _test_net_up(unet, ipv6=True, multihop=False)
     check_logs(unet)
 
     if not unet.ipv6_enable and tun_ipv6:
@@ -177,17 +178,17 @@ async def test_iperf(
         profile=pytestconfig.getoption("--profile", False),
         profcount=test_iperf.count,
     )
+    assert result, "No result from test!"
 
-    if result:
-        fname = unet.rundir.joinpath("../speed.csv")
-        fmode = "w+" if test_iperf.count == 0 else "a+"
-        tunstr = "routed" if routed else "policy"
-        vstr = "IPv6" if tun_ipv6 else "IPv4"
-        with open(fname, fmode, encoding="ascii") as f:
-            print(
-                f"{result[0]},{result[1]},{pktsize},{tunstr},{vstr},{iptfs_opts}\n",
-                file=f,
-            )
+    fname = unet.rundir.joinpath("../speed.csv")
+    fmode = "w+" if test_iperf.count == 0 else "a+"
+    tunstr = "routed" if routed else "policy"
+    vstr = "IPv6" if tun_ipv6 else "IPv4"
+    with open(fname, fmode, encoding="ascii") as f:
+        print(
+            f"{result[2]}{result[3]}bits/s,{result[1]},{result[0]},{pktsize},{tunstr},{vstr},{iptfs_opts}",
+            file=f,
+        )
 
 
 test_iperf.count = -1

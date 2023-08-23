@@ -20,11 +20,15 @@
 #
 "Utility functions for use with trex"
 import asyncio
+import copy
 import datetime
+import json
 import logging
 import pprint
+import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from common import util
 
@@ -32,6 +36,32 @@ logger = logging.getLogger(__name__)
 
 UINT_NULL = 4294967295
 USER_IFINDEX = 1
+
+
+def find_json_obj(a, k, v):
+    for o in a:
+        if k in o and o[k] == v:
+            return o
+    return None
+
+
+def sub_stats(m, s):
+    d = copy.deepcopy(m)
+    for o in d:
+        if "stats64" not in o or "ifname" not in o:
+            continue
+        so = find_json_obj(s, "ifname", d["ifname"])
+        if not so:
+            continue
+        rxdo = o["stats64"]["rx"]
+        rxso = so["stats64"]["rx"]
+        txdo = o["stats64"]["tx"]
+        txso = so["stats64"]["tx"]
+        for stat in rxdo:
+            rxdo[stat] -= rxso[stat]
+        for stat in txdo:
+            txdo[stat] -= txso[stat]
+    return d
 
 
 def convert_number(value):
@@ -306,6 +336,16 @@ def clear_stats(c):
         c.clear_stats()
 
 
+async def collect_dut_stats(dutlist):
+    async def _collect_dut_stats(dut):
+        astats = json.loads(dut.cmd_raises("ip -j -s link show"))
+        stats = {x["ifname"]: x for x in astats}
+        return stats
+
+    return await asyncio.gather(*[_collect_dut_stats(dut) for dut in dutlist])
+    # return {k: v for k, v in stats}
+
+
 def collect_trex_stats(c, unidir=None):
     stats = c.get_stats()
     stats[0]["rx-missed"] = stats[1]["opackets"] - stats[0]["ipackets"]
@@ -333,27 +373,24 @@ def check_running(dut):
 
 
 def get_active_dut(dutlist):
-    a = []
-    for dut in dutlist:
-        if check_running(dut):
-            a.append(dut)
-        else:
-            logger.warning("%s exited", dut.name)
-    return a
+    return dutlist
 
 
 def check_active_dut(dutlist):
-    active_dutlist = get_active_dut(dutlist)
-    if active_dutlist != dutlist:
-        for dut in dutlist:
-            if dut not in active_dutlist:
-                dut.gather_any_core_info()
-        raise Exception("Not all DUT are running")
+    # active_dutlist = get_active_dut(dutlist)
+    # if active_dutlist != dutlist:
+    #     for dut in dutlist:
+    #         if dut not in active_dutlist:
+    #             dut.gather_any_core_info()
+    #     raise Exception("Not all DUT are running")
+    del dutlist
 
 
 def wait_for_test_done(
     dutlist, c, check_ports, starttime, endtime, beat_callback, beat_time=1
 ):
+    del dutlist
+
     beat = datetime.timedelta(0, beat_time)
     nextbeat = starttime + beat
 
@@ -372,14 +409,6 @@ def wait_for_test_done(
             if nextbeat < newnow:
                 nextbeat = newnow + ((newnow - nextbeat) % beat)
                 assert nextbeat > newnow
-
-        # Need to make sure we don't abort b/c of gdb.
-        if any(not x.args.gdb and not check_running(x) for x in dutlist):
-            logger.info("A VPP has exited")
-            logger.info("Stopping traffic on TREX")
-            if c:
-                c.stop()
-            break
 
         if newnow > endtime:
             # logger.warning("XXX: Past endtime %s", str(newnow - endtime))
@@ -411,6 +440,7 @@ async def start_trex_cont_test(
     modeclass=None,
     statsclass=None,
     startingf=None,
+    tracing=False,
 ):
     del extended_stats
     # create two streams
@@ -473,13 +503,21 @@ async def start_trex_cont_test(
     pcap_servers = []
     # pcap_servers = pcap_servers_up(args, args.capture_ports)
 
-    for v in dutlist:
-        if v.args.event_log_size and not v.args.event_log_startup:
-            v.vppctl("event-logger restart")
-            if v.args.event_log_dispatch:
-                v.vppctl("elog trace api barrier dispatch")
-            elif v.args.event_log_barrier:
-                v.vppctl("elog trace api barrier ")
+    if tracing:
+        trpath = Path("/sys/kernel/tracing")
+        tronpath = trpath / "tracing_on"
+        evpath = trpath / "events/iptfs"
+        evp = evpath / "enable"
+        for r in dutlist:
+            r.cmd_nostatus(f"echo 1 > {evp}")
+            r.cmd_status(f"echo 1 > {tronpath}")
+
+        # if v.args.event_log_size and not v.args.event_log_startup:
+        #     v.vppctl("event-logger restart")
+        #     if v.args.event_log_dispatch:
+        #         v.vppctl("elog trace api barrier dispatch")
+        #     elif v.args.event_log_barrier:
+        #         v.vppctl("elog trace api barrier ")
 
     #
     # Don't bother starting test if a VPP has exited.
@@ -501,6 +539,7 @@ async def start_trex_cont_test(
 
 
 async def end_trex_cont_test(
+    unet,
     starttime,
     pcap_servers,
     startingfval,
@@ -510,6 +549,8 @@ async def end_trex_cont_test(
     beat_callback=None,
     beat_time=1,
     stoppingf=None,
+    tracing=False,
+    start_vstats=None,
 ):
     if c:
         check_ports = get_check_ports(args, c)
@@ -544,19 +585,17 @@ async def end_trex_cont_test(
     # cap_offs = {}
     # dispatch_cap_offs = {}
 
-    async def stop_disruptive(x):
-        # if x.args.dispatch_trace:
-        #     dispatch_cap_offs[x.host] = x.vppctl("pcap dispatch trace off")
-        # if x.args.event_log_size:
-        #     x.vppctl("event-logger stop")
-        # if args.capture_drops:
-        #     cap_offs[x.host] = x.vppctl("pcap trace off")
-        # # Terminate the capture now.
-        # for server in pcap_servers:
-        #     server.stop()
-        del x
+    trpath = Path("/sys/kernel/tracing")
+    tronpath = trpath / "tracing_on"
 
-    await asyncio.gather(*[stop_disruptive(x) for x in active_dutlist])
+    async def stop_disruptive(r):
+        r.cmd_status(f"echo 0 > {tronpath}")
+        trfile = unet.rundir.joinpath(f"{r.name}-trace.txt")
+        with open(trfile, "w+", encoding="ascii") as f:
+            r.cmd_status("cat /sys/kernel/tracing/trace", stdout=f)
+
+    if tracing:
+        await asyncio.gather(*[stop_disruptive(x) for x in active_dutlist])
 
     # #
     # # Get pcap captures
@@ -579,9 +618,9 @@ async def end_trex_cont_test(
     if c:
         stats = collect_trex_stats(c, args.unidirectional)
 
-    vstats = None
-    # vstats = await asyncio.gather(
-    #     *[collect_dut_stats(dut, extended_stats) for vpp in active_dutlist])
+    vstats = await collect_dut_stats(active_dutlist)
+    if start_vstats:
+        vstats = sub_stats(vstats, start_vstats)
 
     active_dutlist = get_active_dut(active_dutlist)
 
@@ -590,43 +629,19 @@ async def end_trex_cont_test(
     #
 
     logger.debug("Collecting disruptive stats")
-    showrun = []
-    for vpp in active_dutlist:
-        sr = "RUN: " + vpp.vppctl("show runtime time").replace("\n", "\nRUN: ")
-        sr += "\nMAX: " + vpp.vppctl("show runtime time max").replace("\n", "\nMAX: ")
-        showrun.append(sr)
 
-    # pcap_files = {}
-    # dispatch_pcap_files = {}
+    async def collect_disruptive(r):
+        trfile = unet.rundir.joinpath(f"{r.name}-trace.txt")
+        with open(trfile, "w+", encoding="ascii") as f:
+            r.cmd_status("cat /sys/kernel/tracing/trace", stdout=f)
 
-    async def collect_disruptive(x):
-        # logger.debug("%s: Collecting disruptive stats", x.host)
-        # if x.host in cap_offs and "No packets" not in cap_offs[x.host]:
-        #     # Grab the pcap file. XXX should go to file named for this test.
-        #     pcap = x.get_remote_file("/tmp/vpp-drops.pcap")
-        #     pcapfile = os.path.join(g_logdir, f"{x.host}-pcap-drop.pcap")
-        #     with open(f"{pcapfile}", "wb") as pcapf:
-        #         pcapf.write(pcap)
-        #     pcap_files[x.host] = pcapfile
-        # if (
-        # x.host in dispatch_cap_offs and "No packets" not in dispatch_cap_offs[x.host]
-        # ):
-        #     # Grab the pcap file. XXX should go to file named for this test.
-        #     pcap = x.get_remote_file("/tmp/dispatch.pcap")
-        #     pcapfile = os.path.join(g_logdir, f"{x.host}-pcap-dispatch.pcap")
-        #     with open(f"{pcapfile}", "wb") as pcapf:
-        #         pcapf.write(pcap)
-        #     dispatch_pcap_files[x.host] = pcapfile
-        # if x.args.event_log_size:
-        #     x.save_event_log()
-        del x
-
-    # for r in asyncio.as_completed([collect_disruptive(vpp) for vpp in dutlist]):
-    #     await r
+    if tracing:
+        for r in asyncio.as_completed([collect_disruptive(x) for x in dutlist]):
+            await r
 
     results = []
-    for vpp in active_dutlist:
-        results.append(collect_disruptive(vpp))
+    # for vpp in active_dutlist:
+    #     results.append(collect_disruptive(vpp))
     for result in results:
         await result
 
@@ -639,9 +654,9 @@ async def end_trex_cont_test(
     #
     # Log show runtime
     #
-    for i, sr in enumerate(showrun):
-        name = dutlist[i].name
-        logger.debug("%s:\n%s", name, sr.replace("\n", f"\n{name}: "))
+    # for i, sr in enumerate(showrun):
+    #     name = dutlist[i].name
+    #     logger.debug("%s:\n%s", name, sr.replace("\n", f"\n{name}: "))
 
     #
     # Print packet drops
@@ -661,6 +676,7 @@ async def end_trex_cont_test(
 async def run_trex_cont_test(
     args,
     c,
+    unet,
     dutlist,
     mult,
     get_streams_func,
@@ -673,7 +689,10 @@ async def run_trex_cont_test(
     startingf=None,
     beforewaitf=None,
     stoppingf=None,
+    tracing=False,
 ):
+
+    start_vstats = collect_dut_stats(dutlist)
 
     starttime, pcap_servers, startingfval = await start_trex_cont_test(
         args,
@@ -686,12 +705,14 @@ async def run_trex_cont_test(
         modeclass,
         statsclass,
         startingf,
+        tracing=tracing,
     )
 
     if beforewaitf:
         await beforewaitf(startingfval)
 
     return await end_trex_cont_test(
+        unet,
         starttime,
         pcap_servers,
         startingfval,
@@ -701,6 +722,8 @@ async def run_trex_cont_test(
         beat_callback,
         beat_time,
         stoppingf,
+        tracing=tracing,
+        start_vstats=start_vstats,
     )
 
 
@@ -714,12 +737,14 @@ def fail_test(args, reason, trex_stats, vstats, dutlist=None):
         dutlist = []
     if trex_stats:
         pprint.pprint(trex_stats, indent=4)
-    for _, vpp in enumerate(dutlist):
-        logger.info("%s", f"VPP HOST: {vpp.host}:")
-        # We do not want bogus way late stats reported!
-        # logger.info(vpp.vppctl("show errors"))
-        # dump_tun_stats(vpp, *vstats[index][-1][1:])
-        # dump_ifstats_one(vpp, vstats[index])
+
+    # for _, vpp in enumerate(dutlist):
+    #     logger.info("%s", f"VPP HOST: {vpp.host}:")
+    #     # We do not want bogus way late stats reported!
+    #     # logger.info(vpp.vppctl("show errors"))
+    #     # dump_tun_stats(vpp, *vstats[index][-1][1:])
+    #     # dump_ifstats_one(vpp, vstats[index])
+
     if args.pause:
         logger.info("%s", f"Pausing after {reason}")
         result = input('Pausing with testbed UP, RETURN to continue, "p" for PDB: ')
@@ -751,6 +776,7 @@ def check_missed(args, trex_stats, vstats, dutlist):
     if args.is_docker and args.dont_use_tfs:
         return
 
+    # XXX update to linux
     # for i, dut in enumerate(dutlist):
     #     trx = trex_stats[i]["ipackets"]
     #     vuser_tx = vstats[i][dut.USER_IFINDEX]["/if/tx"]
@@ -759,9 +785,9 @@ def check_missed(args, trex_stats, vstats, dutlist):
     #         fail_test(args, reason, trex_stats, vstats, dutlist)
 
 
-def log_packet_counts(dutlist, trex_stats, vstats):
+def log_packet_counts(dutlist, trex_stats, vstats, user_intf):
     assert not dutlist or len(dutlist) == 2
-    for i, vpp in enumerate(dutlist):
+    for i, dut in enumerate(dutlist):
         oi = (i + 1) % 2
         missed = trex_stats[i]["rx-missed"]
         pct = trex_stats[i]["rx-missed-pct"]
@@ -776,33 +802,35 @@ def log_packet_counts(dutlist, trex_stats, vstats):
                 pct,
             ),
         )
-        tx = trex_stats[i]["opackets"]
-        rx = vstats[i][vpp.USER_IFINDEX]["/if/rx"]
-        missed = tx - rx
-        if missed:
-            pct = abs((missed / tx) * 100)
-            # mstr = "missed" if missed > 0 else "extra"
-            missed = abs(missed)
-            logging.info(
-                "%s",
-                f"TEST INFO VPP->TREX: {i} tx: {tx} "
-                "rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
-            )
-        tx = trex_stats[i]["opackets"]
-        rx = vstats[i][vpp.USER_IFINDEX]["/if/rx"]
-        missed = tx - rx
-        if missed:
-            pct = abs((missed / tx) * 100)
-            # mstr = "missed" if missed > 0 else "extra"
-            missed = abs(missed)
-            logging.info(
-                "%s",
-                f"TEST INFO VPP->TREX: {i} tx: {tx} "
-                "rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
-            )
+
+        # tx = trex_stats[i]["opackets"]
+        # rx = vstats[i][user_intf]["stats64"]["rx"]["packets"]
+        # missed = tx - rx
+        # if missed:
+        #     pct = abs((missed / tx) * 100)
+        #     # mstr = "missed" if missed > 0 else "extra"
+        #     missed = abs(missed)
+        #     logging.info(
+        #         "%s",
+        #         f"TEST INFO TREX->DUT: {i} tx: {tx} "
+        #         "rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
+        #     )
+
+        # tx = vstats[i][user_intf]["stats64"]["tx"]["packets"]
+        # rx = trex_stats[i]["ipackets"]
+        # missed = tx - rx
+        # if missed:
+        #     pct = abs((missed / tx) * 100)
+        #     # mstr = "missed" if missed > 0 else "extra"
+        #     missed = abs(missed)
+        #     logging.info(
+        #         "%s",
+        #         f"TEST INFO DUT->TREX: {i} tx: {tx} "
+        #         "rx: {rx} {mstr}: {missed} {mstr}-pct: {pct}",
+        #     )
 
 
-def finish_test(module_name, args, dutlist, trex, trex_stats, vstats):
+def finish_test(module_name, args, dutlist, trex, trex_stats, vstats, user_intf):
     del module_name
     # save_stats(module_name, "trex-stats", trex_stats)
     # save_stats(module_name, "vpp-stats", vstats)
@@ -813,7 +841,7 @@ def finish_test(module_name, args, dutlist, trex, trex_stats, vstats):
 
         # logging.debug("TREX Stats:\n%s" % pprint.pformat(trex_stats, indent=4))
 
-        log_packet_counts(dutlist, trex_stats, vstats)
+        log_packet_counts(dutlist, trex_stats, vstats, user_intf)
 
     logging.info("TEST PASSED")
 

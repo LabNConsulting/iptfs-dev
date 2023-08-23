@@ -80,9 +80,28 @@ async def test_net_up(unet):
     logging.debug(r2.conrepl.cmd_raises("ping -w1 -i.2 -c1 11.0.0.1"))
 
 
-async def test_policy_small_pkt(unet, pytestconfig):
-    await _test_policy_small_pkt(unet, pytestconfig, default_rate="5M")
+def is_debug_kernel(unet):
+    if is_debug_kernel.cache is None:
+        r = unet.hosts["r1"]
+        o = r.cmd_nostatus(
+            "gzip -dc /proc/config.gz | egrep '^(CONFIG_DEBUG_SPINLOCK|CONFIG_DEBUG_NET|CONFIG_KASAN)=y'",
+            warn=False,
+        )
+        is_debug_kernel.cache = bool(o.strip())
+    return is_debug_kernel.cache
 
 
-async def test_policy_imix(unet, pytestconfig):
-    await _test_policy_imix(unet, pytestconfig, default_rate="50M")
+is_debug_kernel.cache = None
+
+
+async def test_policy_small_pkt(unet, pytestconfig, astepf):
+    await astepf("Before small packet test")
+    defrate = "4M" if is_debug_kernel(unet) else "40M"
+
+    await _test_policy_small_pkt(unet, pytestconfig, tracing=True, default_rate=defrate)
+
+
+async def test_policy_imix(unet, pytestconfig, astepf):
+    await astepf("Before IMix packet test")
+    defrate = "40M" if is_debug_kernel(unet) else "1000M"
+    await _test_policy_imix(unet, pytestconfig, tracing=True, default_rate=defrate)

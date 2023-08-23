@@ -37,6 +37,7 @@ scapydir = glob.glob(trexlib + "/scapy*")[0]
 # sys.path[0:0] = [trexlib, scapydir]
 sys.path[0:0] = [scapydir]
 
+import common.config
 from common.config import (  # pylint: disable=unused-import
     setup_policy_tun,
     setup_routed_tun,
@@ -136,6 +137,48 @@ async def _network_up(unet):
     r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
 
+    await common.config._network_up(unet, trex=True)
+
+    # Pin the ARP entries
+    logging.debug(r1.conrepl.cmd_status("ping -w1 -i.2 -c1 10.0.1.3"))
+    logging.debug(r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3"))
+    r1.conrepl.cmd_raises("ip neigh change 10.0.1.3 dev eth1")
+    r2.conrepl.cmd_raises("ip neigh change 10.0.1.2 dev eth1")
+
+    # TREX doesn't answer pings and this is causing us ARP headaches apparently :(
+
+    for _ in range(0, 30):
+        # logging.debug(r1.conrepl.cmd_nostatus("ping -w1 -i1 -c1 11.0.0.1"))
+        rc, output = r1.conrepl.cmd_status("ip neigh get 11.0.0.1 dev eth2")
+        logging.info("neighbor on r1: rc %s output: %s", rc, output)
+        if not rc and "FAILED" not in output:
+            break
+        time.sleep(1)
+    else:
+        assert False, "Failed to get ARP for trex port on r1"
+    r1.conrepl.cmd_raises("ip neigh change 11.0.0.1 dev eth2")
+
+    for _ in range(0, 10):
+        # logging.debug(r2.conrepl.cmd_nostatus("ping -w1 -i1 -c1 12.0.0.1"))
+        rc, output = r2.conrepl.cmd_status("ip neigh get 12.0.0.1 dev eth2")
+        logging.info("neighbor on r2: rc %s output: %s", rc, output)
+        if not rc and "FAILED" not in output:
+            break
+        if "FAILED" in output:
+            rc, output = r2.conrepl.cmd_status("ip neigh del 12.0.0.1 dev eth2")
+        time.sleep(1)
+
+    else:
+        rc, output = r2.conrepl.cmd_status("ip neigh del 12.0.0.1 dev eth2")
+        r2.conrepl.cmd_raises("ip neigh add 12.0.0.1 lladdr 02:cc:cc:cc:02:01 dev eth2")
+        # assert False, "Failed to get ARP for trex port on r2"
+    r2.conrepl.cmd_raises("ip neigh change 12.0.0.1 dev eth2")
+
+
+async def __network_up(unet):
+    r1 = unet.hosts["r1"]
+    r2 = unet.hosts["r2"]
+
     await toggle_ipv6(unet, enable=False)
 
     r1.conrepl.cmd_raises("ip route add 12.0.0.0/24 via 10.0.1.3")
@@ -185,7 +228,9 @@ async def _network_up(unet):
     r2.conrepl.cmd_raises("ip neigh change 12.0.0.1 dev eth2")
 
 
-async def _test_policy_small_pkt(unet, pytestconfig, default_rate="100M"):
+async def _test_policy_small_pkt(
+    unet, pytestconfig, tracing=False, default_rate="100M"
+):
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
     profile = bool(pytestconfig.getoption("--profile"))
 
@@ -195,7 +240,7 @@ async def _test_policy_small_pkt(unet, pytestconfig, default_rate="100M"):
 
     # await setup_policy_tun(
     if args.mode != "routed":
-        await setup_routed_tun(
+        await setup_policy_tun(
             unet, ipsec_intf="eth1", mode=args.mode, iptfs_opts=iptfs_opts, trex=True
         )
 
@@ -226,13 +271,14 @@ async def _test_policy_small_pkt(unet, pytestconfig, default_rate="100M"):
         # unet.hosts["r1"].run_in_window("bash")
         # unet.hosts["r2"].run_in_window("bash")
 
-    dutlist = []
+    dutlist = [unet.hosts["r1"], unet.hosts["r2"]]
     imix_table, pps, avg_ipsize, imix_desc = trexutil.get_imix_table(args, c)
     logging.info("pps: %s av_ipsize: %s desc: %s", pps, avg_ipsize, imix_desc)
 
     trex_stats, vstats, _ = await trexutil.run_trex_cont_test(
         args,
         c,
+        unet,
         dutlist,
         1,
         get_streams,
@@ -241,15 +287,17 @@ async def _test_policy_small_pkt(unet, pytestconfig, default_rate="100M"):
         startingf=starting if profile else None,
         beforewaitf=beforewait,
         stoppingf=stop_profile if profile else None,
+        tracing=tracing,
     )
     c.disconnect()
-    trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)
 
-    await remote_cli(unet, "cli>", "CLI", True)
+    trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats, "eth2")
+
+    # await remote_cli(unet, "cli>", "CLI", True)
     # await async_cli(unet)
 
 
-async def _test_policy_imix(unet, pytestconfig, default_rate="1G"):
+async def _test_policy_imix(unet, pytestconfig, tracing=False, default_rate="1G"):
     iptfs_opts = pytestconfig.getoption("--iptfs-opts")
     profile = bool(pytestconfig.getoption("--profile"))
 
@@ -280,7 +328,7 @@ async def _test_policy_imix(unet, pytestconfig, default_rate="1G"):
     def starting():
         return start_profile(unet, "r1", args.duration)
 
-    dutlist = []
+    dutlist = [unet.hosts["r1"], unet.hosts["r2"]]
     imix_table, pps, avg_ipsize, imix_desc = trexutil.get_imix_table(
         args, c, max_imix_size=1400
     )
@@ -288,6 +336,7 @@ async def _test_policy_imix(unet, pytestconfig, default_rate="1G"):
     trex_stats, vstats, _ = await trexutil.run_trex_cont_test(
         args,
         c,
+        unet,
         dutlist,
         1,
         get_streams,
@@ -295,9 +344,10 @@ async def _test_policy_imix(unet, pytestconfig, default_rate="1G"):
         # extended_stats=True)
         startingf=starting if profile else None,
         stoppingf=stop_profile if profile else None,
+        tracing=tracing,
     )
     c.disconnect()
-    trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats)
+    trexutil.finish_test(__name__, args, dutlist, True, trex_stats, vstats, "eth2")
     # await async_cli(unet)
 
 

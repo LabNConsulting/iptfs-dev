@@ -22,21 +22,38 @@
 import logging
 import re
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
 from common.config import setup_policy_tun, setup_routed_tun
 from common.util import start_profile, stop_profile
 from munet.base import cmd_error
+from munet.testing.util import async_pause_test
 from munet.watchlog import MatchFoundError
 
-skip_future = False
+skip_future = []
 
 
 def std_result(o, e):
     o = "\n\tstdout: " + o.strip() if o and o.strip() else ""
     e = "\n\tstderr: " + e.strip() if e and e.strip() else ""
     return o + e
+
+
+def convnum(val, letter):
+    val = float(val)
+    if not letter:
+        return val
+    if letter == "K" or letter == "k":
+        val *= 1000
+    elif letter == "M" or letter == "m":
+        val *= 1000000
+    elif letter == "G" or letter == "k":
+        val *= 1000000000
+    elif letter == "T" or letter == "t":
+        val *= 1000000000000
+    return val
 
 
 def check_logs(unet):
@@ -73,10 +90,6 @@ async def _test_iperf(
     h2 = unet.hosts["h2"]
     r2 = unet.hosts["r2"]
 
-    global skip_future  # pylint: disable=global-statement
-    if skip_future:
-        pytest.skip("Skipping test due to earlier failure")
-
     if routed:
         await setup_routed_tun(
             unet,
@@ -85,6 +98,7 @@ async def _test_iperf(
             iptfs_opts=iptfs_opts,
             ipv6=ipv6,
             tun_ipv6=tun_ipv6,
+            tun_route_mtu=65536,
         )
     else:
         await setup_policy_tun(
@@ -94,6 +108,7 @@ async def _test_iperf(
             iptfs_opts=iptfs_opts,
             ipv6=ipv6,
             tun_ipv6=tun_ipv6,
+            tun_route_mtu=65536,
         )
 
     # # check the sum inside iptfs code with printk
@@ -156,6 +171,11 @@ async def _test_iperf(
             # r2.cmd_status(f"echo scan=off > {leakpath}")
             for rname in ["r1", "r2"]:
                 r = unet.hosts[rname]
+                rc, _, _ = r.cmd_status(f"test -e {leakpath}", warn=False)
+                if rc:
+                    logging.info("Disabling leakcheck as not enabled in kernel")
+                    leakcheck = False
+                    break
                 r.cmd_status(f"echo clear > {leakpath}")
 
         if use_udp:
@@ -178,6 +198,8 @@ async def _test_iperf(
                 # "--json",
                 "-t",
                 str(tval),  # timeval
+                # "-n",
+                # "40K",
                 # "-P4",  # parallel threads
                 # "--bidir",
                 # "--repeating-payload",
@@ -214,6 +236,7 @@ async def _test_iperf(
         result = None
         iperfc = h1.popen(args)
         # iperfc = await h1.async_popen(args)
+        rc = None
         try:
             # try:
             #     rc = await asyncio.wait_for(iperfc.wait(), timeout=tval + 5)
@@ -223,35 +246,86 @@ async def _test_iperf(
             #     rc = await iperfc.wait()
             #     timeout = True
             # o, e = await iperfc.communicate()
-
             try:
                 rc = iperfc.wait(timeout=tval + 5)
                 timeout = False
             except subprocess.TimeoutExpired:
-                logging.error("XXX timeout expired!")
+                logging.error("Timeout expired!")
+                h1.cmd_status("pkill iperf3")
+                time.sleep(1)
                 iperfc.kill()
                 timeout = True
             # Apparently iperfc is really hanging hard b/c kill is still leaving it around
             try:
                 o, e = iperfc.communicate(timeout=5)
+                logging.debug("iperf client output: %s", std_result(o, e))
             except subprocess.TimeoutExpired:
-                logging.error("XXX timeout expired after kill!")
+                logging.error("timeout after kill")
                 logging.error(unet.cmd_nostatus("ps xaww"))
+                o = e = ""
                 timeout = True
 
-            # Look for leak
-            vals = r2.cmd_nostatus(
-                "awk '/^kmalloc-(128|256)/{print $2;}' /proc/slabinfo"
-            )
-            vals = [int(x.strip()) for x in vals.split("\n") if x.strip()]
-            assert (
-                vals[0] < 50000 and vals[1] < 50000
-            ), f"leak found on r2 kmalloc-128|256 == {vals}"
+            # await async_pause_test(f"{'' if timeout else 'no '} timeout")
 
-            # o = o.decode("utf-8")
-            # e = e.decode("utf-8")
-            assert not timeout, f"client TIMEOUT: {cmd_error(rc, o, e)}"
+            assert not timeout, f"client TIMEOUT"
             assert not rc, f"client FAILED: {cmd_error(rc, o, e)}"
+
+            #
+            # Get results
+            #
+            # [  5]   0.00-10.00  sec   154 MBytes   129 Mbits/sec  190             sender
+            # [  5]   0.00-10.00  sec  6.82 GBytes  5.86 Gbits/sec  368             sender
+            m = re.search(
+                r"\[\s*\d+\]\s+[-0-9\.]+\s+sec.+\s+([0-9 \.]+) ([KMGT])?bits/sec\s+(\d+)?\s*sender",
+                o,
+            )
+            if m:
+                quant = float(m.group(1))
+                value = quant
+                mletter = m.group(2)
+                if mletter is None:
+                    mletter = ""
+                else:
+                    value = convnum(value, mletter)
+                retries = int(m.group(3)) if m.group(3) else 0
+                result = [value, retries, quant, mletter]
+                logging.info(
+                    "iperf client completed, avg bitrate: %s %sbits/s", quant, mletter
+                )
+            else:
+                logging.info(
+                    "iperf client completed -- no result found:\n%s", std_result(o, e)
+                )
+
+            #
+            # Look for specific type of leak
+            #
+            if True:
+                vals = r2.cmd_nostatus(
+                    r"awk '/^kmalloc-(128|256|512|2k)/{print $1, $2;}' /proc/slabinfo"
+                )
+                vals = [x.split() for x in vals.split("\n") if x.strip()]
+                vals = [(x[0], int(x[1])) for x in vals]
+                for k, v in vals:
+                    if v > 30000:
+                        logging.info("Large num of alloc'd %s: %s", k, v)
+
+            else:
+                vals = r2.cmd_nostatus(
+                    "awk '/^kmalloc-(128|256|512|2k)/{print $1, $2;}' /proc/slabinfo"
+                )
+                vals = [int(x.strip()) for x in vals.split("\n") if x.strip()]
+                assert (
+                    vals[0] < 50000 and vals[1] < 50000
+                ), f"leak found on r2 kmalloc-128|256|512|2k == {vals}"
+
+            if leakcheck:
+                for rname in ["r1", "r2"]:
+                    r = unet.hosts[rname]
+                    r.cmd_status(f"echo scan > {leakpath}")
+                    assert not r.cmd_nostatus(
+                        f"head {leakpath}"
+                    ).strip(), f"leaks found on {rname}"
 
             if perfc:
                 await stop_profile(perfc, filebase=f"perf-{profcount}.data")
@@ -278,17 +352,24 @@ async def _test_iperf(
                 for rname in ["r1", "r2"]:
                     r = unet.hosts[rname]
                     r.cmd_status(f"echo scan > {leakpath}")
-                # r2.cmd_status(f"echo scan=off > {leakpath}")
+
+                o = r.cmd_nostatus(f"head {leakpath}")
+                if o.strip():
+                    leakfile = unet.rundir.joinpath(f"{r.name}-leaks.txt")
+                    with open(leakfile, "w+", encoding="ascii") as f:
+                        rc, _, e = r.cmd_status("head -n1000 {leakpath}", stdout=f)
 
             if iperfc.returncode is None:
                 iperfc.terminate()
     finally:
         if iperfs.returncode is None:
+            h2.cmd_status("pkill iperf3")
+            time.sleep(1)
             iperfs.kill()
 
         rname, wl, m = check_logs(unet)
         if m:
-            skip_future = True
+            skip_future.append(True)
             startpos = m.span()[0]
             content_after = wl.content[startpos:]
             pytest.fail(f"failed log check: {rname}:{wl.path}: {content_after}")

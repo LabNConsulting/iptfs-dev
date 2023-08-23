@@ -24,7 +24,7 @@ import os
 import pytest
 from common.config import _network_up, setup_policy_tun
 from common.tests import _test_net_up
-from iperf import _test_iperf, check_logs
+from iperf import _test_iperf, check_logs, skip_future
 from munet.testing.fixtures import _unet_impl
 
 # All tests are coroutines
@@ -42,14 +42,15 @@ async def checkrun(pytestconfig):
         )
 
 
-@pytest.fixture(scope="module", name="unet")
+@pytest.fixture(scope="module", name="lcl_unet")
 async def _unet(rundir_module, pytestconfig):
     async for x in _unet_impl(rundir_module, pytestconfig, param="munet_phy"):
         yield x
 
 
 @pytest.fixture(scope="module", autouse=True)
-async def network_up(unet):
+async def network_up(lcl_unet):
+    unet = lcl_unet
     await _network_up(unet, ipv6=unet.ipv6_enable)
     unet.hosts["r1"].add_watch_log("qemu.out")
     unet.hosts["r2"].add_watch_log("qemu.out")
@@ -66,8 +67,8 @@ async def network_up(unet):
 #           fc00::/64         fc00:0:0:1::/64     fc00:0:0:2::/64
 
 
-@pytest.mark.asyncio
-async def test_net_up(unet):
+async def test_net_up(lcl_unet):
+    unet = lcl_unet
     await _test_net_up(unet, ipv6=unet.ipv6_enable)
     check_logs(unet)
 
@@ -75,8 +76,8 @@ async def test_net_up(unet):
 MODE = "iptfs"
 
 
-@pytest.mark.asyncio
-async def test_tun_up(unet, astepf):
+async def test_tun_up(lcl_unet, astepf):
+    unet = lcl_unet
     # iptfs_opts = "dont-frag"
     await setup_policy_tun(
         unet,
@@ -101,15 +102,18 @@ async def test_tun_up(unet, astepf):
     check_logs(unet)
 
 
-@pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
-@pytest.mark.parametrize("pktsize", [None, 88, 536, 1442])
-@pytest.mark.parametrize("ipv6", [False, True])
-@pytest.mark.parametrize("tun_ipv6", [False, True])
-@pytest.mark.parametrize("routed", [False, True])
-@pytest.mark.asyncio
+@pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"], scope="function")
+@pytest.mark.parametrize("pktsize", [None, 88, 536, 1442], scope="function")
+@pytest.mark.parametrize("ipv6", [False, True], scope="function")
+@pytest.mark.parametrize("tun_ipv6", [False, True], scope="function")
+@pytest.mark.parametrize("routed", [False, True], scope="function")
 async def test_iperf(
-    unet, rundir, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
+    lcl_unet, rundir, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
 ):
+    unet = lcl_unet
+    if skip_future:
+        pytest.skip("Skipping test due to earlier failure")
+
     if not unet.ipv6_enable and tun_ipv6:
         pytest.skip("skipping ipv6 as --enable-ipv6 not specified")
     if tun_ipv6 and pktsize and pktsize < 536:
@@ -139,16 +143,17 @@ async def test_iperf(
         profile=pytestconfig.getoption("--profile", False),
         profcount=test_iperf.count,
     )
-    if result:
-        fname = os.path.join(rundir, "../speed-phy.csv")
-        fmode = "w+" if test_iperf.count == 0 else "a+"
-        tunstr = "routed" if routed else "policy"
-        vstr = "IPv6" if tun_ipv6 else "IPv4"
-        with open(fname, fmode, encoding="ascii") as f:
-            print(
-                f"{result[0]},{result[1]},{pktsize},{tunstr},{vstr},{iptfs_opts}\n",
-                file=f,
-            )
+    assert result, "No result from test!"
+
+    fname = os.path.join(rundir, "../speed-phy.csv")
+    fmode = "w+" if test_iperf.count == 0 else "a+"
+    tunstr = "routed" if routed else "policy"
+    vstr = "IPv6" if tun_ipv6 else "IPv4"
+    with open(fname, fmode, encoding="ascii") as f:
+        print(
+            f"{result[2]}{result[3]}bits/s,{result[1]},{result[0]},{pktsize},{tunstr},{vstr},{iptfs_opts}",
+            file=f,
+        )
 
 
 test_iperf.count = -1

@@ -85,6 +85,7 @@ testpaths = [
         "tests/console",
         "tests/errors",
         "tests/iperf",
+        "tests/mtu",
         "tests/phynic",
         "tests/reorder",
         "tests/simplenet",

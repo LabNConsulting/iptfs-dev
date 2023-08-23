@@ -9,10 +9,12 @@ kinds:
       initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
       sshkey: "%CONFIGDIR%/../../root-key"
       #cmdline-extra: "acpi=off idle=poll nokaslr"
+      #cmdline-extra: "idle=poll nokaslr trace_buf_size=1024M"
       cmdline-extra: "idle=poll nokaslr"
-      memory: "8192M"
+      #memory: "2048"
+      memory: "8192"
       kvm: true
-      ncpu: 1
+      ncpu: 2
       console:
         timeout: 180
 

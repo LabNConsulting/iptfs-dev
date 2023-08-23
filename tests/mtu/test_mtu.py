@@ -19,8 +19,6 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 #
 "Test various MTU configurations are handled correctly."
-import asyncio
-import logging
 import os
 
 import pytest
