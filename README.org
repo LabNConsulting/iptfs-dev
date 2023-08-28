@@ -278,6 +278,22 @@ relevant, they're just a place to keep notes while developing IPTFS.
   - need something at end of window that shifts into slot0 (will happend from the above).
     [[file:linux/net/xfrm/xfrm_iptfs.c::extra_drops--; /* we aren't dropping what's in slot0 */]]
 - was_gso == true in ingress/output collect function
+- zero reorder window size
+   [[file:linux/net/xfrm/xfrm_iptfs.c::iptfs_input_ordered(x, skb);]]
+- free list from iptfs_input_reorder
+  [[file:linux/net/xfrm/xfrm_iptfs.c::pr_devinf("freeing list of len %u\n", fcount);]]
+
+*** Ingress (collecting)
+- input GSO packets
+[[file:linux/net/xfrm/xfrm_iptfs.c::netdev_features_t features = netif_skb_features(skb);]]
+*** Ingress (sending)
+- rehoming a fraglist
+[[file:linux/net/xfrm/xfrm_iptfs.c::static struct sk_buff **iptfs_rehome_fraglist(struct sk_buff **nextp,]]
+
+XXXX DO THIS NEXT
+- iptfs_should_fragment
+[[file:linux/net/xfrm/xfrm_iptfs.c::iptfs_should_fragment(skb2, mtu, remaining)) {]]
+XXXX
 
 ** Implementation Catalog
 
@@ -704,6 +720,42 @@ ARP
     at /home/chopps/w/iptfs-dev/linux/arch/x86/kernel/irq.c:240
 #30 0xffffffff82c0146b in asm_common_interrupt () at /home/chopps/w/iptfs-dev/linux/arch/x86/include/asm/idtentry.h:636
 #31 0x0000000000000000 in ?? ()
+
+** nr_frags large packet
+(gdb) p *skb
+$25 = {{{next = 0x0 <fixed_percpu_data>, prev = 0x0 <fixed_percpu_data>, {dev = 0xffff888109008000, dev_scratch = 18446612686516027392}}, rbnode = {
+      __rb_parent_color = 0, rb_right = 0x0 <fixed_percpu_data>, rb_left = 0xffff888109008000}, list = {next = 0x0 <fixed_percpu_data>,
+      prev = 0x0 <fixed_percpu_data>}, ll_node = {next = 0x0 <fixed_percpu_data>}}, {sk = 0x0 <fixed_percpu_data>, ip_defrag_offset = 0}, {tstamp = 0,
+    skb_mstamp_ns = 0},
+  cb = "\b", '\000' <repeats 19 times>, "\001\000\000\000ȉ\373\377\000\000\000\000\316\000\000\000\024\000\000\000ʠ\377\377\342\000\377\377", {{
+      _skb_refdst = 18446612686612525184, destructor = 0x0 <fixed_percpu_data>}, tcp_tsorted_anchor = {next = 0xffff88810ec0f080,
+      prev = 0x0 <fixed_percpu_data>}, _sk_redir = 18446612686612525184}, _nfct = 0, len = 8040, data_len = 4982, mac_len = 0, hdr_len = 0,
+  queue_mapping = 1, __cloned_offset = 0xffff88810e8fb43e "", cloned = 0 '\000', nohdr = 0 '\000', fclone = 0 '\000', peeked = 0 '\000',
+  head_frag = 0 '\000', pfmemalloc = 0 '\000', pp_recycle = 0 '\000', active_extensions = 0 '\000', {{__pkt_type_offset = 0xffff88810e8fb440 "",
+      pkt_type = 0 '\000', ignore_df = 0 '\000', dst_pending_confirm = 0 '\000', ip_summed = 0 '\000', ooo_okay = 0 '\000',
+      __mono_tc_offset = 0xffff88810e8fb441 "", mono_delivery_time = 0 '\000', tc_at_ingress = 0 '\000', tc_skip_classify = 0 '\000',
+      remcsum_offload = 0 '\000', csum_complete_sw = 0 '\000', csum_level = 0 '\000', inner_protocol_type = 0 '\000', l4_hash = 1 '\001', sw_hash = 0 '\000',
+      wifi_acked_valid = 0 '\000', wifi_acked = 0 '\000', no_fcs = 0 '\000', encapsulation = 0 '\000', encap_hdr_csum = 0 '\000', csum_valid = 0 '\000',
+      ndisc_nodetype = 0 '\000', redirected = 0 '\000', nf_skip_egress = 0 '\000', slow_gro = 1 '\001', tc_index = 0, alloc_cpu = 1, {csum = 1048802, {
+          csum_start = 226, csum_offset = 16}}, priority = 0, skb_iif = 8, hash = 2159314812, {vlan_all = 0, {vlan_proto = 0, vlan_tci = 0}}, {napi_id = 69,
+        sender_cpu = 69}, secmark = 0, {mark = 0, reserved_tailroom = 0}, {inner_protocol = 0, inner_ipproto = 0 '\000'}, inner_transport_header = 0,
+      inner_network_header = 0, inner_mac_header = 0, protocol = 8, transport_header = 226, network_header = 206, mac_header = 206}, headers = {
+      __pkt_type_offset = 0xffff88810e8fb440 "", pkt_type = 0 '\000', ignore_df = 0 '\000', dst_pending_confirm = 0 '\000', ip_summed = 0 '\000',
+      ooo_okay = 0 '\000', __mono_tc_offset = 0xffff88810e8fb441 "", mono_delivery_time = 0 '\000', tc_at_ingress = 0 '\000', tc_skip_classify = 0 '\000',
+      remcsum_offload = 0 '\000', csum_complete_sw = 0 '\000', csum_level = 0 '\000', inner_protocol_type = 0 '\000', l4_hash = 1 '\001', sw_hash = 0 '\000',
+      wifi_acked_valid = 0 '\000', wifi_acked = 0 '\000', no_fcs = 0 '\000', encapsulation = 0 '\000', encap_hdr_csum = 0 '\000', csum_valid = 0 '\000',
+      ndisc_nodetype = 0 '\000', redirected = 0 '\000', nf_skip_egress = 0 '\000', slow_gro = 1 '\001', tc_index = 0, alloc_cpu = 1, {csum = 1048802, {
+          csum_start = 226, csum_offset = 16}}, priority = 0, skb_iif = 8, hash = 2159314812, {vlan_all = 0, {vlan_proto = 0, vlan_tci = 0}}, {napi_id = 69,
+        sender_cpu = 69}, secmark = 0, {mark = 0, reserved_tailroom = 0}, {inner_protocol = 0, inner_ipproto = 0 '\000'}, inner_transport_header = 0,
+      inner_network_header = 0, inner_mac_header = 0, protocol = 8, transport_header = 226, network_header = 206, mac_header = 206}}, tail = 3264,
+  end = 3776, head = 0xffff88810ed64000 "", data = 0xffff88810ed640ce "E", truesize = 9334, users = {refs = {counter = 1}},
+  extensions = 0x0 <fixed_percpu_data>}
+(gdb) p *(struct skb_shared_info *)(skb->head + skb->end)
+$26 = {flags = 0 '\000', meta_len = 0 '\000', nr_frags = 2 '\002', tx_flags = 0 '\000', gso_size = 0, gso_segs = 0, frag_list = 0x0 <fixed_percpu_data>,
+  hwtstamps = {{hwtstamp = 0, netdev_data = 0x0 <fixed_percpu_data>}}, gso_type = 0, tskey = 0, dataref = {counter = 1}, xdp_frags_size = 0,
+  destructor_arg = 0x0 <fixed_percpu_data>, frags = {{bv_page = 0xffffea000432cb00, bv_len = 3072, bv_offset = 192}, {bv_page = 0xffffea000432cb80,
+      bv_len = 1910, bv_offset = 192}, {bv_page = 0x0 <fixed_percpu_data>, bv_len = 0, bv_offset = 0} <repeats 15 times>}}
+
 ** Sandbox
 
 *** CONFIG options for tracing
