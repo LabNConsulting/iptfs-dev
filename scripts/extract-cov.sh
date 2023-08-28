@@ -13,7 +13,7 @@ for f in $(find /tmp/unet-test -name 'gcov-data.tgz'); do
     ntmpdir=$tmpdir/$count
     mkdir -p $ntmpdir
     echo extracting resutls from $f to $ntmpdir
-    gzip -dc $f | tar --strip-components=${strip} -C $ntmpdir -xf -
+    gzip -dc $f | tar --strip-components=${strip} -C $ntmpdir -xvf -
     count=$(($count + 1))
 done
 sudo chown -R $USER $tmpdir

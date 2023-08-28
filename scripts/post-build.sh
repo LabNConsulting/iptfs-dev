@@ -80,7 +80,7 @@ chmod -R =0000,u=rwX $TARGET/root/.ssh
 # rm -f $TARGET/etc/profile.d/promptprefix.sh
 
 
-chlogf = $TARGET/etc/strongswan.d/charon-logging.conf
+chlogf=$TARGET/etc/strongswan.d/charon-logging.conf
 if [ -e $chlogf ]; then
     cat <<EOF > $TARGET/etc/strongswan.d/charon-logging.conf
 charon {
