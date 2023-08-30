@@ -202,6 +202,7 @@ async def _network_up3(unet, ipv4=True, ipv6=False, trex=False, minimal=False):
 
     await toggle_ipv6(unet, enable=ipv6)
     await toggle_forward_pmtu(unet, enable=False)
+    await toggle_forwarding(unet, enable=True)
 
     if h1:
         if ipv4:
@@ -370,6 +371,19 @@ async def toggle_forward_pmtu(unet, enable=False):
             node.cmd_raises("sysctl -w net.ipv4.ip_forward_use_pmtu=1")
         else:
             node.cmd_raises("sysctl -w net.ipv4.ip_forward_use_pmtu=0")
+
+
+async def toggle_forwarding(unet, enable=False):
+    nodes = list(unet.hosts.values())
+    if unet.isolated:
+        nodes.append(unet)
+    for node in nodes:
+        if enable:
+            node.cmd_raises("sysctl -w net.ipv4.ip_forward=1")
+            node.cmd_raises("sysctl -w net.ipv6.conf.all.forwarding=1")
+        else:
+            node.cmd_raises("sysctl -w net.ipv4.ip_forward=0")
+            node.cmd_raises("sysctl -w net.ipv6.conf.all.forwarding=0")
 
 
 async def toggle_ipv6(unet, enable=False):
