@@ -70,9 +70,13 @@ async def test_routed_mtu(unet, astepf, pytestconfig):
         unet, iptfs_opts=opts, tun_ipv6=ipv6, network3=True, tun_route_mtu=65535
     )
 
+    await astepf("Send normal ping")
+    h1.cmd_nostatus("ping -W1 -c1 10.0.3.5", warn=False)
+    h1.cmd_raises("ping -c1 10.0.3.5")
+
     await astepf("Send big ping")
     # get the PTMU reply
-    h1.cmd_nostatus("ping -w1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
+    h1.cmd_nostatus("ping -W1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
     h1.cmd_raises("ping -Mdo -s 5000 -c1 10.0.3.5")
 
     await astepf("Test complete")
@@ -94,9 +98,13 @@ async def test_policy_with_routes_mtu(unet, astepf, pytestconfig):
         tun_route_mtu=65535,
     )
 
+    await astepf("Send normal ping")
+    h1.cmd_nostatus("ping -W1 -c1 10.0.3.5", warn=False)
+    h1.cmd_raises("ping -c1 10.0.3.5")
+
     await astepf("Send big ping")
     # get the PTMU reply
-    h1.cmd_nostatus("ping -w1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
+    h1.cmd_nostatus("ping -W1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
     h1.cmd_raises("ping -Mdo -s 5000 -c1 10.0.3.5")
 
 
@@ -134,7 +142,7 @@ async def test_policy_with_table_routes_mtu(unet, astepf, pytestconfig):
 
     await astepf("Send big ping")
     # get the PTMU reply
-    h1.cmd_nostatus("ping -w1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
+    h1.cmd_nostatus("ping -W1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
     h1.cmd_raises("ping -Mdo -s 5000 -c1 10.0.3.5")
 
     await astepf("Test complete")
@@ -170,7 +178,7 @@ async def test_policy_with_default_route_mtu(unet, astepf, pytestconfig):
 
         await astepf("Send big ping")
         # get the PTMU reply
-        h1.cmd_nostatus("ping -w1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
+        h1.cmd_nostatus("ping -W1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
         h1.cmd_raises("ping -Mdo -s 5000 -c1 10.0.3.5")
 
         await astepf("Test complete")
@@ -216,7 +224,7 @@ async def test_policy_with_dummy_mtu(unet, astepf, pytestconfig):
 
         await astepf("Send big ping")
         # get the PTMU reply
-        h1.cmd_nostatus("ping -w1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
+        h1.cmd_nostatus("ping -W1 -Mdo -s 5000 -c1 10.0.3.5", warn=False)
         h1.cmd_raises("ping -Mdo -s 5000 -c1 10.0.3.5")
 
         await astepf("Test complete")

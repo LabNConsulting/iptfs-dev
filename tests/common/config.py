@@ -332,8 +332,8 @@ async def cleanup_config3(unet, ipv4=True, ipv6=False):
             # The route used by the tunnel packets
             r2con.cmd_nostatus("ip route del 10.0.1.2/32 via 10.0.2.3")
 
-            r2con.cmd_nostatus("ip route del 10.0.0.0/24 dev ipsec0")
             r2con.cmd_nostatus("ip route del 10.0.1.0/24 dev ipsec0")
+            r2con.cmd_nostatus("ip route del 10.0.0.0/24 dev ipsec0")
             r2con.cmd_nostatus("ip route del 11.0.0.0/24 dev ipsec0")
             r2con.cmd_nostatus("ip route del 16.0.0.0/8 dev ipsec0")
 
@@ -346,13 +346,13 @@ async def cleanup_config3(unet, ipv4=True, ipv6=False):
             # The route used by the tunnel packets
             r2con.cmd_nostatus("ip route del fc00:0:0:1::2/128 via fc00:0:0:2::3")
 
-            r2con.cmd_nostatus("ip route del fc00:0:0:0::/64 dev ipsec0")
             r2con.cmd_nostatus("ip route del fc00:0:0:1::/64 dev ipsec0")
+            r2con.cmd_nostatus("ip route del fc00:0:0:0::/64 dev ipsec0")
             r2con.cmd_nostatus("ip route del 2011::/64 dev ipsec0")
             r2con.cmd_nostatus("ip route del 2016::/16 dev ipsec0")
 
-            r2con.cmd_nostatus("ip -6 route del fc00:0:0:0::/64 via fc00:0:0:2::3")
             r2con.cmd_nostatus("ip -6 route del fc00:0:0:1::/64 via fc00:0:0:2::3")
+            r2con.cmd_nostatus("ip -6 route del fc00:0:0:0::/64 via fc00:0:0:2::3")
             r2con.cmd_nostatus("ip -6 route del 2011::/64 via fc00:0:0:2::3")
             r2con.cmd_nostatus("ip -6 route del 2016::/16 via fc00:0:0:2::3")
 
@@ -859,12 +859,14 @@ async def setup_routed_tun(
     if ipv4:
         if not trex:
             if r1con:
+                r1con.cmd_raises(f"ip route add 10.0.2.0/24 dev ipsec0 {r1srcip}")
                 if network3:
                     r1con.cmd_raises(f"ip route add 10.0.3.0/24 dev ipsec0 {r1srcip}")
-                else:
-                    r1con.cmd_raises(f"ip route add 10.0.2.0/24 dev ipsec0 {r1srcip}")
             if r2con:
                 r2con.cmd_raises(f"ip route add 10.0.0.0/24 dev ipsec0 {r2srcip}")
+                if network3:
+                    r2con.cmd_raises(f"ip route add 10.0.1.0/24 dev ipsec0 {r2srcip}")
+
         else:
             if r1con:
                 r1con.cmd_raises(f"ip route add 12.0.0.0/24 dev ipsec0 {r1srcip}")
@@ -877,16 +879,17 @@ async def setup_routed_tun(
     if ipv6:
         if not trex:
             if r1con:
+                r1con.cmd_raises(f"ip route add fc00:0:0:2::/64 dev ipsec0 {r1srcip6}")
                 if network3:
                     r1con.cmd_raises(
                         f"ip route add fc00:0:0:3::/64 dev ipsec0 {r1srcip6}"
                     )
-                else:
-                    r1con.cmd_raises(
-                        f"ip route add fc00:0:0:2::/64 dev ipsec0 {r1srcip6}"
-                    )
             if r2con:
                 r2con.cmd_raises(f"ip route add fc00:0:0:0::/64 dev ipsec0 {r2srcip6}")
+                if network3:
+                    r2con.cmd_raises(
+                        f"ip route add fc00:0:0:1::/64 dev ipsec0 {r2srcip6}"
+                    )
         else:
             if r1con:
                 r1con.cmd_raises(f"ip route add 2012::/64 dev ipsec0 {r1srcip6}")
