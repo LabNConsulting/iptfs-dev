@@ -756,6 +756,139 @@ $26 = {flags = 0 '\000', meta_len = 0 '\000', nr_frags = 2 '\002', tx_flags = 0 
   destructor_arg = 0x0 <fixed_percpu_data>, frags = {{bv_page = 0xffffea000432cb00, bv_len = 3072, bv_offset = 192}, {bv_page = 0xffffea000432cb80,
       bv_len = 1910, bv_offset = 192}, {bv_page = 0x0 <fixed_percpu_data>, bv_len = 0, bv_offset = 0} <repeats 15 times>}}
 
+These 2 pages are 0x80 apart (sizeof *page == 0x40 so 2 pages), but the offset
+is 192 (0xc0) on both with lengths of 3072 and 1910 these regions overlap.
+That's b/c the actual page address is not the page struct.
+
+
+Here's a SW based 2 frag version:
+(gdb) p *skb
+$5 = {{{next = 0x0 <fixed_percpu_data>, prev = 0x0 <fixed_percpu_data>, {
+        dev = 0xffff888109210000, dev_scratch = 18446612686518157312}}, rbnode = {
+      __rb_parent_color = 0, rb_right = 0x0 <fixed_percpu_data>,
+      rb_left = 0xffff888109210000}, list = {next = 0x0 <fixed_percpu_data>,
+      prev = 0x0 <fixed_percpu_data>}, ll_node = {next = 0x0 <fixed_percpu_data>}}, {
+    sk = 0x0 <fixed_percpu_data>, ip_defrag_offset = 0}, {tstamp = 0, skb_mstamp_ns = 0},
+  cb = "\004", '\000' <repeats 19 times>, "\001", '\000' <repeats 11 times>, "N\000\000\000\024\000\000\000\306\340\377\377b\000\000", {{_skb_refdst = 18446612686654115968,
+      destructor = 0x0 <fixed_percpu_data>}, tcp_tsorted_anchor = {next = 0xffff8881113b9080,
+      prev = 0x0 <fixed_percpu_data>}, _sk_redir = 18446612686654115968}, _nfct = 0,
+  len = 9000, data_len = 8948, mac_len = 0, hdr_len = 0, queue_mapping = 1,
+  __cloned_offset = 0xffff8881112f657e "", cloned = 0 '\000', nohdr = 0 '\000',
+  fclone = 0 '\000', peeked = 0 '\000', head_frag = 0 '\000', pfmemalloc = 0 '\000',
+  pp_recycle = 0 '\000', active_extensions = 0 '\000', {{
+      __pkt_type_offset = 0xffff8881112f6580 "", pkt_type = 0 '\000', ignore_df = 0 '\000',
+      dst_pending_confirm = 0 '\000', ip_summed = 0 '\000', ooo_okay = 0 '\000',
+      __mono_tc_offset = 0xffff8881112f6581 "", mono_delivery_time = 0 '\000',
+      tc_at_ingress = 0 '\000', tc_skip_classify = 0 '\000', remcsum_offload = 0 '\000',
+      csum_complete_sw = 0 '\000', csum_level = 0 '\000', inner_protocol_type = 0 '\000',
+      l4_hash = 0 '\000', sw_hash = 0 '\000', wifi_acked_valid = 0 '\000',
+      wifi_acked = 0 '\000', no_fcs = 0 '\000', encapsulation = 0 '\000',
+      encap_hdr_csum = 0 '\000', csum_valid = 0 '\000', ndisc_nodetype = 0 '\000',
+      redirected = 0 '\000', nf_skip_egress = 0 '\000', slow_gro = 1 '\001', tc_index = 0,
+      alloc_cpu = 1, {csum = 1048674, {csum_start = 98, csum_offset = 16}}, priority = 0,
+      skb_iif = 4, hash = 0, {vlan_all = 0, {vlan_proto = 0, vlan_tci = 0}}, {napi_id = 66,
+        sender_cpu = 66}, secmark = 0, {mark = 0, reserved_tailroom = 0}, {
+        inner_protocol = 0, inner_ipproto = 0 '\000'}, inner_transport_header = 0,
+      inner_network_header = 0, inner_mac_header = 0, protocol = 8, transport_header = 98,
+      network_header = 78, mac_header = 78}, headers = {
+      __pkt_type_offset = 0xffff8881112f6580 "", pkt_type = 0 '\000', ignore_df = 0 '\000',
+      dst_pending_confirm = 0 '\000', ip_summed = 0 '\000', ooo_okay = 0 '\000',
+      __mono_tc_offset = 0xffff8881112f6581 "", mono_delivery_time = 0 '\000',
+      tc_at_ingress = 0 '\000', tc_skip_classify = 0 '\000', remcsum_offload = 0 '\000',
+      csum_complete_sw = 0 '\000', csum_level = 0 '\000', inner_protocol_type = 0 '\000',
+      l4_hash = 0 '\000', sw_hash = 0 '\000', wifi_acked_valid = 0 '\000',
+      wifi_acked = 0 '\000', no_fcs = 0 '\000', encapsulation = 0 '\000',
+      encap_hdr_csum = 0 '\000', csum_valid = 0 '\000', ndisc_nodetype = 0 '\000',
+      redirected = 0 '\000', nf_skip_egress = 0 '\000', slow_gro = 1 '\001', tc_index = 0,
+      alloc_cpu = 1, {csum = 1048674, {csum_start = 98, csum_offset = 16}}, priority = 0,
+      skb_iif = 4, hash = 0, {vlan_all = 0, {vlan_proto = 0, vlan_tci = 0}}, {napi_id = 66,
+        sender_cpu = 66}, secmark = 0, {mark = 0, reserved_tailroom = 0}, {
+        inner_protocol = 0, inner_ipproto = 0 '\000'}, inner_transport_header = 0,
+      inner_network_header = 0, inner_mac_header = 0, protocol = 8, transport_header = 98,
+      network_header = 78, mac_header = 78}}, tail = 130, end = 320,
+  head = 0xffff88810fa37c00 "", data = 0xffff88810fa37c4e "E", truesize = 9844, users = {
+    refs = {counter = 1}}, extensions = 0x0 <fixed_percpu_data>}
+(gdb) p *((struct skb_shared_info *)(skb->head + skb->end))
+$6 = {flags = 0 '\000', meta_len = 0 '\000', nr_frags = 2 '\002', tx_flags = 0 '\000',
+  gso_size = 0, gso_segs = 0, frag_list = 0x0 <fixed_percpu_data>, hwtstamps = {{
+      hwtstamp = 0, netdev_data = 0x0 <fixed_percpu_data>}}, gso_type = 0, tskey = 0,
+  dataref = {counter = 1}, xdp_frags_size = 0, destructor_arg = 0x0 <fixed_percpu_data>,
+  frags = {{bv_page = 0xffffea0004387000, bv_len = 3506, bv_offset = 29262}, {
+      bv_page = 0xffffea0004387200, bv_len = 5442, bv_offset = 0}, {
+      bv_page = 0x0 <fixed_percpu_data>, bv_len = 0, bv_offset = 0} <repeats 15 times>}}
+
+$3 = {
+[...]
+  frags = {{
+      bv_page = 0xffffea0004387000,
+      bv_len = 3506,
+      bv_offset = 29262
+    }, {
+      bv_page = 0xffffea0004387200,
+      bv_len = 5442,
+      bv_offset = 0
+    }, {
+      bv_page = 0x0 <fixed_percpu_data>,
+      bv_len = 0,
+      bv_offset = 0
+    } <repeats 15 times>}
+}
+
+(gdb) p *$7->frags[0].bv_page
+$18 = {flags = 144115188075921408, {{{lru = {next = 0x0 <fixed_percpu_data>,
+          prev = 0xdead000000000122}, {__filler = 0x0 <fixed_percpu_data>,
+          mlock_count = 290}, buddy_list = {next = 0x0 <fixed_percpu_data>,
+          prev = 0xdead000000000122}, pcp_list = {next = 0x0 <fixed_percpu_data>,
+          prev = 0xdead000000000122}}, mapping = 0x0 <fixed_percpu_data>, {index = 0,
+        share = 0}, private = 0}, {pp_magic = 0, pp = 0xdead000000000122,
+      _pp_mapping_pad = 0, dma_addr = 0, {dma_addr_upper = 0, pp_frag_count = {
+          counter = 0}}}, {compound_head = 0}, {_pt_pad_1 = 0,
+      pmd_huge_pte = 0xdead000000000122, _pt_pad_2 = 0, {pt_mm = 0x0 <fixed_percpu_data>,
+        pt_frag_refcount = {counter = 0}}, ptl = 0x0 <fixed_percpu_data>}, {
+      pgmap = 0x0 <fixed_percpu_data>, zone_device_data = 0xdead000000000122},
+    callback_head = {next = 0x0 <fixed_percpu_data>, func = 0xdead000000000122}}, {
+    _mapcount = {counter = -1}, page_type = 4294967295}, _refcount = {counter = 1}}
+(gdb) p/x *$7->frags[0].bv_page
+$20 = {flags = 0x200000000010000, {{{lru = {next = 0x0, prev = 0xdead000000000122}, {
+          __filler = 0x0, mlock_count = 0x122}, buddy_list = {next = 0x0,
+          prev = 0xdead000000000122}, pcp_list = {next = 0x0, prev = 0xdead000000000122}},
+      mapping = 0x0, {index = 0x0, share = 0x0}, private = 0x0}, {pp_magic = 0x0,
+      pp = 0xdead000000000122, _pp_mapping_pad = 0x0, dma_addr = 0x0, {dma_addr_upper = 0x0,
+        pp_frag_count = {counter = 0x0}}}, {compound_head = 0x0}, {_pt_pad_1 = 0x0,
+      pmd_huge_pte = 0xdead000000000122, _pt_pad_2 = 0x0, {pt_mm = 0x0, pt_frag_refcount = {
+          counter = 0x0}}, ptl = 0x0}, {pgmap = 0x0, zone_device_data = 0xdead000000000122},
+    callback_head = {next = 0x0, func = 0xdead000000000122}}, {_mapcount = {
+      counter = 0xffffffff}, page_type = 0xffffffff}, _refcount = {counter = 0x1}}
+
+(gdb) p *$7->frags[1].bv_page
+$19 = {flags = 144115188075921408, {{{lru = {next = 0x0 <fixed_percpu_data>,
+          prev = 0xdead000000000122}, {__filler = 0x0 <fixed_percpu_data>,
+          mlock_count = 290}, buddy_list = {next = 0x0 <fixed_percpu_data>,
+          prev = 0xdead000000000122}, pcp_list = {next = 0x0 <fixed_percpu_data>,
+          prev = 0xdead000000000122}}, mapping = 0x0 <fixed_percpu_data>, {index = 0,
+        share = 0}, private = 0}, {pp_magic = 0, pp = 0xdead000000000122,
+      _pp_mapping_pad = 0, dma_addr = 0, {dma_addr_upper = 0, pp_frag_count = {
+          counter = 0}}}, {compound_head = 0}, {_pt_pad_1 = 0,
+      pmd_huge_pte = 0xdead000000000122, _pt_pad_2 = 0, {pt_mm = 0x0 <fixed_percpu_data>,
+        pt_frag_refcount = {counter = 0}}, ptl = 0x0 <fixed_percpu_data>}, {
+      pgmap = 0x0 <fixed_percpu_data>, zone_device_data = 0xdead000000000122},
+    callback_head = {next = 0x0 <fixed_percpu_data>, func = 0xdead000000000122}}, {
+    _mapcount = {counter = -1}, page_type = 4294967295}, _refcount = {counter = 4}}
+(gdb) p/x *$7->frags[1].bv_page
+$21 = {flags = 0x200000000010000, {{{lru = {next = 0x0, prev = 0xdead000000000122}, {
+          __filler = 0x0, mlock_count = 0x122}, buddy_list = {next = 0x0,
+          prev = 0xdead000000000122}, pcp_list = {next = 0x0, prev = 0xdead000000000122}},
+      mapping = 0x0, {index = 0x0, share = 0x0}, private = 0x0}, {pp_magic = 0x0,
+      pp = 0xdead000000000122, _pp_mapping_pad = 0x0, dma_addr = 0x0, {dma_addr_upper = 0x0,
+        pp_frag_count = {counter = 0x0}}}, {compound_head = 0x0}, {_pt_pad_1 = 0x0,
+      pmd_huge_pte = 0xdead000000000122, _pt_pad_2 = 0x0, {pt_mm = 0x0, pt_frag_refcount = {
+          counter = 0x0}}, ptl = 0x0}, {pgmap = 0x0, zone_device_data = 0xdead000000000122},
+    callback_head = {next = 0x0, func = 0xdead000000000122}}, {_mapcount = {
+      counter = 0xffffffff}, page_type = 0xffffffff}, _refcount = {counter = 0x4}}
+
+
+
+
 ** Sandbox
 
 *** CONFIG options for tracing
