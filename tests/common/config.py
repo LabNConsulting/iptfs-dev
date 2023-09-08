@@ -64,6 +64,10 @@ async def _network_up(
         await ethtool_disable_offloads(r2, g_offloads)
 
     await toggle_ipv6(unet, enable=ipv6)
+    await toggle_forward_pmtu(unet, enable=False)
+    await toggle_forwarding(unet, enable=True)
+
+    await toggle_ipv6(unet, enable=ipv6)
 
     if ipv4:
         if h1:

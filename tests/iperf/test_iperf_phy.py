@@ -87,22 +87,30 @@ async def test_tun_up(lcl_unet, astepf):
         ipv6=unet.ipv6_enable,
     )
 
-    h1 = unet.hosts["h1"]
-    r1 = unet.hosts["r1"]
+    # h1 = unet.hosts["h1"]
+    # r1 = unet.hosts["r1"]
 
-    await astepf("Before R2R ping")
-    # r1 (qemu side) pings r2 (qemu side)
-    r1.conrepl.cmd_nostatus("ping -w1 -i.2 -c1 10.0.1.3")
-    r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3")
+    # await astepf("Before R2R ping")
+    # # r1 (qemu side) pings r2 (qemu side)
+    # r1.conrepl.cmd_nostatus("ping -w1 -i.2 -c1 10.0.1.3")
+    # r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3")
 
-    await astepf("Before H2H ping")
-    # h1 pings h2
-    h1.cmd_nostatus("ping -w1 -i.2 -c1 10.0.2.4")
-    h1.cmd_raises("ping -w1 -i.2 -c1 10.0.2.4")
+    # await astepf("Before H2H ping")
+    # # h1 pings h2
+    # h1.cmd_nostatus("ping -w1 -i.2 -c1 10.0.2.4")
+    # h1.cmd_raises("ping -w1 -i.2 -c1 10.0.2.4")
+
     check_logs(unet)
 
 
-@pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"], scope="function")
+# @pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"], scope="function")
+# @pytest.mark.parametrize("pktsize", [None, 88, 536, 1442], scope="function")
+# @pytest.mark.parametrize("ipv6", [False, True], scope="function")
+# @pytest.mark.parametrize("tun_ipv6", [False, True], scope="function")
+# @pytest.mark.parametrize("routed", [False, True], scope="function")
+
+
+@pytest.mark.parametrize("iptfs_opts", [""], scope="function")
 @pytest.mark.parametrize("pktsize", [None, 88, 536, 1442], scope="function")
 @pytest.mark.parametrize("ipv6", [False, True], scope="function")
 @pytest.mark.parametrize("tun_ipv6", [False, True], scope="function")

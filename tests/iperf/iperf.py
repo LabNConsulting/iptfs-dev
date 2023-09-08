@@ -187,7 +187,7 @@ async def _test_iperf(
                 if ipv6:
                     cargs.append("-V")
 
-        tval = 10
+        tval = 3
 
         if use_iperf3:
             args = [

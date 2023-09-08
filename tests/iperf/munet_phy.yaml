@@ -15,7 +15,8 @@ topology:
           hostintf: "enp27s0f0v0"
           ip: 10.0.0.1/24
           ipv6: "fc00:0:0:0::1/64"
-          mtu: 9000
+          # mtu: 9000
+          mtu: 1400
     - name: r1
       kind: linux
       connections:
@@ -29,7 +30,8 @@ topology:
           physical: "0000:d8:02.0"
           ip: 10.0.0.2/24
           ipv6: "fc00:0:0:0::2/64"
-          mtu: 9000
+          # mtu: 9000
+          mtu: 1400
     - name: r2
       kind: linux
       connections:
@@ -43,7 +45,8 @@ topology:
           physical: "0000:d8:0a.0"
           ip: 10.0.2.3/24
           ipv6: "fc00:0:0:2::3/64"
-          mtu: 9000
+          # mtu: 9000
+          mtu: 1400
     - name: h2
       connections:
         - to: mgmt0
@@ -51,7 +54,8 @@ topology:
           hostintf: "enp27s0f1v0"
           ip: 10.0.2.4/24
           ipv6: "fc00:0:0:2::4/64"
-          mtu: 9000
+          # mtu: 9000
+          mtu: 1400
 
 kinds:
   - name: linux
@@ -65,6 +69,7 @@ kinds:
       sshkey: "%CONFIGDIR%/../../root-key"
       #cmdline-extra: "acpi=off nokaslr idle=poll"
       # cmdline-extra: "nokaslr slub_debug=U,kmalloc-256,kmalloc-128"
+      # cmdline-extra: "nokaslr idle=poll"
       cmdline-extra: "nokaslr"
       # memory: "8192M"
       memory: "16384M"
