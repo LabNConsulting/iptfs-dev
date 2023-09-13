@@ -283,7 +283,7 @@ def line_rate_to_pps(args, l1_rate, ipmtu, iptfs_mtu):
     return pps
 
 
-async def start_profile(unet, hostname, tval):
+def start_profile(unet, hostname, tval):
     perfargs = [
         "perf",
         "record",
@@ -298,24 +298,22 @@ async def start_profile(unet, hostname, tval):
         tval,
     ]
     host = unet.hosts[hostname]
-    await host.async_cmd_raises("sysctl -w kernel.perf_cpu_time_max_percent=75")
+    host.cmd_raises("sysctl -w kernel.perf_cpu_time_max_percent=75")
     logging.info("Starting perf-profile on %s for %s", hostname, tval)
 
-    p = await host.async_popen(perfargs, use_pty=True, start_new_session=True)
+    p = host.popen(perfargs, use_pty=True, start_new_session=True)
     p.host = host
     return p
 
 
-async def stop_profile(p, filebase="perf.data"):
+def stop_profile(p, filebase="perf.data"):
     try:
         try:
             # logging.info("signaling perf to exit")
             # p.send_signal(signal.SIGTERM)
             logging.info("waiting for perf to exit")
-            o, e = await asyncio.wait_for(p.communicate(), timeout=5.0)
-            o = o.decode("utf-8")
+            o, e = p.communicate(timeout=5.0)
             o = "\nerror:\n" + o if o else ""
-            e = e.decode("utf-8")
             e = "\nerror:\n" + e if e else ""
             logging.info(
                 "perf rc: %s%s%s",
@@ -338,7 +336,7 @@ async def stop_profile(p, filebase="perf.data"):
             logging.info("terminating perf")
             p.terminate()
             try:
-                _, e = await asyncio.wait_for(p.communicate(), timeout=2.0)
+                _, e = p.communicate(timeout=2.0)
                 logging.warning("perf rc: %s error: %s", p.returncode, e)
             except TimeoutError:
                 logging.warning(

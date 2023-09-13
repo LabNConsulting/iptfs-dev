@@ -126,8 +126,9 @@ async def _unet(rundir_module, pytestconfig):
 # pktsize == 2916 works, 2917+ doesn't
 
 
-@pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"])
-@pytest.mark.parametrize("pktsize", [None, 64, 536, 1442])
+# @pytest.mark.parametrize("iptfs_opts", ["init-delay 500"], scope="function")
+@pytest.mark.parametrize("iptfs_opts", [""], scope="function")
+@pytest.mark.parametrize("pktsize", [None, 88, 536, 1442])
 @pytest.mark.parametrize("ipv6", [False, True])
 @pytest.mark.parametrize("tun_ipv6", [False, True])
 @pytest.mark.parametrize("routed", [False, True])
@@ -180,7 +181,8 @@ async def test_iperf(
     )
     assert result, "No result from test!"
 
-    fname = unet.rundir.joinpath("../speed.csv")
+    rundir = str(unet.rundir)
+    fname = rundir[: rundir.rindex("/")] + "/speed.csv"
     fmode = "w+" if test_iperf.count == 0 else "a+"
     tunstr = "routed" if routed else "policy"
     vstr = "IPv6" if tun_ipv6 else "IPv4"

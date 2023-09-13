@@ -110,6 +110,9 @@ async def test_tun_up(lcl_unet, astepf):
 # @pytest.mark.parametrize("routed", [False, True], scope="function")
 
 
+# @pytest.mark.parametrize("iptfs_opts", ["init-delay 1000"], scope="function")
+
+
 @pytest.mark.parametrize("iptfs_opts", [""], scope="function")
 @pytest.mark.parametrize("pktsize", [None, 88, 536, 1442], scope="function")
 @pytest.mark.parametrize("ipv6", [False, True], scope="function")
@@ -153,7 +156,7 @@ async def test_iperf(
     )
     assert result, "No result from test!"
 
-    fname = os.path.join(rundir, "../speed-phy.csv")
+    fname = rundir[: rundir.rindex("/")] + "/speed-phy.csv"
     fmode = "w+" if test_iperf.count == 0 else "a+"
     tunstr = "routed" if routed else "policy"
     vstr = "IPv6" if tun_ipv6 else "IPv4"

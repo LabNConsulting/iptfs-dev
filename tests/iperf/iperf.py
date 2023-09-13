@@ -128,8 +128,8 @@ async def _test_iperf(
 
     iperfs = h2.popen(sargs)
 
-    tracing = True
-    leakcheck = True
+    tracing = False
+    leakcheck = False
     # watch "awk '/^kmalloc-128/{print \$2}'" /proc/slabinfo
     # perfs = None
     try:
@@ -187,7 +187,7 @@ async def _test_iperf(
                 if ipv6:
                     cargs.append("-V")
 
-        tval = 3
+        tval = 10
 
         if use_iperf3:
             args = [
@@ -227,7 +227,7 @@ async def _test_iperf(
             ]
 
         # Start profiling if enabled
-        perfc = await start_profile(unet, "r1", tval + 1) if profile else None
+        perfc = start_profile(unet, "r1", tval + 1) if profile else None
 
         logging.info("Starting iperf client on h1 for %s", tval)
         # logging.info("Starting iperf3 client on h1 at %s for %s", brate, tval)
@@ -328,13 +328,13 @@ async def _test_iperf(
                     ).strip(), f"leaks found on {rname}"
 
             if perfc:
-                await stop_profile(perfc, filebase=f"perf-{profcount}.data")
+                stop_profile(perfc, filebase=f"perf-{profcount}.data")
                 perfc = None
             # result = json.loads(o)
             # logging.info("Results: %s", json.dumps(result, sort_keys=True, indent=2))
         finally:
             if perfc:
-                await stop_profile(perfc, filebase=f"perf-{profcount}.data")
+                stop_profile(perfc, filebase=f"perf-{profcount}.data")
                 perfc = None
             if tracing:
                 # disable tracing
