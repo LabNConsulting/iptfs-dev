@@ -1,6 +1,6 @@
-LINUXCONFIG ?= linux.config
+# LINUXCONFIG ?= linux.config
 # LINUXCONFIG ?= linux-cov.config
-# LINUXCONFIG ?= linux-fast.config
+LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
 # LINUXCONFIG ?= linux-nosmp.config
 
@@ -16,15 +16,16 @@ setup:
 	([ -d linux ] || [ -h linux ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
 kernel: output-linux/arch/x86/boot/bzImage
+# kernel: linux/arch/x86/boot/bzImage
 
 rootfs: output-buildroot/images/rootfs.cpio.gz
 
 # These aren't phoney but we always want to descend to check them with make
+# .PHONY: linux/arch/x86/boot/bzImage output-buildroot/images/rootfs.cpio.gz
 .PHONY: output-linux/arch/x86/boot/bzImage output-buildroot/images/rootfs.cpio.gz
 
 linux-defconfig:
 	make -C linux O=../output-linux defconfig
-
 linux-menuconfig:
 	make -C linux O=../output-linux menuconfig
 
@@ -38,6 +39,10 @@ output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
 	mkdir -p output-linux
 	make -C linux -j$(shell nproc) O=../output-linux
 	(cd linux && scripts/clang-tools/gen_compile_commands.py -d../output-linux)
+
+# linux/arch/x86/boot/bzImage: linux/.config
+# 	make -C linux -j$(shell nproc)
+# 	(cd linux && scripts/clang-tools/gen_compile_commands.py)
 
 
 output-buildroot/images/rootfs.cpio.gz: output-buildroot output-buildroot/.config
@@ -83,17 +88,30 @@ ci-extract-cov:
 #
 # Personal
 #
+# PERFTEST := tests/stress/test_stress_phy.py::test_policy_small_pkt
+# PERFSLAB := tests.stress.test_stress_phy
+#PERFFILE := ./res-latest/$(PERFSLAB)/r1/perf-0.data
+
+PERFTEST := tests/iperf/test_iperf_phy.py::test_iperf[False-False-False-88-]
+PERFSLAB := tests.iperf.test_iperf_phy
+PERFFILE := /tmp/unet-test/$(PERFSLAB)/r1/perf-0.data
+
 flame-clean:
-	sudo rm -f /tmp/out.perf-folded flame.svg /tmp/unet-test/tests.stress.test_stress_phy/r1/perf.data
+	sudo rm -f /tmp/out.perf-folded flame.svg $(PERFFILE)
 
 flame: flame.svg
 	scp flame.svg ja:
 
-/tmp/unet-test/tests.stress.test_stress_phy/r1/perf.data:
-	sudo -E pytest -s -v tests/stress/test_stress_phy.py::test_policy_small_pkt  --stdout=r1  --enable-physical --profile --duration=30 || true
+$(PERFFILE):
+	sudo -E pytest -s -v '$(PERFTEST)' --enable-physical --profile || true
 
-/tmp/out.perf-folded: /tmp/unet-test/tests.stress.test_stress_phy/r1/perf.data
-	(cd FlameGraph && perf script --vmlinux ../output-linux/vmlinux -i ../$< | ./stackcollapse-perf.pl > /tmp/out.perf-folded)
+PERF := ../output-buildroot/target/usr/bin/perf
+
+/tmp/out.perf: $(PERFFILE)
+	(cd FlameGraph && $(PERF) script --vmlinux ../output-linux/vmlinux -i $< > /tmp/out.perf)
+
+/tmp/out.perf-folded: /tmp/out.perf
+	(cd FlameGraph && cat /tmp/out.perf | ./stackcollapse-perf.pl > /tmp/out.perf-folded)
 
 flame.svg: /tmp/out.perf-folded
 	(cd FlameGraph && ./flamegraph.pl --height=16 --fontsize=6 $< > ../$@)
