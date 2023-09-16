@@ -2525,3 +2525,24 @@ broadcast 127.255.255.255 dev lo table local proto kernel scope link src 127.0.0
 local 192.168.0.3 dev eth0 table local proto kernel scope host src 192.168.0.3
 broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168.0.3
 ------- End: rm ------
+
+* features/sharing gso/gro_cells
+(py39) [0s][04:14:18 labnh:~/w/iptfs-dev]$ python scripts/feat2str.py 0x201901fd54bb3
+['SG_BIT', 'IP_CSUM_BIT', 'IPV6_CSUM_BIT', 'HIGHDMA_BIT', 'HW_VLAN_CTAG_TX_BIT',
+'HW_VLAN_CTAG_RX_BIT', 'HW_VLAN_CTAG_FILTER_BIT', 'GSO_BIT', 'GRO_BIT',
+
+'TSO_BIT', 'TSO_ECN_BIT', 'TSO6_BIT', 'GSO_GRE_BIT', 'GSO_GRE_CSUM_BIT',
+'GSO_IPXIP4_BIT', 'GSO_IPXIP6_BIT', 'GSO_UDP_TUNNEL_BIT',
+'GSO_UDP_TUNNEL_CSUM_BIT', 'GSO_PARTIAL_BIT', 'SCTP_CRC_BIT', 'RXHASH_BIT',
+'RXCSUM_BIT', 'HW_TC_BIT']
+
+# This is missing {GRE,UDP}_TUNNEL_CSUM_BIT's
+
+(py39) [0s][04:56:02 labnh:~/w/iptfs-dev]$ python scripts/feat2str.py 0x2019017554bb3
+['SG_BIT', 'IP_CSUM_BIT', 'IPV6_CSUM_BIT', 'HIGHDMA_BIT', 'HW_VLAN_CTAG_TX_BIT',
+'HW_VLAN_CTAG_RX_BIT', 'HW_VLAN_CTAG_FILTER_BIT', 'GSO_BIT', 'GRO_BIT',
+
+'TSO_BIT', 'TSO_ECN_BIT', 'TSO6_BIT', 'GSO_GRE_BIT',
+'GSO_IPXIP4_BIT', 'GSO_IPXIP6_BIT', 'GSO_UDP_TUNNEL_BIT',
+                           'GSO_PARTIAL_BIT', 'SCTP_CRC_BIT', 'RXHASH_BIT',
+ 'RXCSUM_BIT', 'HW_TC_BIT']
