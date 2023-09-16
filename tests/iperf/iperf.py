@@ -85,6 +85,7 @@ async def _test_iperf(
     tun_ipv6=False,
     profile=False,
     profcount=0,
+    tracing=False,
 ):
     h1 = unet.hosts["h1"]
     h2 = unet.hosts["h2"]
@@ -128,7 +129,6 @@ async def _test_iperf(
 
     iperfs = h2.popen(sargs)
 
-    tracing = False
     leakcheck = False
     # watch "awk '/^kmalloc-128/{print \$2}'" /proc/slabinfo
     # perfs = None
@@ -187,7 +187,7 @@ async def _test_iperf(
                 if ipv6:
                     cargs.append("-V")
 
-        tval = 10
+        tval = 3
 
         if use_iperf3:
             args = [
@@ -196,6 +196,8 @@ async def _test_iperf(
                 # "--get-server-output",
                 # "--port=5201",
                 # "--json",
+                "-P",
+                "8",
                 "-t",
                 str(tval),  # timeval
                 # "-n",

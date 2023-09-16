@@ -56,6 +56,12 @@ def pytest_addoption(parser):  # pylint: disable=E0102
         help="Enable profiling if supported by test",
     )
 
+    parser.addoption(
+        "--tracing",
+        action="store_true",
+        help="Enable tracing if supported by test",
+    )
+
     rundir_help = "directory for running in and log files"
     parser.addini("rundir", rundir_help, default="/tmp/unet-test")
     parser.addoption("--rundir", metavar="DIR", help=rundir_help)

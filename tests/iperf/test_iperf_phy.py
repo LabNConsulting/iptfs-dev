@@ -153,6 +153,7 @@ async def test_iperf(
         tun_ipv6=tun_ipv6,
         profile=pytestconfig.getoption("--profile", False),
         profcount=test_iperf.count,
+        tracing=pytestconfig.getoption("--tracing", False),
     )
     assert result, "No result from test!"
 
