@@ -103,7 +103,19 @@ async def test_tun_up(lcl_unet, astepf):
     check_logs(unet)
 
 
+# overrun the queue setup
+# @pytest.mark.parametrize(
+#     "iptfs_opts", ["pkt-size 256 max-queue-size 100000"], scope="function"
+# )
+# @pytest.mark.parametrize("pktsize", [8000])
+# @pytest.mark.parametrize("ipv6", [False])
+# @pytest.mark.parametrize("tun_ipv6", [False])
+# @pytest.mark.parametrize("routed", [False])
+
 # @pytest.mark.parametrize("iptfs_opts", ["", "dont-frag"], scope="function")
+# @pytest.mark.parametrize("iptfs_opts", ["init-delay 1000"], scope="function")
+
+# @pytest.mark.parametrize("iptfs_opts", [""], scope="function")
 # @pytest.mark.parametrize("pktsize", [None, 88, 536, 1442], scope="function")
 # @pytest.mark.parametrize("ipv6", [False, True], scope="function")
 # @pytest.mark.parametrize("tun_ipv6", [False, True], scope="function")
@@ -127,7 +139,7 @@ async def test_iperf(
 
     if not unet.ipv6_enable and tun_ipv6:
         pytest.skip("skipping ipv6 as --enable-ipv6 not specified")
-    if tun_ipv6 and pktsize and pktsize < 536:
+    if ipv6 and pktsize and pktsize < 536:
         pytest.skip("Can't run IPv6 iperf with MSS < 536")
         return
 
@@ -154,6 +166,7 @@ async def test_iperf(
         profile=pytestconfig.getoption("--profile", False),
         profcount=test_iperf.count,
         tracing=pytestconfig.getoption("--tracing", False),
+        duration=pytestconfig.getoption("--duration", 10.0),
     )
     assert result, "No result from test!"
 

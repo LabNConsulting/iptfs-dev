@@ -34,6 +34,13 @@ from munet.testing.hooks import pytest_configure as _pytest_configure
 
 def pytest_addoption(parser):  # pylint: disable=E0102
     parser.addoption(
+        "--duration",
+        default=10.0,
+        type=float,
+        help="Enable tracing if supported by test",
+    )
+
+    parser.addoption(
         "--enable-ipv6",
         action="store_true",
         help="Enable IPv6 testing",

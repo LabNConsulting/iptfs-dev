@@ -86,6 +86,7 @@ async def _test_iperf(
     profile=False,
     profcount=0,
     tracing=False,
+    duration=10,
 ):
     h1 = unet.hosts["h1"]
     h2 = unet.hosts["h2"]
@@ -187,7 +188,7 @@ async def _test_iperf(
                 if ipv6:
                     cargs.append("-V")
 
-        tval = 3
+        tval = duration
 
         if use_iperf3:
             args = [
@@ -249,7 +250,10 @@ async def _test_iperf(
             #     timeout = True
             # o, e = await iperfc.communicate()
             try:
-                rc = iperfc.wait(timeout=tval + 5)
+                if tval > 60:
+                    rc = iperfc.wait(timeout=tval + 20)
+                else:
+                    rc = iperfc.wait(timeout=tval + 5)
                 timeout = False
             except subprocess.TimeoutExpired:
                 logging.error("Timeout expired!")

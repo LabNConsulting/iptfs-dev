@@ -127,6 +127,16 @@ async def _unet(rundir_module, pytestconfig):
 
 
 # @pytest.mark.parametrize("iptfs_opts", ["init-delay 500"], scope="function")
+# @pytest.mark.parametrize("pktsize", [None, 88, 536, 8000])
+# @pytest.mark.parametrize("ipv6", [False, True])
+# @pytest.mark.parametrize("tun_ipv6", [False, True])
+# @pytest.mark.parametrize("routed", [False, True])
+
+# @pytest.mark.parametrize(
+#     "iptfs_opts", ["pkt-size 256 max-queue-size 100000"], scope="function"
+# )
+
+
 @pytest.mark.parametrize("iptfs_opts", [""], scope="function")
 @pytest.mark.parametrize("pktsize", [None, 88, 536, 1442])
 @pytest.mark.parametrize("ipv6", [False, True])
@@ -179,6 +189,7 @@ async def test_iperf(
         profile=pytestconfig.getoption("--profile", False),
         profcount=test_iperf.count,
         tracing=pytestconfig.getoption("--tracing", False),
+        duration=pytestconfig.getoption("--duration", 10.0),
     )
     assert result, "No result from test!"
 

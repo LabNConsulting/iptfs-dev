@@ -29,8 +29,8 @@ from . import iptfs
 
 g_offloads = [
     # These are both required on my machine to get rid of GSO
-    # "generic-receive-offload",
-    # "rx-gro-hw",
+    "generic-receive-offload",
+    "rx-gro-hw",
     #     # These are not required to get rid of GSO in iptfs path
     #     # "generic-segmentation-offload",
     #     # "tcp-segmentation-offload",
@@ -64,10 +64,9 @@ async def _network_up(
         await ethtool_disable_offloads(r2, g_offloads)
 
     await toggle_ipv6(unet, enable=ipv6)
+    await toggle_ecn(unet, enable=True)
     await toggle_forward_pmtu(unet, enable=False)
     await toggle_forwarding(unet, enable=True)
-
-    await toggle_ipv6(unet, enable=ipv6)
 
     if ipv4:
         if h1:
@@ -205,6 +204,7 @@ async def _network_up3(unet, ipv4=True, ipv6=False, trex=False, minimal=False):
         await ethtool_disable_offloads(r2, g_offloads)
 
     await toggle_ipv6(unet, enable=ipv6)
+    await toggle_ecn(unet, enable=True)
     await toggle_forward_pmtu(unet, enable=False)
     await toggle_forwarding(unet, enable=True)
 
@@ -364,6 +364,19 @@ async def cleanup_config3(unet, ipv4=True, ipv6=False):
         r2con.cmd_nostatus("ip link del ipsec0")
         r2con.cmd_nostatus("ip x s deleteall")
         r2con.cmd_nostatus("ip x p deleteall")
+
+
+async def toggle_ecn(unet, enable=False):
+    nodes = list(unet.hosts.values())
+    if unet.isolated:
+        nodes.append(unet)
+    for node in nodes:
+        if enable:
+            node.cmd_raises("sysctl -w net.ipv4.tcp_ecn=1")
+            node.cmd_raises("sysctl -w net.ipv4.tcp_ecn_fallback=0")
+        else:
+            node.cmd_raises("sysctl -w net.ipv4.tcp_ecn=0")
+            node.cmd_raises("sysctl -w net.ipv4.tcp_ecn_fallback=1")
 
 
 async def toggle_forward_pmtu(unet, enable=False):
