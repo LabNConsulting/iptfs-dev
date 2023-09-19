@@ -22,6 +22,7 @@
 import asyncio
 import copy
 import datetime
+import inspect
 import json
 import logging
 import pprint
@@ -512,13 +513,6 @@ async def start_trex_cont_test(
             r.cmd_nostatus(f"echo 1 > {evp}")
             r.cmd_status(f"echo 1 > {tronpath}")
 
-        # if v.args.event_log_size and not v.args.event_log_startup:
-        #     v.vppctl("event-logger restart")
-        #     if v.args.event_log_dispatch:
-        #         v.vppctl("elog trace api barrier dispatch")
-        #     elif v.args.event_log_barrier:
-        #         v.vppctl("elog trace api barrier ")
-
     #
     # Don't bother starting test if a VPP has exited.
     #
@@ -529,7 +523,8 @@ async def start_trex_cont_test(
     #
     # Start the traffic
     #
-    startingfval = await startingf() if startingf else None
+    aw = startingf() if startingf else None
+    startingfval = await aw if inspect.isawaitable(aw) else aw
     starttime = datetime.datetime.now()
     if c:
         logger.info("Starting TREX: mult: %s duration: %s", str(mult), str(duration))
@@ -567,7 +562,9 @@ async def end_trex_cont_test(
     logger.debug("TREX: after wait on traffic")
 
     if stoppingf:
-        await stoppingf(startingfval)
+        aw = stoppingf()
+        if inspect.isawaitable(aw):
+            await aw
 
     #
     # gpz workaround
@@ -589,13 +586,10 @@ async def end_trex_cont_test(
     tronpath = trpath / "tracing_on"
 
     async def stop_disruptive(r):
-        r.cmd_status(f"echo 0 > {tronpath}")
-        trfile = unet.rundir.joinpath(f"{r.name}-trace.txt")
-        with open(trfile, "w+", encoding="ascii") as f:
-            r.cmd_status("cat /sys/kernel/tracing/trace", stdout=f)
+        await r.async_cmd_status(f"echo 0 > {tronpath}")
 
     if tracing:
-        await asyncio.gather(*[stop_disruptive(x) for x in active_dutlist])
+        await asyncio.gather(*[stop_disruptive(x) for x in dutlist])
 
     # #
     # # Get pcap captures
@@ -692,7 +686,7 @@ async def run_trex_cont_test(
     tracing=False,
 ):
 
-    start_vstats = collect_dut_stats(dutlist)
+    start_vstats = await collect_dut_stats(dutlist)
 
     starttime, pcap_servers, startingfval = await start_trex_cont_test(
         args,
@@ -709,7 +703,9 @@ async def run_trex_cont_test(
     )
 
     if beforewaitf:
-        await beforewaitf(startingfval)
+        aw = beforewaitf(startingfval)
+        if inspect.isawaitable(aw):
+            await aw
 
     return await end_trex_cont_test(
         unet,
