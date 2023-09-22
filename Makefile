@@ -1,6 +1,6 @@
-# LINUXCONFIG ?= linux.config
+LINUXCONFIG ?= linux.config
 # LINUXCONFIG ?= linux-cov.config
-LINUXCONFIG ?= linux-fast.config
+# LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
 # LINUXCONFIG ?= linux-nosmp.config
 
