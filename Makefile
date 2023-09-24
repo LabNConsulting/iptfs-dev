@@ -107,12 +107,15 @@ $(PERFFILE):
 
 PERF := ../output-buildroot/target/usr/bin/perf
 
-/tmp/out.perf: $(PERFFILE)
+FlameGraph:
+	git clone https://github.com/brendangregg/FlameGraph
+
+/tmp/out.perf: FlameGraph $(PERFFILE)
 	(cd FlameGraph && $(PERF) script --vmlinux ../output-linux/vmlinux -i $< > /tmp/out.perf)
 
-/tmp/out.perf-folded: /tmp/out.perf
+/tmp/out.perf-folded: FlameGraph /tmp/out.perf
 	(cd FlameGraph && cat /tmp/out.perf | ./stackcollapse-perf.pl > /tmp/out.perf-folded)
 
-flame.svg: /tmp/out.perf-folded
+flame.svg: FlameGraph /tmp/out.perf-folded
 	(cd FlameGraph && ./flamegraph.pl --height=16 --fontsize=6 $< > ../$@)
 

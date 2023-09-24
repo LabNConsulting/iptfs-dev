@@ -1,6 +1,7 @@
 .dir-locals.el
 .flake8rc
 *~
+*.csv
 *.decode
 *.log
 *.pcap
@@ -28,3 +29,7 @@ __pycache__/
 /venv
 /sandbox/*
 !/sandbox/*.c
+/future/
+/old/
+/results/
+/FlameGraph/
