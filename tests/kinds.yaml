@@ -4,6 +4,7 @@ kinds:
     gdb-cmd: "/usr/bin/sudo -E gdb %CONFIGDIR%/../../output-linux/vmlinux"
     gdb-target-cmds: ["target remote %RUNDIR%/s/gdbserver"]
     gdb-run-cmds: ["c"]
+    gdb-run-cmd: ["c"]
     qemu:
       kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
       initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
