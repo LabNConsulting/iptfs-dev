@@ -20,19 +20,23 @@
 #
 "Test iptfs tunnel using iperf with various configurations"
 import logging
+import os
 import re
 import subprocess
 import time
 from pathlib import Path
 
 import pytest
-from common.config import setup_policy_tun, setup_routed_tun
+from common.config import cleanup_config, setup_policy_tun, setup_routed_tun
+from common.tests import _test_net_up
 from common.util import start_profile, stop_profile
 from munet.base import cmd_error
-from munet.testing.util import async_pause_test
-from munet.watchlog import MatchFoundError
 
 skip_future = []
+
+iperf3 = Path(os.path.realpath(__file__)).parent.parent.parent / Path(
+    "output-iperf3/src/iperf3"
+)
 
 
 def std_result(o, e):
@@ -45,13 +49,13 @@ def convnum(val, letter):
     val = float(val)
     if not letter:
         return val
-    if letter == "K" or letter == "k":
+    if letter in ("K", "k"):
         val *= 1000
-    elif letter == "M" or letter == "m":
+    if letter in ("M", "m"):
         val *= 1000000
-    elif letter == "G" or letter == "k":
+    if letter in ("G", "g"):
         val *= 1000000000
-    elif letter == "T" or letter == "t":
+    if letter in ("T", "t"):
         val *= 1000000000000
     return val
 
@@ -90,7 +94,34 @@ async def _test_iperf(
 ):
     h1 = unet.hosts["h1"]
     h2 = unet.hosts["h2"]
+    r1 = unet.hosts["r1"]
     r2 = unet.hosts["r2"]
+
+    if not iperf3.exists():
+        pytest.skip(
+            "skipping test as local iperf3 not build -- run `make iperf` in the build environment"
+        )
+
+    if not unet.ipv6_enable and tun_ipv6:
+        pytest.skip("skipping ipv6 as --enable-ipv6 not specified")
+
+    if tun_ipv6 and pktsize and pktsize < 536:
+        pytest.skip("Can't run IPv6 iperf with MSS < 536")
+        return
+
+    r1.cmd_nostatus(
+        f"echo test start: routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
+    )
+    r2.cmd_nostatus(
+        f"echo test start: routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
+    )
+
+    await cleanup_config(unet, ipv4=True, ipv6=True)
+    await _test_net_up(unet, ipv6=True, multihop=False)
+    check_logs(unet)
+
+    if tun_ipv6 and pktsize and pktsize == 1442:
+        pktsize = 1428
 
     if routed:
         await setup_routed_tun(
@@ -121,8 +152,10 @@ async def _test_iperf(
     #     pktsize = "536"
     # pktsize = None
 
+    print(iperf3)
+
     logging.info("Starting iperf server on h2")
-    sargs = ["iperf3" if use_iperf3 else "iperf", "-s"]
+    sargs = [iperf3 if use_iperf3 else "iperf", "-s"]
     if not use_iperf3:
         if use_udp:
             sargs.append("-u")
@@ -144,7 +177,7 @@ async def _test_iperf(
         evpath = trpath / "events/iptfs"
         tronpath = trpath / "tracing_on"
         if tracing:
-            afpath = trpath / "available_filter_functions"
+            # afpath = trpath / "available_filter_functions"
 
             evp = evpath / "enable"
             for rname in ["r1", "r2"]:
@@ -192,13 +225,13 @@ async def _test_iperf(
 
         if use_iperf3:
             args = [
-                "iperf3",
+                iperf3,
                 # "--verbose",
                 # "--get-server-output",
                 # "--port=5201",
                 # "--json",
-                "-P",
-                "8",
+                # "-P",
+                # "8",
                 "-t",
                 str(tval),  # timeval
                 # "-n",
@@ -230,7 +263,8 @@ async def _test_iperf(
             ]
 
         # Start profiling if enabled
-        perfc = start_profile(unet, "r1", tval + 1) if profile else None
+        perfc1 = start_profile(unet, "r1", tval + 1) if profile else None
+        perfc2 = start_profile(unet, "r2", tval + 1) if profile else None
 
         logging.info("Starting iperf client on h1 for %s", tval)
         # logging.info("Starting iperf3 client on h1 at %s for %s", brate, tval)
@@ -273,7 +307,7 @@ async def _test_iperf(
 
             # await async_pause_test(f"{'' if timeout else 'no '} timeout")
 
-            assert not timeout, f"client TIMEOUT"
+            assert not timeout, "client TIMEOUT"
             assert not rc, f"client FAILED: {cmd_error(rc, o, e)}"
 
             #
@@ -333,15 +367,15 @@ async def _test_iperf(
                         f"head {leakpath}"
                     ).strip(), f"leaks found on {rname}"
 
-            if perfc:
-                stop_profile(perfc, filebase=f"perf-{profcount}.data")
-                perfc = None
             # result = json.loads(o)
             # logging.info("Results: %s", json.dumps(result, sort_keys=True, indent=2))
         finally:
-            if perfc:
-                stop_profile(perfc, filebase=f"perf-{profcount}.data")
-                perfc = None
+            if perfc1:
+                stop_profile(perfc1, filebase=f"perf-{profcount}.data")
+                perfc1 = None
+            if perfc2:
+                stop_profile(perfc2, filebase=f"perf-{profcount}.data")
+                perfc2 = None
             if tracing:
                 # disable tracing
                 for rname in ["r1", "r2"]:

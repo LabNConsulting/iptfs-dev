@@ -1,6 +1,6 @@
-LINUXCONFIG ?= linux.config
+# LINUXCONFIG ?= linux.config
 # LINUXCONFIG ?= linux-cov.config
-# LINUXCONFIG ?= linux-fast.config
+LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
 # LINUXCONFIG ?= linux-nosmp.config
 
@@ -8,7 +8,7 @@ ifdef SHALLOW_CLONE
 DEPTH ?= --depth 1
 endif
 
-all: kernel rootfs
+all: kernel rootfs iperf
 
 setup:
 	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2023.05
@@ -55,16 +55,31 @@ output-linux/.config: $(LINUXCONFIG)
 output-buildroot/.config: buildroot.config
 	cp -p $< $@
 
-output-buildroot:
+output-buildroot output-iperf3 output-linux:
 	mkdir -p $@
 
-output-linux:
-	mkdir -p $@
+# local iperf
+
+iperf: iperf3 output-iperf3/src/iperf3
+
+iperf3:
+	([ -d iperf ] || [ -h iperf ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iperf.git iperf3 -b imix
+	(cd iperf3 && git pull --rebase)
+
+iperf3/configure: iperf3/configure.ac
+	(cd iperf3 && ./bootstrap.sh)
+
+output-iperf3/Makefile: iperf3/configure
+	mkdir -p output-iperf3
+	(cd output-iperf3 && ../iperf3/configure --enable-static-bin)
+
+output-iperf3/src/iperf3: output-iperf3/Makefile
+	(cd output-iperf3 && make -j$(nproc))
 
 #
 # Testing
 #
-tests/ci:
+tests/ci: iperf
 	sudo -E pytest -s tests/config tests/errors tests/frags tests/simplenet tests/utpkt/test_utpkt.py
 
 tests-trex/external_libs:
@@ -73,7 +88,7 @@ tests-trex/external_libs:
 clean-trex:
 	rm -rf tests-trex/podman-trex-extract tests-trex/trex tests-trex/trex_stl_lib tests-trex/external_libs
 
-test: tests-trex/external_libs
+test: iperf tests-trex/external_libs
 	sudo -E pytest -s tests
 	sudo -E pytest -s tests-trex
 
@@ -92,30 +107,37 @@ ci-extract-cov:
 # PERFSLAB := tests.stress.test_stress_phy
 #PERFFILE := ./res-latest/$(PERFSLAB)/r1/perf-0.data
 
-PERFTEST := tests/iperf/test_iperf_phy.py::test_iperf[False-False-False-88-]
-PERFSLAB := tests.iperf.test_iperf_phy
-PERFFILE := /tmp/unet-test/$(PERFSLAB)/r1/perf-0.data
+# PERFTEST := tests/iperf/test_iperf_phy.py::test_iperf[False-False-False-88-]
+# PERFSLAB := tests.iperf.test_iperf_phy
+
+PERFTEST := tests/iperf/test_iperf_phy.py::test_iperf[False-False-False-None-]
+
+PERFSLAB := $(subst /,.,$(shell SLAB=$(PERFTEST); echo $${SLAB%.py*}))
+
+PERFPFX := /tmp/unet-test/$(PERFSLAB)
+PERFFILES := $(PERFPFX)/r1/perf-0.data $(PERFPFX)/r2/perf-0.data
+
+PERFBIN := ../output-buildroot/target/usr/bin/perf
 
 flame-clean:
-	sudo rm -f /tmp/out.perf-folded flame.svg $(PERFFILE)
+	sudo rm -f $(PERFPFX)/perf-*.data $(PERFPFX)/perf-*.fdata flame-r1.svg flame-r2.svg $(PERFFILES)
 
-flame: flame.svg
+flame: iperf flame-r1.svg flame-r2.svg
 	scp flame.svg ja:
 
-$(PERFFILE):
+$(PERFFILES):
 	sudo -E pytest -s -v '$(PERFTEST)' --enable-physical --profile || true
-
-PERF := ../output-buildroot/target/usr/bin/perf
 
 FlameGraph:
 	git clone https://github.com/brendangregg/FlameGraph
 
-/tmp/out.perf: FlameGraph $(PERFFILE)
-	(cd FlameGraph && $(PERF) script --vmlinux ../output-linux/vmlinux -i $< > /tmp/out.perf)
+$(PERFPFX)/perf-%.data: $(PERFPFX)/%/perf-0.data
+	sudo chown $(USER) $(PERFPFX)
+	(cd FlameGraph && $(PERFBIN) script --vmlinux ../output-linux/vmlinux -i $< > $@)
 
-/tmp/out.perf-folded: FlameGraph /tmp/out.perf
-	(cd FlameGraph && cat /tmp/out.perf | ./stackcollapse-perf.pl > /tmp/out.perf-folded)
+$(PERFPFX)/perf-%.fdata: $(PERFPFX)/perf-%.data
+	sudo chown $(USER) $(PERFPFX)
+	(cd FlameGraph && ./stackcollapse-perf.pl $< > $@)
 
-flame.svg: FlameGraph /tmp/out.perf-folded
+flame-%.svg: $(PERFPFX)/perf-%.fdata
 	(cd FlameGraph && ./flamegraph.pl --height=16 --fontsize=6 $< > ../$@)
-

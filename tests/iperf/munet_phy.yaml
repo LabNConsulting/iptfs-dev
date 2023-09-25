@@ -18,7 +18,7 @@ topology:
           mtu: 9000
           # mtu: 1400
     - name: r1
-      kind: linux
+      kind: linux2
       connections:
         - to: mgmt0
         - to: r2
@@ -33,7 +33,7 @@ topology:
           mtu: 9000
           # mtu: 1400
     - name: r2
-      kind: linux
+      kind: linux2
       connections:
         - to: mgmt0
         - to: r1
@@ -69,11 +69,11 @@ kinds:
       sshkey: "%CONFIGDIR%/../../root-key"
       #cmdline-extra: "acpi=off nokaslr idle=poll"
       # cmdline-extra: "nokaslr slub_debug=U,kmalloc-256,kmalloc-128"
-      # cmdline-extra: "nokaslr idle=poll"
-      cmdline-extra: "nokaslr"
+      cmdline-extra: "nokaslr idle=poll"
+      # cmdline-extra: "nokaslr"
       # memory: "8192M"
       memory: "16384M"
       kvm: true
-      ncpu: 3
+      ncpu: 2
       console:
         timeout: 180
