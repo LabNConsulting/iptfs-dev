@@ -22,9 +22,8 @@
 import os
 
 import pytest
-from common.config import _network_up, setup_policy_tun
-from common.tests import _test_net_up
-from iperf import _test_iperf, check_logs, skip_future
+from common.config import _network_up
+from iperf import _test_iperf, skip_future
 from munet.testing.fixtures import _unet_impl
 
 # All tests are coroutines
@@ -42,19 +41,13 @@ async def checkrun(pytestconfig):
         )
 
 
-@pytest.fixture(scope="module", name="lcl_unet")
+@pytest.fixture(scope="module", name="unet")
 async def _unet(rundir_module, pytestconfig):
     async for x in _unet_impl(rundir_module, pytestconfig, param="munet_phy"):
+        await _network_up(x, ipv6=x.ipv6_enable)
+        x.hosts["r1"].add_watch_log("qemu.out")
+        x.hosts["r2"].add_watch_log("qemu.out")
         yield x
-
-
-@pytest.fixture(scope="module", autouse=True)
-async def network_up(lcl_unet):
-    unet = lcl_unet
-    await _network_up(unet, ipv6=unet.ipv6_enable)
-    unet.hosts["r1"].add_watch_log("qemu.out")
-    unet.hosts["r2"].add_watch_log("qemu.out")
-    yield
 
 
 #                       192.168.0.0/24  fd00::/64
@@ -65,43 +58,6 @@ async def network_up(lcl_unet):
 #   +----+ .1        .2 +----+ .2        .3 +----+ .3        .4 +----+
 #          10.0.0.0/24         10.0.1.0/24         10.0.2.0/24
 #           fc00::/64         fc00:0:0:1::/64     fc00:0:0:2::/64
-
-
-async def test_net_up(lcl_unet):
-    unet = lcl_unet
-    await _test_net_up(unet, ipv6=unet.ipv6_enable)
-    check_logs(unet)
-
-
-MODE = "iptfs"
-
-
-async def test_tun_up(lcl_unet, astepf):
-    unet = lcl_unet
-    # iptfs_opts = "dont-frag"
-    await setup_policy_tun(
-        unet,
-        mode=MODE,
-        ipsec_intf="eth1",
-        iptfs_opts="",
-        ipv6=unet.ipv6_enable,
-    )
-
-    # h1 = unet.hosts["h1"]
-    # r1 = unet.hosts["r1"]
-
-    # await astepf("Before R2R ping")
-    # # r1 (qemu side) pings r2 (qemu side)
-    # r1.conrepl.cmd_nostatus("ping -w1 -i.2 -c1 10.0.1.3")
-    # r1.conrepl.cmd_raises("ping -w1 -i.2 -c1 10.0.1.3")
-
-    # await astepf("Before H2H ping")
-    # # h1 pings h2
-    # h1.cmd_nostatus("ping -w1 -i.2 -c1 10.0.2.4")
-    # h1.cmd_raises("ping -w1 -i.2 -c1 10.0.2.4")
-
-    check_logs(unet)
-
 
 # overrun the queue setup
 # @pytest.mark.parametrize(
@@ -121,27 +77,29 @@ async def test_tun_up(lcl_unet, astepf):
 # @pytest.mark.parametrize("tun_ipv6", [False, True], scope="function")
 # @pytest.mark.parametrize("routed", [False, True], scope="function")
 
-
 # @pytest.mark.parametrize("iptfs_opts", ["init-delay 1000"], scope="function")
 
 
-@pytest.mark.parametrize("iptfs_opts", [""], scope="function")
-@pytest.mark.parametrize("pktsize", [None, 88, 536, 1442], scope="function")
-@pytest.mark.parametrize("ipv6", [False, True], scope="function")
-@pytest.mark.parametrize("tun_ipv6", [False, True], scope="function")
-@pytest.mark.parametrize("routed", [False, True], scope="function")
+@pytest.mark.parametrize("mode", ["iptfs", "tunnel"])
+@pytest.mark.parametrize("iptfs_opts", ["none"])
+@pytest.mark.parametrize("pktsize", [None, 88, 256, 536, 1442])
+@pytest.mark.parametrize("inner", ["ipv4", "ipv6"])
+@pytest.mark.parametrize("encap", ["encap4", "encap6"])
+@pytest.mark.parametrize("routed", ["policy", "routed"])
 async def test_iperf(
-    lcl_unet, rundir, astepf, pytestconfig, iptfs_opts, pktsize, ipv6, routed, tun_ipv6
+    unet, astepf, pytestconfig, mode, iptfs_opts, pktsize, inner, encap, routed
 ):
-    unet = lcl_unet
+    if iptfs_opts == "none":
+        iptfs_opts = ""
+    ipv6 = inner == "ipv6"
+    tun_ipv6 = encap == "encap6"
+    routed = routed == "routed"
+
     if skip_future:
         pytest.skip("Skipping test due to earlier failure")
 
-    if not unet.ipv6_enable and tun_ipv6:
-        pytest.skip("skipping ipv6 as --enable-ipv6 not specified")
-    if ipv6 and pktsize and pktsize < 536:
-        pytest.skip("Can't run IPv6 iperf with MSS < 536")
-        return
+    if mode == "tunnel" and ((not ipv6) != (not tun_ipv6)):
+        pytest.skip("Skipping std ipsec test with mixed modes")
 
     test_iperf.count += 1
 
@@ -149,13 +107,10 @@ async def test_iperf(
     if use_iperf3 and pktsize and pktsize < 88:
         pktsize = 88
 
-    # Leak cases tun_ipv6 = True | False, ipv6 = True
-    # Non-Leak cases tun_ipv6 = True | False, ipv6 = False
-
     result = await _test_iperf(
         unet,
         astepf,
-        mode=MODE,
+        mode=mode,
         ipsec_intf="eth1",
         use_iperf3=use_iperf3,
         iptfs_opts=iptfs_opts,
@@ -170,6 +125,7 @@ async def test_iperf(
     )
     assert result, "No result from test!"
 
+    rundir = str(unet.rundir)
     fname = rundir[: rundir.rindex("/")] + "/speed-phy.csv"
     fmode = "w+" if test_iperf.count == 0 else "a+"
     tunstr = "routed" if routed else "policy"
