@@ -2546,3 +2546,123 @@ broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168
 'GSO_IPXIP4_BIT', 'GSO_IPXIP6_BIT', 'GSO_UDP_TUNNEL_BIT',
                            'GSO_PARTIAL_BIT', 'SCTP_CRC_BIT', 'RXHASH_BIT',
  'RXCSUM_BIT', 'HW_TC_BIT']
+
+
+
+
+* packets at egress:
+** GRO/GSO enabled
+*** PHY
+head_frag == 1, nr_frags == 0, end == 1728, headroom == 242 (data)
+
+**** R2
+##### CPU 1 buffer started ####
+     ksoftirqd/1-20      [001] ..s..     9.540379: iptfs_egress_recv: EGRESS: skb=000000006d1fa058 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea5a800 hdpgaddr=ffff88810ea5a000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+
+     ksoftirqd/1-20      [001] ..s..     9.540402: iptfs_egress_recv: EGRESS: skb=00000000156d5d79 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=7558
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea5b800 hdpgaddr=ffff88810ea5b000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     9.540419: iptfs_egress_recv: EGRESS: skb=00000000c70110b1 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=6116
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea5c800 hdpgaddr=ffff88810ea5c000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     9.540436: iptfs_egress_recv: EGRESS: skb=000000001ed1d59d len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=4674
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea5d800 hdpgaddr=ffff88810ea5d000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     9.540453: iptfs_egress_recv: EGRESS: skb=00000000eb724e7f len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=3232
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea5e800 hdpgaddr=ffff88810ea5e000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     9.540470: iptfs_egress_recv: EGRESS: skb=0000000014591435 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=1790
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea5f800 hdpgaddr=ffff88810ea5f000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     9.540487: iptfs_egress_recv: EGRESS: skb=000000000ad8eb58 len=352 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=348
+		tailroom=1134 tail=594 end=1728 head=ffff88810ea60800 hdpgaddr=ffff88810ea60000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     9.540505: iptfs_egress_recv: EGRESS: skb=000000002453d179 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea61800 hdpgaddr=ffff88810ea61000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+*** NON
+**** R1
+     ksoftirqd/0-14      [000] ..s1.     8.144958: iptfs_egress_recv: EGRESS: skb=000000001d284ad6 len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=0
+		tailroom=0 tail=114 end=704 head=ffff88801b667800 hdpgaddr=ffff88801b667000 pg0->addr=ffff888011520000 pg0->data=ffff88801152603e pg0->off=24638
+     ksoftirqd/0-14      [000] ..s1.     8.144981: iptfs_egress_recv: EGRESS: skb=000000007791ad14 len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=7558
+		tailroom=0 tail=114 end=704 head=ffff88801b667400 hdpgaddr=ffff88801b667000 pg0->addr=ffff888011520000 pg0->data=ffff88801152663e pg0->off=26174
+     ksoftirqd/0-14      [000] ..s1.     8.145119: iptfs_egress_recv: EGRESS: skb=000000004969634f len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=6116
+		tailroom=0 tail=114 end=704 head=ffff88801b66e400 hdpgaddr=ffff88801b66e000 pg0->addr=ffff888011520000 pg0->data=ffff888011526c3e pg0->off=27710
+     ksoftirqd/0-14      [000] ..s1.     8.145140: iptfs_egress_recv: EGRESS: skb=00000000315dd6bd len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=4674
+		tailroom=0 tail=114 end=704 head=ffff88801b66e000 hdpgaddr=ffff88801b66e000 pg0->addr=ffff888011520000 pg0->data=ffff88801152723e pg0->off=29246
+     ksoftirqd/0-14      [000] ..s..     8.145163: iptfs_egress_recv: EGRESS: skb=00000000695e660c len=1446 data_len=0 headroom=62 head_frag=1 frag_list=0 nr_frags=0 blkoff=3232
+		tailroom=220 tail=1508 end=1728 head=ffff888011527800 hdpgaddr=ffff888011520000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s1.     8.145184: iptfs_egress_recv: EGRESS: skb=00000000702a4cee len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=1790
+		tailroom=0 tail=114 end=704 head=ffff88801b673c00 hdpgaddr=ffff88801b673000 pg0->addr=ffff8880119e8000 pg0->data=ffff8880119e803e pg0->off=62
+     ksoftirqd/0-14      [000] ..s..     8.145206: iptfs_egress_recv: EGRESS: skb=00000000f3979ed2 len=352 data_len=0 headroom=62 head_frag=1 frag_list=0 nr_frags=0 blkoff=348
+		tailroom=802 tail=414 end=1216 head=ffff8880119e8600 hdpgaddr=ffff8880119e8000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s1.     8.145225: iptfs_egress_recv: EGRESS: skb=000000005abe0cf1 len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=0
+		tailroom=0 tail=114 end=704 head=ffff88801b673800 hdpgaddr=ffff88801b673000 pg0->addr=ffff8880119e8000 pg0->data=ffff8880119e8c3e pg0->off=3134
+** GRO/GSO disabled
+*** R1
+**** NON: small packets with a small amounts of aggregation it seems
+
+head_frag == 1, nr_frags == 0, end == 1728, headroom == 242 (data)
+
+ksoftirqd/0-14      [000] ..s..     8.006165: iptfs_egress_recv: EGRESS: skb=00000000345e5161 len=368 data_len=0 headroom=62 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=786 tail=430 end=1216 head=ffff8880212db000 hdpgaddr=ffff8880212d8000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s..     8.006240: iptfs_egress_recv: EGRESS: skb=00000000fec9351c len=56 data_len=0 headroom=114 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=534 tail=170 end=704 head=ffff888009cd4000 hdpgaddr=ffff888009cd4000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s..     8.006254: iptfs_egress_recv: EGRESS: skb=000000009a3b8aab len=56 data_len=0 headroom=114 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=534 tail=170 end=704 head=ffff888009926c00 hdpgaddr=ffff888009926000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s..     8.006268: iptfs_egress_recv: EGRESS: skb=0000000083f12223 len=108 data_len=0 headroom=62 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=1046 tail=170 end=1216 head=ffff8880212dc200 hdpgaddr=ffff8880212d8000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+
+NON: [000] ..s1.    15.334429: iptfs_egress_recv: EGRESS: skb=00000000029a7314 len=1412 data_len=1412 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=0 tailroom=0 tail=114 end=704 head=ffff888019c8c400 hdpgaddr=ffff888019c8c000 pg0->addr=ffff888020280000 pg0->data=ffff88802028243e pg0->off=9278
+
+**** PHY
+PHY: [001] ..s1.     7.412970: iptfs_egress_recv: EGRESS: skb=0000000043420e6b len=212 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0 tailroom=1274 tail=454 end=1728 head=ffff88810eb0e000 hdpgaddr=ffff88810eb0e000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+
+     ksoftirqd/0-14      [000] ..s..     8.411730: iptfs_egress_recv: EGRESS: skb=00000000de2755bc len=56 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=1430 tail=298 end=1728 head=ffff88810eb6e000 hdpgaddr=ffff88810eb6e000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+
+     ksoftirqd/0-14      [000] ..s..     8.411745: iptfs_egress_recv: EGRESS: skb=00000000dcac57c7 len=56 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=1430 tail=298 end=1728 head=ffff88810eb6f000 hdpgaddr=ffff88810eb6f000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s..     8.411759: iptfs_egress_recv: EGRESS: skb=00000000e5e49dd8 len=56 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=1430 tail=298 end=1728 head=ffff88810eb70000 hdpgaddr=ffff88810eb70000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s..     8.411774: iptfs_egress_recv: EGRESS: skb=000000002f5710b4 len=56 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=1430 tail=298 end=1728 head=ffff88810eb71000 hdpgaddr=ffff88810eb71000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s..     8.411788: iptfs_egress_recv: EGRESS: skb=00000000ca57c05a len=56 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=1430 tail=298 end=1728 head=ffff88810eb72000 hdpgaddr=ffff88810eb72000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/0-14      [000] ..s..     8.411802: iptfs_egress_recv: EGRESS: skb=00000000d813b429 len=108 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=1378 tail=350 end=1728 head=ffff88810eb73000 hdpgaddr=ffff88810eb73000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+
+*** R2
+**** NON:
+
+
+     ksoftirqd/0-14      [000] ..s1.     8.180352: iptfs_egress_recv: EGRESS: skb=00000000acf45ccb len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=0
+		tailroom=0 tail=114 end=704 head=ffff88801a90b400 hdpgaddr=ffff88801a90b000 pg0->addr=ffff888012148000 pg0->data=ffff88801214da3e pg0->off=23102
+
+     ksoftirqd/0-14      [000] ..s1.     8.180379: iptfs_egress_recv: EGRESS: skb=0000000097b1ffcb len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=7558
+		tailroom=0 tail=114 end=704 head=ffff88801a90b000 hdpgaddr=ffff88801a90b000 pg0->addr=ffff888012148000 pg0->data=ffff88801214e03e pg0->off=24638
+
+     ksoftirqd/0-14      [000] ..s1.     8.180481: iptfs_egress_recv: EGRESS: skb=0000000090088909 len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=6116
+		tailroom=0 tail=114 end=704 head=ffff88801a90b800 hdpgaddr=ffff88801a90b000 pg0->addr=ffff888012148000 pg0->data=ffff88801214e63e pg0->off=26174
+
+     ksoftirqd/0-14      [000] ..s1.     8.180503: iptfs_egress_recv: EGRESS: skb=00000000cc18d723 len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=4674
+		tailroom=0 tail=114 end=704 head=ffff88801a90b400 hdpgaddr=ffff88801a90b000 pg0->addr=ffff888012148000 pg0->data=ffff88801214ec3e pg0->off=27710
+
+     ksoftirqd/0-14      [000] ..s1.     8.180525: iptfs_egress_recv: EGRESS: skb=000000008a12301d len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=3232
+		tailroom=0 tail=114 end=704 head=ffff88801a90b000 hdpgaddr=ffff88801a90b000 pg0->addr=ffff888012148000 pg0->data=ffff88801214f23e pg0->off=29246
+
+     ksoftirqd/0-14      [000] ..s..     8.180546: iptfs_egress_recv: EGRESS: skb=00000000e59cfe58 len=1446 data_len=0 headroom=62 head_frag=1 frag_list=0 nr_frags=0 blkoff=1790
+		tailroom=220 tail=1508 end=1728 head=ffff88801214f800 hdpgaddr=ffff888012148000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+
+     ksoftirqd/0-14      [000] ..s..     8.180574: iptfs_egress_recv: EGRESS: skb=0000000079b524b0 len=352 data_len=0 headroom=62 head_frag=1 frag_list=0 nr_frags=0 blkoff=348
+		tailroom=802 tail=414 end=1216 head=ffff888011998000 hdpgaddr=ffff888011998000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+
+**** PHY
+     ksoftirqd/1-20      [001] ..s..     7.647452: iptfs_egress_recv: EGRESS: skb=0000000006bf1593 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=0
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea02000 hdpgaddr=ffff88810ea02000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     7.647479: iptfs_egress_recv: EGRESS: skb=00000000b9ac19cc len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=7558
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea03000 hdpgaddr=ffff88810ea03000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     7.647500: iptfs_egress_recv: EGRESS: skb=00000000bac669ce len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=6116
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea04000 hdpgaddr=ffff88810ea04000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     7.647578: iptfs_egress_recv: EGRESS: skb=0000000052a43342 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=4674
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea05000 hdpgaddr=ffff88810ea05000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     7.647599: iptfs_egress_recv: EGRESS: skb=000000009e3c3cb2 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=3232
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea06000 hdpgaddr=ffff88810ea06000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     7.647620: iptfs_egress_recv: EGRESS: skb=00000000afd492e1 len=1446 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=1790
+		tailroom=40 tail=1688 end=1728 head=ffff88810ea07000 hdpgaddr=ffff88810ea07000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
+     ksoftirqd/1-20      [001] ..s..     7.647643: iptfs_egress_recv: EGRESS: skb=000000009e9f8574 len=352 data_len=0 headroom=242 head_frag=1 frag_list=0 nr_frags=0 blkoff=348
+		tailroom=1134 tail=594 end=1728 head=ffff88810ea08000 hdpgaddr=ffff88810ea08000 pg0->addr=0000000000000000 pg0->data=0000000000000000 pg0->off=0
