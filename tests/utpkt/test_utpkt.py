@@ -304,7 +304,7 @@ async def test_small_pkt_agg(unet, astepf, ipv6):
 @pytest.mark.parametrize("ipv6", [False, True])
 async def test_recv_runt(unet, astepf, ipv6, tun_ipv6):
     await setup_policy_tun(unet, r1only=True, iptfs_opts="", ipv6=ipv6)
-    await astepf(f"Prior to gen_pkt_test, ipv6: {ipv6}")
+    await astepf(f"Prior to gen_pkt_test ipv6: {ipv6} tun_ipv6: {tun_ipv6}")
     await gen_pkt_test(
         unet, psize=1421 if tun_ipv6 else 1441, mtu=1500, count=3, ipv6=ipv6
     )

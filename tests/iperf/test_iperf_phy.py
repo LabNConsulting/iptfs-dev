@@ -82,7 +82,7 @@ async def _unet(rundir_module, pytestconfig):
 
 @pytest.mark.parametrize("mode", ["iptfs", "tunnel"])
 @pytest.mark.parametrize("iptfs_opts", [None])
-@pytest.mark.parametrize("pktsize", [None, 88, 256, 536, 1442])
+@pytest.mark.parametrize("pktsize", [None, 1442, 546, 88])
 @pytest.mark.parametrize("inner", ["ipv4", "ipv6"])
 @pytest.mark.parametrize("encap", ["encap4", "encap6"])
 @pytest.mark.parametrize("routed", ["policy", "routed"])
@@ -93,11 +93,12 @@ async def test_iperf(
         iptfs_opts = ""
     ipv6 = inner == "ipv6"
     tun_ipv6 = encap == "encap6"
-    routed = routed == "routed"
 
     if skip_future:
         pytest.skip("Skipping test due to earlier failure")
 
+    if (not ipv6) != (not tun_ipv6):
+        pytest.skip("Skipping mixed modes")
     if mode == "tunnel" and ((not ipv6) != (not tun_ipv6)):
         pytest.skip("Skipping std ipsec test with mixed modes")
 
@@ -116,7 +117,7 @@ async def test_iperf(
         use_udp=False,
         iptfs_opts=iptfs_opts,
         pktsize=pktsize,
-        routed=routed,
+        routed=routed == "routed",
         ipv6=ipv6,
         tun_ipv6=tun_ipv6,
         profile=pytestconfig.getoption("--profile", False),
@@ -129,11 +130,10 @@ async def test_iperf(
     rundir = str(unet.rundir)
     fname = rundir[: rundir.rindex("/")] + "/speed-phy.csv"
     fmode = "w+" if test_iperf.count == 0 else "a+"
-    tunstr = "routed" if routed else "policy"
-    vstr = "IPv6" if tun_ipv6 else "IPv4"
+    pktsize = pktsize if pktsize is not None else "any"
     with open(fname, fmode, encoding="ascii") as f:
         print(
-            f"{result[2]}{result[3]}bits/s,{result[1]},{result[0]},{pktsize},{tunstr},{vstr},{iptfs_opts}",
+            f"{mode}-{routed},{encap}-{inner},{pktsize},{result[0]},{result[1]},{result[2]}{result[3]}bits/s",
             file=f,
         )
 

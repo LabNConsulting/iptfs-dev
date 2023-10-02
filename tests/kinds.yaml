@@ -12,8 +12,24 @@ kinds:
       #cmdline-extra: "acpi=off idle=poll nokaslr"
       #cmdline-extra: "idle=poll nokaslr trace_buf_size=1024M"
       cmdline-extra: "idle=poll nokaslr"
-      #memory: "2048"
       memory: "2048"
+      kvm: true
+      ncpu: 1
+      console:
+        timeout: 180
+
+  - name: slinux1
+    merge: [ "qemu" ]
+    gdb-cmd: "/usr/bin/sudo -E gdb %CONFIGDIR%/../../output-linux/vmlinux"
+    gdb-target-cmds: ["target remote %RUNDIR%/s/gdbserver"]
+    gdb-run-cmds: ["c"]
+    gdb-run-cmd: ["c"]
+    qemu:
+      kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
+      initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
+      sshkey: "%CONFIGDIR%/../../root-key"
+      cmdline-extra: "idle=poll nokaslr"
+      memory: "1024"
       kvm: true
       ncpu: 1
       console:
@@ -29,11 +45,8 @@ kinds:
       kernel: "%CONFIGDIR%/../../output-linux/arch/x86/boot/bzImage"
       initrd: "%CONFIGDIR%/../../output-buildroot/images/rootfs.cpio.gz"
       sshkey: "%CONFIGDIR%/../../root-key"
-      #cmdline-extra: "acpi=off idle=poll nokaslr"
-      #cmdline-extra: "idle=poll nokaslr trace_buf_size=1024M"
       cmdline-extra: "idle=poll nokaslr"
-      #memory: "2048"
-      memory: "2048"
+      memory: "4096"
       kvm: true
       ncpu: 1
       console:
@@ -52,8 +65,7 @@ kinds:
       #cmdline-extra: "acpi=off idle=poll nokaslr"
       #cmdline-extra: "idle=poll nokaslr trace_buf_size=1024M"
       cmdline-extra: "idle=poll nokaslr"
-      #memory: "2048"
-      memory: "4096"
+      memory: "8192"
       kvm: true
       ncpu: 2
       console:
@@ -72,8 +84,7 @@ kinds:
       #cmdline-extra: "acpi=off idle=poll nokaslr"
       #cmdline-extra: "idle=poll nokaslr trace_buf_size=1024M"
       cmdline-extra: "idle=poll nokaslr"
-      #memory: "2048"
-      memory: "6144"
+      memory: "12288"
       kvm: true
       ncpu: 3
       console:

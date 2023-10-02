@@ -45,3 +45,5 @@ topology:
       connections:
         - to: mgmt0
         - to: net2
+
+# watch -n1 "egrep 'kmemleak_obj|skbuff_(ext|head)' /proc/slabinfo"

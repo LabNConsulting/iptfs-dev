@@ -109,11 +109,12 @@ async def _test_iperf(
         pytest.skip("Can't run IPv6 iperf with MSS < 536")
         return
 
+    mds = "iptfs " if mode == "iptfs" else "tunnel"
     r1.cmd_nostatus(
-        f"echo test start: routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
+        f"echo test start: mode={mds} routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
     )
     r2.cmd_nostatus(
-        f"echo test start: routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
+        f"echo test start: mode={mds} routed={routed} v6tun={tun_ipv6} v6={ipv6} pktsize={pktsize} opts={iptfs_opts} > /dev/kmsg"
     )
 
     await cleanup_config(unet, ipv4=True, ipv6=True)
