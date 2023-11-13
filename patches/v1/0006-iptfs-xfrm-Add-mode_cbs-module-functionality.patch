@@ -1,0 +1,304 @@
+From 89a3e47a26c627edbf94e5e93fe900c0fd8a720b Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Thu, 3 Aug 2023 15:15:00 +0000
+Subject: [RFC ipsec-next 6/8] iptfs: xfrm: Add mode_cbs module functionality
+
+Add a set of callbacks xfrm_mode_cbs to xfrm_state. These callbacks
+enable the addition of new xfrm modes, such as IP-TFS to be defined
+in modules.
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+ include/net/xfrm.h     | 36 ++++++++++++++++++++++++++++++++++++
+ net/xfrm/xfrm_device.c |  3 ++-
+ net/xfrm/xfrm_input.c  | 14 ++++++++++++--
+ net/xfrm/xfrm_output.c |  9 +++++++--
+ net/xfrm/xfrm_policy.c | 18 +++++++++++-------
+ net/xfrm/xfrm_state.c  | 41 +++++++++++++++++++++++++++++++++++++++++
+ net/xfrm/xfrm_user.c   | 10 ++++++++++
+ 7 files changed, 119 insertions(+), 12 deletions(-)
+
+diff --git a/include/net/xfrm.h b/include/net/xfrm.h
+index d2e87344d175..aeeadadc9545 100644
+--- a/include/net/xfrm.h
++++ b/include/net/xfrm.h
+@@ -204,6 +204,7 @@ struct xfrm_state {
+ 		u16		family;
+ 		xfrm_address_t	saddr;
+ 		int		header_len;
++		int		enc_hdr_len;
+ 		int		trailer_len;
+ 		u32		extra_flags;
+ 		struct xfrm_mark	smark;
+@@ -289,6 +290,9 @@ struct xfrm_state {
+ 	/* Private data of this transformer, format is opaque,
+ 	 * interpreted by xfrm_type methods. */
+ 	void			*data;
++
++	const struct xfrm_mode_cbs	*mode_cbs;
++	void				*mode_data;
+ };
+ 
+ static inline struct net *xs_net(struct xfrm_state *x)
+@@ -441,6 +445,38 @@ struct xfrm_type_offload {
+ int xfrm_register_type_offload(const struct xfrm_type_offload *type, unsigned short family);
+ void xfrm_unregister_type_offload(const struct xfrm_type_offload *type, unsigned short family);
+ 
++struct xfrm_mode_cbs {
++	struct module	*owner;
++	/* Add/delete state in the new xfrm_state in `x`. */
++	int	(*create_state)(struct xfrm_state *x);
++	void	(*delete_state)(struct xfrm_state *x);
++
++	/* Called while handling the user netlink options. */
++	int	(*user_init)(struct net *net, struct xfrm_state *x,
++			     struct nlattr **attrs);
++	int	(*copy_to_user)(struct xfrm_state *x, struct sk_buff *skb);
++
++	u32	(*get_inner_mtu)(struct xfrm_state *x, int outer_mtu);
++
++	/* Called to handle received xfrm (egress) packets. */
++	int	(*input)(struct xfrm_state *x, struct sk_buff *skb);
++
++	/* Placed in dst_output of the dst when an xfrm_state is bound. */
++	int	(*output)(struct net *net, struct sock *sk, struct sk_buff *skb);
++
++	/**
++	 * Prepare the skb for output for the given mode. Returns:
++	 *    Error value, if 0 then skb values should be as follows:
++	 *    transport_header should point at ESP header
++	 *    network_header should point at Outer IP header
++	 *    mac_header should point at protocol/nexthdr of the outer IP
++	 */
++	int	(*prepare_output)(struct xfrm_state *x, struct sk_buff *skb);
++};
++
++int xfrm_register_mode_cbs(u8 mode, const struct xfrm_mode_cbs *mode_cbs);
++void xfrm_unregister_mode_cbs(u8 mode);
++
+ static inline int xfrm_af2proto(unsigned int family)
+ {
+ 	switch(family) {
+diff --git a/net/xfrm/xfrm_device.c b/net/xfrm/xfrm_device.c
+index 3784534c9185..8b848540ea47 100644
+--- a/net/xfrm/xfrm_device.c
++++ b/net/xfrm/xfrm_device.c
+@@ -42,7 +42,8 @@ static void __xfrm_mode_tunnel_prep(struct xfrm_state *x, struct sk_buff *skb,
+ 		skb->transport_header = skb->network_header + hsize;
+ 
+ 	skb_reset_mac_len(skb);
+-	pskb_pull(skb, skb->mac_len + x->props.header_len);
++	pskb_pull(skb,
++		  skb->mac_len + x->props.header_len - x->props.enc_hdr_len);
+ }
+ 
+ static void __xfrm_mode_beet_prep(struct xfrm_state *x, struct sk_buff *skb,
+diff --git a/net/xfrm/xfrm_input.c b/net/xfrm/xfrm_input.c
+index bd4ce21d76d7..824f7b7f90e0 100644
+--- a/net/xfrm/xfrm_input.c
++++ b/net/xfrm/xfrm_input.c
+@@ -437,6 +437,9 @@ static int xfrm_inner_mode_input(struct xfrm_state *x,
+ 		WARN_ON_ONCE(1);
+ 		break;
+ 	default:
++		if (x->mode_cbs && x->mode_cbs->input)
++			return x->mode_cbs->input(x, skb);
++
+ 		WARN_ON_ONCE(1);
+ 		break;
+ 	}
+@@ -479,6 +482,10 @@ int xfrm_input(struct sk_buff *skb, int nexthdr, __be32 spi, int encap_type)
+ 
+ 		family = x->props.family;
+ 
++		/* An encap_type of -3 indicates reconstructed inner packet */
++		if (encap_type == -3)
++			goto resume_decapped;
++
+ 		/* An encap_type of -1 indicates async resumption. */
+ 		if (encap_type == -1) {
+ 			async = 1;
+@@ -660,11 +667,14 @@ int xfrm_input(struct sk_buff *skb, int nexthdr, __be32 spi, int encap_type)
+ 
+ 		XFRM_MODE_SKB_CB(skb)->protocol = nexthdr;
+ 
+-		if (xfrm_inner_mode_input(x, skb)) {
++		err = xfrm_inner_mode_input(x, skb);
++		if (err == -EINPROGRESS)
++			return 0;
++		else if (err) {
+ 			XFRM_INC_STATS(net, LINUX_MIB_XFRMINSTATEMODEERROR);
+ 			goto drop;
+ 		}
+-
++resume_decapped:
+ 		if (x->outer_mode.flags & XFRM_MODE_FLAG_TUNNEL) {
+ 			decaps = 1;
+ 			break;
+diff --git a/net/xfrm/xfrm_output.c b/net/xfrm/xfrm_output.c
+index 662c83beb345..4390c111410d 100644
+--- a/net/xfrm/xfrm_output.c
++++ b/net/xfrm/xfrm_output.c
+@@ -280,7 +280,9 @@ static int xfrm4_tunnel_encap_add(struct xfrm_state *x, struct sk_buff *skb)
+ 	skb_set_inner_network_header(skb, skb_network_offset(skb));
+ 	skb_set_inner_transport_header(skb, skb_transport_offset(skb));
+ 
+-	skb_set_network_header(skb, -x->props.header_len);
++	/* backup to add space for the outer encap */
++	skb_set_network_header(skb,
++			       -x->props.header_len + x->props.enc_hdr_len);
+ 	skb->mac_header = skb->network_header +
+ 			  offsetof(struct iphdr, protocol);
+ 	skb->transport_header = skb->network_header + sizeof(*top_iph);
+@@ -325,7 +327,8 @@ static int xfrm6_tunnel_encap_add(struct xfrm_state *x, struct sk_buff *skb)
+ 	skb_set_inner_network_header(skb, skb_network_offset(skb));
+ 	skb_set_inner_transport_header(skb, skb_transport_offset(skb));
+ 
+-	skb_set_network_header(skb, -x->props.header_len);
++	skb_set_network_header(skb,
++			       -x->props.header_len + x->props.enc_hdr_len);
+ 	skb->mac_header = skb->network_header +
+ 			  offsetof(struct ipv6hdr, nexthdr);
+ 	skb->transport_header = skb->network_header + sizeof(*top_iph);
+@@ -472,6 +475,8 @@ static int xfrm_outer_mode_output(struct xfrm_state *x, struct sk_buff *skb)
+ 		WARN_ON_ONCE(1);
+ 		break;
+ 	default:
++		if (x->mode_cbs->prepare_output)
++			return x->mode_cbs->prepare_output(x, skb);
+ 		WARN_ON_ONCE(1);
+ 		break;
+ 	}
+diff --git a/net/xfrm/xfrm_policy.c b/net/xfrm/xfrm_policy.c
+index d2dddc570f4f..3220b01121f3 100644
+--- a/net/xfrm/xfrm_policy.c
++++ b/net/xfrm/xfrm_policy.c
+@@ -2707,13 +2707,17 @@ static struct dst_entry *xfrm_bundle_create(struct xfrm_policy *policy,
+ 
+ 		dst1->input = dst_discard;
+ 
+-		rcu_read_lock();
+-		afinfo = xfrm_state_afinfo_get_rcu(inner_mode->family);
+-		if (likely(afinfo))
+-			dst1->output = afinfo->output;
+-		else
+-			dst1->output = dst_discard_out;
+-		rcu_read_unlock();
++		if (xfrm[i]->mode_cbs && xfrm[i]->mode_cbs->output) {
++			dst1->output = xfrm[i]->mode_cbs->output;
++		} else {
++			rcu_read_lock();
++			afinfo = xfrm_state_afinfo_get_rcu(inner_mode->family);
++			if (likely(afinfo))
++				dst1->output = afinfo->output;
++			else
++				dst1->output = dst_discard_out;
++			rcu_read_unlock();
++		}
+ 
+ 		xdst_prev = xdst;
+ 
+diff --git a/net/xfrm/xfrm_state.c b/net/xfrm/xfrm_state.c
+index bda5327bf34d..f5e1a17ebf74 100644
+--- a/net/xfrm/xfrm_state.c
++++ b/net/xfrm/xfrm_state.c
+@@ -513,6 +513,36 @@ static const struct xfrm_mode *xfrm_get_mode(unsigned int encap, int family)
+ 	return NULL;
+ }
+ 
++static struct xfrm_mode_cbs xfrm_mode_cbs_map[XFRM_MODE_MAX];
++
++int xfrm_register_mode_cbs(u8 mode, const struct xfrm_mode_cbs *mode_cbs)
++{
++	if (mode >= XFRM_MODE_MAX)
++		return -EINVAL;
++
++	xfrm_mode_cbs_map[mode] = *mode_cbs;
++	return 0;
++}
++EXPORT_SYMBOL(xfrm_register_mode_cbs);
++
++void xfrm_unregister_mode_cbs(u8 mode)
++{
++	if (mode >= XFRM_MODE_MAX)
++		return;
++
++	memset(&xfrm_mode_cbs_map[mode], 0, sizeof(xfrm_mode_cbs_map[mode]));
++}
++EXPORT_SYMBOL(xfrm_unregister_mode_cbs);
++
++static const struct xfrm_mode_cbs *xfrm_get_mode_cbs(u8 mode)
++{
++	if (mode >= XFRM_MODE_MAX)
++		return NULL;
++	if (mode == XFRM_MODE_IPTFS && !xfrm_mode_cbs_map[mode].create_state)
++		request_module("xfrm-iptfs");
++	return &xfrm_mode_cbs_map[mode];
++}
++
+ void xfrm_state_free(struct xfrm_state *x)
+ {
+ 	kmem_cache_free(xfrm_state_cache, x);
+@@ -521,6 +551,8 @@ EXPORT_SYMBOL(xfrm_state_free);
+ 
+ static void ___xfrm_state_destroy(struct xfrm_state *x)
+ {
++	if (x->mode_cbs && x->mode_cbs->delete_state)
++		x->mode_cbs->delete_state(x);
+ 	hrtimer_cancel(&x->mtimer);
+ 	del_timer_sync(&x->rtimer);
+ 	kfree(x->aead);
+@@ -2765,6 +2797,9 @@ u32 xfrm_state_mtu(struct xfrm_state *x, int mtu)
+ 	case XFRM_MODE_TUNNEL:
+ 		break;
+ 	default:
++		if (x->mode_cbs && x->mode_cbs->get_inner_mtu)
++			return x->mode_cbs->get_inner_mtu(x, mtu);
++
+ 		WARN_ON_ONCE(1);
+ 		break;
+ 	}
+@@ -2850,6 +2885,12 @@ int __xfrm_init_state(struct xfrm_state *x, bool init_replay, bool offload,
+ 			goto error;
+ 	}
+ 
++	x->mode_cbs = xfrm_get_mode_cbs(x->props.mode);
++	if (x->mode_cbs && x->mode_cbs->create_state) {
++		err = x->mode_cbs->create_state(x);
++		if (err)
++			goto error;
++	}
+ error:
+ 	return err;
+ }
+diff --git a/net/xfrm/xfrm_user.c b/net/xfrm/xfrm_user.c
+index ed95772bbd3f..8a504331e369 100644
+--- a/net/xfrm/xfrm_user.c
++++ b/net/xfrm/xfrm_user.c
+@@ -779,6 +779,12 @@ static struct xfrm_state *xfrm_state_construct(struct net *net,
+ 			goto error;
+ 	}
+ 
++	if (x->mode_cbs && x->mode_cbs->user_init) {
++		err = x->mode_cbs->user_init(net, x, attrs);
++		if (err)
++			goto error;
++	}
++
+ 	return x;
+ 
+ error:
+@@ -1192,6 +1198,10 @@ static int copy_to_user_state_extra(struct xfrm_state *x,
+ 		if (ret)
+ 			goto out;
+ 	}
++	if (x->mode_cbs && x->mode_cbs->copy_to_user)
++		ret = x->mode_cbs->copy_to_user(x, skb);
++	if (ret)
++		goto out;
+ 	if (x->mapping_maxage)
+ 		ret = nla_put_u32(skb, XFRMA_MTIMER_THRESH, x->mapping_maxage);
+ out:
+-- 
+2.42.0
+

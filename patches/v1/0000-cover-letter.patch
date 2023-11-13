@@ -1,0 +1,10 @@
+From: Christian Hopps <chopps@labn.net>
+Subject: [RFC ipsec-next] Add IP-TFS mode to xfrm
+
+This patchset adds a new xfrm mode implementing on-demand IP-TFS. IP-TFS
+(AggFrag encapsulation) has been standardized in RFC9347.
+
+Link: https://www.rfc-editor.org/rfc/rfc9347.txt
+
+In order to allow loading this fucntionality as a module a set of callbacks
+xfrm_mode_cbs has been added to xfrm as well.
