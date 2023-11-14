@@ -1,6 +1,6 @@
-# LINUXCONFIG ?= linux.config
+LINUXCONFIG ?= linux.config
 # LINUXCONFIG ?= linux-cov.config
-LINUXCONFIG ?= linux-fast.config
+# LINUXCONFIG ?= linux-fast.config
 # LINUXCONFIG ?= linux-fasttrace.config
 # LINUXCONFIG ?= linux-nosmp.config
 
@@ -28,6 +28,10 @@ linux-defconfig:
 	make -C linux O=../output-linux defconfig
 linux-menuconfig:
 	make -C linux O=../output-linux menuconfig
+linux-allyesconfig:
+	make -C linux O=../output-linux allyesconfig
+linux-allmodconfig:
+	make -C linux O=../output-linux allmodconfig
 
 br-defconfig:
 	make -C buildroot O=../output-buildroot defconfig
@@ -141,3 +145,14 @@ $(PERFPFX)/perf-%.fdata: $(PERFPFX)/perf-%.data
 
 flame-%.svg: $(PERFPFX)/perf-%.fdata
 	(cd FlameGraph && ./flamegraph.pl --height=16 --fontsize=6 $< > ../$@)
+
+
+#
+# Making and sending patches
+#
+#
+# git format-patch -v2 --subject-prefix="RFC ipsec-next" -o ../patches/v2/ upstream/master..HEAD
+# git send-email --cc='Steffen Klassert <steffen.klassert@secunet.com>' \
+#   --cc='netdev@vger.kernel.org' --to='devel@linux-ipsec.org' \
+#   --cc='chopps@chopps.org' ../patches/v2 \
+#

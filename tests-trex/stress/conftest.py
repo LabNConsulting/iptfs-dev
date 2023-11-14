@@ -29,13 +29,6 @@ def pytest_addoption(parser):  # pylint: disable=E0102
     )
 
     parser.addoption(
-        "--duration",
-        type=int,
-        default=10,
-        help="number of seconds to run tests for",
-    )
-
-    parser.addoption(
         "--mode",
         help="'iptfs' or 'tunnel' mode",
     )

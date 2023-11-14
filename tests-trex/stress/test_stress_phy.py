@@ -32,6 +32,11 @@ pytestmark = pytest.mark.asyncio
 
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
+
+# this should be done for small pkt tests
+# echo 100000 > /proc/sys/net/core/netdev_max_backlog
+
+
 #                    192.168.0.0/24
 #   --+--------------------+------ mgmt0 -------+
 #     | .1                 | .2                 | .3

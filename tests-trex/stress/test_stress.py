@@ -98,10 +98,10 @@ async def test_policy_small_pkt(unet, pytestconfig, astepf):
     await astepf("Before small packet test")
     defrate = "4M" if is_debug_kernel(unet) else "40M"
 
-    await _test_policy_small_pkt(unet, pytestconfig, tracing=True, default_rate=defrate)
+    await _test_policy_small_pkt(unet, pytestconfig, default_rate=defrate)
 
 
 async def test_policy_imix(unet, pytestconfig, astepf):
     await astepf("Before IMix packet test")
     defrate = "40M" if is_debug_kernel(unet) else "1000M"
-    await _test_policy_imix(unet, pytestconfig, tracing=True, default_rate=defrate)
+    await _test_policy_imix(unet, pytestconfig, default_rate=defrate)
