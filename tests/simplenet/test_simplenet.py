@@ -31,6 +31,10 @@ pytestmark = pytest.mark.asyncio
 
 SRCDIR = os.path.dirname(os.path.abspath(__file__))
 
+# pytestmark = pytest.mark.parametrize(
+#     "unet", [("munet", False, False)], indirect=["unet"]
+# )
+
 
 @pytest.fixture(scope="module", autouse=True)
 async def network_up(unet, pytestconfig):

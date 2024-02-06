@@ -124,10 +124,10 @@ async def test_config_combo(unet, astepf, psize, qsize, dtime, rewin, idelay, df
 async def test_config_sysctl(unet):
     r1 = unet.hosts["r1"]
 
-    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_drptime=50000")
-    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_idelay=1000")
-    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_maxqsize=500000")
-    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_rewin=1")
+    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_drop_time=50000")
+    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_init_delay=1000")
+    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_max_qsize=500000")
+    r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_reorder_window=1")
 
     await setup_routed_tun(unet)
 

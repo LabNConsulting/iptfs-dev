@@ -22,10 +22,13 @@
 # pylint: disable=wrong-import-position
 """Fixtures and other utilities imported from munet for testing."""
 
+import glob
+import logging
 import os
 import time
 
-from munet.base import Commander, proc_error
+import pytest
+from munet.base import BaseMunet, Commander, proc_error
 from munet.testing.fixtures import *  # noqa
 from munet.testing.hooks import *  # noqa
 from munet.testing.hooks import pytest_addoption as _pytest_addoption
@@ -114,3 +117,40 @@ def pytest_configure(config):
 #         trexlib = os.path.join(SRCDIR, "external_libs")
 #         scapydir = glob.glob(trexlib + "/scapy*")[0]
 #         sys.path[0:0] = [scapydir]
+
+
+def check_for_backtraces(unet):
+    if not hasattr(unet, "existing_backtrace_files"):
+        unet.existing_backtrace_files = {}
+    existing = unet.existing_backtrace_files
+
+    latest = glob.glob(os.path.join(unet.rundir, "*/qemu.out"))
+    backtraces = []
+    for vfile in latest:
+        with open(vfile, encoding="ascii") as vf:
+            vfcontent = vf.read()
+            bugcount = vfcontent.count("BUG: ")
+            btcount = vfcontent.count("Call Trace:")
+        if not btcount and not bugcount:
+            continue
+        if vfile not in existing:
+            existing[vfile] = 0
+            backtraces.append(vfile)
+        if btcount + bugcount == existing[vfile]:
+            continue
+        existing[vfile] = btcount + bugcount
+
+    if backtraces:
+        emsg = "New BUG and/or Call Traces found in: " + ", ".join(backtraces)
+        logging.error(emsg)
+        pytest.fail(emsg)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item: pytest.Item) -> None:
+    "Hook the function that is called to execute the test."
+
+    # Let the default pytest_runtest_call execute the test function
+    yield
+
+    check_for_backtraces(BaseMunet.g_unet)
