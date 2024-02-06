@@ -11,7 +11,7 @@ endif
 all: kernel rootfs iperf
 
 setup:
-	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2023.05
+	([ -d buildroot ] || [ -h buildroot ]) || git clone $(DEPTH) git://git.buildroot.net/buildroot buildroot -b 2023.11.1
 	([ -d iproute2 ] || [ -h iproute2 ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-iproute2.git iproute2 -b iptfs
 	([ -d linux ] || [ -h linux ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
@@ -41,7 +41,7 @@ br-menuconfig:
 
 output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
 	mkdir -p output-linux
-	make -C linux -j$(shell nproc) O=../output-linux
+	make -C linux -j$(shell nproc) O=../output-linux LOCALVERSION=''
 	(cd linux && scripts/clang-tools/gen_compile_commands.py -d../output-linux)
 
 # linux/arch/x86/boot/bzImage: linux/.config
@@ -51,7 +51,7 @@ output-linux/arch/x86/boot/bzImage: output-linux output-linux/.config
 
 output-buildroot/images/rootfs.cpio.gz: output-buildroot output-buildroot/.config
 	mkdir -p output-buildroot
-	make -C buildroot -j$(shell nproc) V=1 O=../output-buildroot
+	make -C buildroot -j$(shell nproc) V=1 O=../output-buildroot LOCALVERSION=''
 
 output-linux/.config: $(LINUXCONFIG)
 	cp -p $< $@
