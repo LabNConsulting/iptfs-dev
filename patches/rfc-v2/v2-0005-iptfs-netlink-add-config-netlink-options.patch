@@ -1,8 +1,7 @@
-From 8451b570ef7b726939aed17aeeaa72af96067f94 Mon Sep 17 00:00:00 2001
+From 2aa806e73ca16e05eec04d9d78459b31ce7839e8 Mon Sep 17 00:00:00 2001
 From: Christian Hopps <chopps@labn.net>
 Date: Sun, 12 Nov 2023 06:02:21 -0500
-Subject: [PATCH ipsec-next v2 5/8] iptfs: netlink: add config (netlink)
- options
+Subject: [RFC ipsec-next v2 5/8] iptfs: netlink: add config (netlink) options
 
 Add netlink options for configuring IP-TFS SAs.
 
@@ -14,7 +13,7 @@ Signed-off-by: Christian Hopps <chopps@labn.net>
  3 files changed, 32 insertions(+), 3 deletions(-)
 
 diff --git a/include/uapi/linux/xfrm.h b/include/uapi/linux/xfrm.h
-index 6a77328be114..fcb8f1583284 100644
+index 6a77328be114..3e98d45d70a6 100644
 --- a/include/uapi/linux/xfrm.h
 +++ b/include/uapi/linux/xfrm.h
 @@ -153,7 +153,8 @@ enum {
@@ -35,13 +34,13 @@ index 6a77328be114..fcb8f1583284 100644
 +	XFRMA_IPTFS_MAX_QSIZE,	/* __u32 max ingress queue size */
 +	XFRMA_IPTFS_DONT_FRAG,	/* don't use fragmentation */
 +	XFRMA_IPTFS_DROP_TIME,	/* __u32 usec to wait for next seq */
-+	XFRMA_IPTFS_REORDER_WINDOW,	/* __u16 reorder window size */
++	XFRMA_IPTFS_REORD_WIN,	/* __u16 reorder window size */
 +	XFRMA_IPTFS_INIT_DELAY,	/* __u32 initial packet wait delay (usec) */
  	__XFRMA_MAX
  
  #define XFRMA_OUTPUT_MARK XFRMA_SET_MARK	/* Compatibility */
 diff --git a/net/xfrm/xfrm_compat.c b/net/xfrm/xfrm_compat.c
-index 655fe4ff8621..0e533b89b17f 100644
+index 655fe4ff8621..35b2abf33e54 100644
 --- a/net/xfrm/xfrm_compat.c
 +++ b/net/xfrm/xfrm_compat.c
 @@ -277,9 +277,15 @@ static int xfrm_xlate64_attr(struct sk_buff *dst, const struct nlattr *src)
@@ -52,7 +51,7 @@ index 655fe4ff8621..0e533b89b17f 100644
 +	case XFRMA_IPTFS_MAX_QSIZE:
 +	case XFRMA_IPTFS_DONT_FRAG:
 +	case XFRMA_IPTFS_DROP_TIME:
-+	case XFRMA_IPTFS_REORDER_WINDOW:
++	case XFRMA_IPTFS_REORD_WIN:
 +	case XFRMA_IPTFS_INIT_DELAY:
  		return xfrm_nla_cpy(dst, src, nla_len(src));
  	default:
@@ -71,7 +70,7 @@ index 655fe4ff8621..0e533b89b17f 100644
  		return -EOPNOTSUPP;
  	}
 diff --git a/net/xfrm/xfrm_user.c b/net/xfrm/xfrm_user.c
-index ad01997c3aa9..d4c88d29703e 100644
+index ad01997c3aa9..fa2059de51f5 100644
 --- a/net/xfrm/xfrm_user.c
 +++ b/net/xfrm/xfrm_user.c
 @@ -272,6 +272,16 @@ static int verify_newsa_info(struct xfrm_usersa_info *p,
@@ -82,7 +81,7 @@ index ad01997c3aa9..d4c88d29703e 100644
 +		     attrs[XFRMA_IPTFS_MAX_QSIZE] ||
 +		     attrs[XFRMA_IPTFS_DONT_FRAG] ||
 +		     attrs[XFRMA_IPTFS_DROP_TIME] ||
-+		     attrs[XFRMA_IPTFS_REORDER_WINDOW] ||
++		     attrs[XFRMA_IPTFS_REORD_WIN] ||
 +		     attrs[XFRMA_IPTFS_INIT_DELAY]) &&
 +		    p->mode != XFRM_MODE_IPTFS) {
 +			NL_SET_ERR_MSG(extack, "IPTFS options can only be used in IPTFS mode");
@@ -99,11 +98,11 @@ index ad01997c3aa9..d4c88d29703e 100644
 +	[XFRMA_IPTFS_MAX_QSIZE]	= { .type = NLA_U32 },
 +	[XFRMA_IPTFS_DONT_FRAG]	= { .type = NLA_FLAG },
 +	[XFRMA_IPTFS_DROP_TIME]	= { .type = NLA_U32 },
-+	[XFRMA_IPTFS_REORDER_WINDOW]	= { .type = NLA_U16 },
-+	[XFRMA_IPTFS_INIT_DELAY]	= { .type = NLA_U32 },
++	[XFRMA_IPTFS_REORD_WIN]	= { .type = NLA_U16 },
++	[XFRMA_IPTFS_INIT_DELAY] = { .type = NLA_U32 },
  };
  EXPORT_SYMBOL_GPL(xfrma_policy);
  
 -- 
-2.43.2
+2.42.0
 

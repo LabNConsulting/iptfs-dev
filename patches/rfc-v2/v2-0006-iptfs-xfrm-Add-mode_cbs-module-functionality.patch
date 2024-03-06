@@ -1,7 +1,7 @@
-From e23c61a038e7bca3d8b23edfa696e977f04879b4 Mon Sep 17 00:00:00 2001
+From 5f0a591d96602c791dde6c1bf7f056b3afcdae8e Mon Sep 17 00:00:00 2001
 From: Christian Hopps <chopps@labn.net>
 Date: Thu, 3 Aug 2023 15:15:00 +0000
-Subject: [PATCH ipsec-next v2 6/8] iptfs: xfrm: Add mode_cbs module
+Subject: [RFC ipsec-next v2 6/8] iptfs: xfrm: Add mode_cbs module
  functionality
 
 Add a set of callbacks xfrm_mode_cbs to xfrm_state. These callbacks
@@ -10,17 +10,17 @@ in modules.
 
 Signed-off-by: Christian Hopps <chopps@labn.net>
 ---
- include/net/xfrm.h     | 38 ++++++++++++++++++++++++++++++++++
+ include/net/xfrm.h     | 36 ++++++++++++++++++++++++++++++++++++
  net/xfrm/xfrm_device.c |  3 ++-
- net/xfrm/xfrm_input.c  | 14 +++++++++++--
- net/xfrm/xfrm_output.c |  2 ++
- net/xfrm/xfrm_policy.c | 18 +++++++++-------
- net/xfrm/xfrm_state.c  | 47 ++++++++++++++++++++++++++++++++++++++++++
- net/xfrm/xfrm_user.c   | 10 +++++++++
- 7 files changed, 122 insertions(+), 10 deletions(-)
+ net/xfrm/xfrm_input.c  | 14 ++++++++++++--
+ net/xfrm/xfrm_output.c |  9 +++++++--
+ net/xfrm/xfrm_policy.c | 18 +++++++++++-------
+ net/xfrm/xfrm_state.c  | 41 +++++++++++++++++++++++++++++++++++++++++
+ net/xfrm/xfrm_user.c   | 10 ++++++++++
+ 7 files changed, 119 insertions(+), 12 deletions(-)
 
 diff --git a/include/net/xfrm.h b/include/net/xfrm.h
-index 1d107241b901..f1d5e99f0a47 100644
+index d2e87344d175..aeeadadc9545 100644
 --- a/include/net/xfrm.h
 +++ b/include/net/xfrm.h
 @@ -204,6 +204,7 @@ struct xfrm_state {
@@ -41,7 +41,7 @@ index 1d107241b901..f1d5e99f0a47 100644
  };
  
  static inline struct net *xs_net(struct xfrm_state *x)
-@@ -441,6 +445,40 @@ struct xfrm_type_offload {
+@@ -441,6 +445,38 @@ struct xfrm_type_offload {
  int xfrm_register_type_offload(const struct xfrm_type_offload *type, unsigned short family);
  void xfrm_unregister_type_offload(const struct xfrm_type_offload *type, unsigned short family);
  
@@ -53,10 +53,8 @@ index 1d107241b901..f1d5e99f0a47 100644
 +
 +	/* Called while handling the user netlink options. */
 +	int	(*user_init)(struct net *net, struct xfrm_state *x,
-+			     struct nlattr **attrs,
-+			     struct netlink_ext_ack *extack);
++			     struct nlattr **attrs);
 +	int	(*copy_to_user)(struct xfrm_state *x, struct sk_buff *skb);
-+	int     (*clone)(struct xfrm_state *x, struct xfrm_state *orig);
 +
 +	u32	(*get_inner_mtu)(struct xfrm_state *x, int outer_mtu);
 +
@@ -139,23 +137,44 @@ index bd4ce21d76d7..824f7b7f90e0 100644
  			decaps = 1;
  			break;
 diff --git a/net/xfrm/xfrm_output.c b/net/xfrm/xfrm_output.c
-index 662c83beb345..8f98e42d4252 100644
+index 662c83beb345..4390c111410d 100644
 --- a/net/xfrm/xfrm_output.c
 +++ b/net/xfrm/xfrm_output.c
-@@ -472,6 +472,8 @@ static int xfrm_outer_mode_output(struct xfrm_state *x, struct sk_buff *skb)
+@@ -280,7 +280,9 @@ static int xfrm4_tunnel_encap_add(struct xfrm_state *x, struct sk_buff *skb)
+ 	skb_set_inner_network_header(skb, skb_network_offset(skb));
+ 	skb_set_inner_transport_header(skb, skb_transport_offset(skb));
+ 
+-	skb_set_network_header(skb, -x->props.header_len);
++	/* backup to add space for the outer encap */
++	skb_set_network_header(skb,
++			       -x->props.header_len + x->props.enc_hdr_len);
+ 	skb->mac_header = skb->network_header +
+ 			  offsetof(struct iphdr, protocol);
+ 	skb->transport_header = skb->network_header + sizeof(*top_iph);
+@@ -325,7 +327,8 @@ static int xfrm6_tunnel_encap_add(struct xfrm_state *x, struct sk_buff *skb)
+ 	skb_set_inner_network_header(skb, skb_network_offset(skb));
+ 	skb_set_inner_transport_header(skb, skb_transport_offset(skb));
+ 
+-	skb_set_network_header(skb, -x->props.header_len);
++	skb_set_network_header(skb,
++			       -x->props.header_len + x->props.enc_hdr_len);
+ 	skb->mac_header = skb->network_header +
+ 			  offsetof(struct ipv6hdr, nexthdr);
+ 	skb->transport_header = skb->network_header + sizeof(*top_iph);
+@@ -472,6 +475,8 @@ static int xfrm_outer_mode_output(struct xfrm_state *x, struct sk_buff *skb)
  		WARN_ON_ONCE(1);
  		break;
  	default:
-+		if (x->mode_cbs && x->mode_cbs->prepare_output)
++		if (x->mode_cbs->prepare_output)
 +			return x->mode_cbs->prepare_output(x, skb);
  		WARN_ON_ONCE(1);
  		break;
  	}
 diff --git a/net/xfrm/xfrm_policy.c b/net/xfrm/xfrm_policy.c
-index 53b7ce4a4db0..f3cd8483d427 100644
+index d2dddc570f4f..3220b01121f3 100644
 --- a/net/xfrm/xfrm_policy.c
 +++ b/net/xfrm/xfrm_policy.c
-@@ -2713,13 +2713,17 @@ static struct dst_entry *xfrm_bundle_create(struct xfrm_policy *policy,
+@@ -2707,13 +2707,17 @@ static struct dst_entry *xfrm_bundle_create(struct xfrm_policy *policy,
  
  		dst1->input = dst_discard;
  
@@ -181,7 +200,7 @@ index 53b7ce4a4db0..f3cd8483d427 100644
  		xdst_prev = xdst;
  
 diff --git a/net/xfrm/xfrm_state.c b/net/xfrm/xfrm_state.c
-index bda5327bf34d..2b58e35bea63 100644
+index bda5327bf34d..f5e1a17ebf74 100644
 --- a/net/xfrm/xfrm_state.c
 +++ b/net/xfrm/xfrm_state.c
 @@ -513,6 +513,36 @@ static const struct xfrm_mode *xfrm_get_mode(unsigned int encap, int family)
@@ -230,27 +249,7 @@ index bda5327bf34d..2b58e35bea63 100644
  	hrtimer_cancel(&x->mtimer);
  	del_timer_sync(&x->rtimer);
  	kfree(x->aead);
-@@ -678,6 +710,7 @@ struct xfrm_state *xfrm_state_alloc(struct net *net)
- 		x->replay_maxage = 0;
- 		x->replay_maxdiff = 0;
- 		spin_lock_init(&x->lock);
-+		x->mode_data = NULL;
- 	}
- 	return x;
- }
-@@ -1745,6 +1778,11 @@ static struct xfrm_state *xfrm_state_clone(struct xfrm_state *orig,
- 	x->new_mapping = 0;
- 	x->new_mapping_sport = 0;
- 
-+	if (x->mode_cbs && x->mode_cbs->clone) {
-+		if (!x->mode_cbs->clone(x, orig))
-+			goto error;
-+	}
-+
- 	return x;
- 
-  error:
-@@ -2765,6 +2803,9 @@ u32 xfrm_state_mtu(struct xfrm_state *x, int mtu)
+@@ -2765,6 +2797,9 @@ u32 xfrm_state_mtu(struct xfrm_state *x, int mtu)
  	case XFRM_MODE_TUNNEL:
  		break;
  	default:
@@ -260,7 +259,7 @@ index bda5327bf34d..2b58e35bea63 100644
  		WARN_ON_ONCE(1);
  		break;
  	}
-@@ -2850,6 +2891,12 @@ int __xfrm_init_state(struct xfrm_state *x, bool init_replay, bool offload,
+@@ -2850,6 +2885,12 @@ int __xfrm_init_state(struct xfrm_state *x, bool init_replay, bool offload,
  			goto error;
  	}
  
@@ -274,7 +273,7 @@ index bda5327bf34d..2b58e35bea63 100644
  	return err;
  }
 diff --git a/net/xfrm/xfrm_user.c b/net/xfrm/xfrm_user.c
-index d4c88d29703e..92d11f2306e7 100644
+index fa2059de51f5..795da945fbc2 100644
 --- a/net/xfrm/xfrm_user.c
 +++ b/net/xfrm/xfrm_user.c
 @@ -779,6 +779,12 @@ static struct xfrm_state *xfrm_state_construct(struct net *net,
@@ -282,7 +281,7 @@ index d4c88d29703e..92d11f2306e7 100644
  	}
  
 +	if (x->mode_cbs && x->mode_cbs->user_init) {
-+		err = x->mode_cbs->user_init(net, x, attrs, extack);
++		err = x->mode_cbs->user_init(net, x, attrs);
 +		if (err)
 +			goto error;
 +	}
@@ -302,5 +301,5 @@ index d4c88d29703e..92d11f2306e7 100644
  		ret = nla_put_u32(skb, XFRMA_MTIMER_THRESH, x->mapping_maxage);
  out:
 -- 
-2.43.2
+2.42.0
 

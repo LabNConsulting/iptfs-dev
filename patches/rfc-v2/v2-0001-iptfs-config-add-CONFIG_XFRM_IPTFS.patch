@@ -1,7 +1,7 @@
-From 53a3a402912b9373cf757d9d613bbc270a66881e Mon Sep 17 00:00:00 2001
+From e7b3772bddb71465df070226c60163c45e4944d0 Mon Sep 17 00:00:00 2001
 From: Christian Hopps <chopps@labn.net>
 Date: Sun, 12 Nov 2023 06:28:49 -0500
-Subject: [PATCH ipsec-next v2 1/8] iptfs: config: add CONFIG_XFRM_IPTFS
+Subject: [RFC ipsec-next v2 1/8] iptfs: config: add CONFIG_XFRM_IPTFS
 
 Add new Kconfig option to enable IP-TFS (RFC9347) functionality.
 
@@ -11,15 +11,15 @@ Signed-off-by: Christian Hopps <chopps@labn.net>
  1 file changed, 16 insertions(+)
 
 diff --git a/net/xfrm/Kconfig b/net/xfrm/Kconfig
-index d7b16f2c23e9..f0157702718f 100644
+index 3adf31a83a79..7a41d36bb080 100644
 --- a/net/xfrm/Kconfig
 +++ b/net/xfrm/Kconfig
-@@ -135,6 +135,22 @@ config NET_KEY_MIGRATE
+@@ -134,6 +134,22 @@ config NET_KEY_MIGRATE
  
  	  If unsure, say N.
  
 +config XFRM_IPTFS
-+	tristate "IPsec IP-TFS/AGGFRAG (RFC 9347) encapsulation support"
++	bool "IPsec IP-TFS/AGGFRAG (RFC 9347) encapsulation support"
 +	depends on XFRM
 +	help
 +	  Information on the IP-TFS/AGGFRAG encapsulation can be found
@@ -38,5 +38,5 @@ index d7b16f2c23e9..f0157702718f 100644
  	bool
  
 -- 
-2.43.2
+2.42.0
 
