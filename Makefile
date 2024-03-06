@@ -16,6 +16,11 @@ setup:
 	([ -d linux ] || [ -h linux ]) || git clone $(DEPTH) https://github.com/LabNConsulting/iptfs-linux.git linux -b iptfs
 
 kernel: output-linux/arch/x86/boot/bzImage
+
+kernel-warn: output-linux/arch/x86/boot/bzImage
+	mkdir -p output-linux
+	make -C linux -j$(shell nproc) V=1 C=1 W=1 O=../output-linux LOCALVERSION='' 2>&1 | tee warn-log.txt
+
 # kernel: linux/arch/x86/boot/bzImage
 
 rootfs: output-buildroot/images/rootfs.cpio.gz
