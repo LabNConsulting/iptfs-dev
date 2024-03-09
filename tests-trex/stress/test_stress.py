@@ -96,7 +96,7 @@ is_debug_kernel.cache = None
 
 async def test_policy_small_pkt(unet, pytestconfig, astepf):
     await astepf("Before small packet test")
-    defrate = "4M" if is_debug_kernel(unet) else "40M"
+    defrate = "2M" if is_debug_kernel(unet) else "30M"
 
     await _test_policy_small_pkt(unet, pytestconfig, default_rate=defrate)
 
