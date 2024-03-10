@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout kernel repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: LabNConsulting/iptfs-linux
           path: linux
@@ -26,7 +26,7 @@ jobs:
 
       - name: Kernel build cache
         id: linux-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: output-linux.tar.xz
           # We need a unique key name in order for new versions to save
@@ -69,7 +69,7 @@ jobs:
           ls -hl output-linux.tar.xz
 
       - name: Archive kernel bzImage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-bzImage
           path: bzImage
@@ -79,10 +79,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout kernel repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: LabNConsulting/iptfs-linux
           path: linux
@@ -94,7 +94,7 @@ jobs:
 
       - name: Coverage kernel build cache
         id: linux-cov-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: output-cov-linux.tar.xz
           # We need a unique key name in order for new versions to save
@@ -139,7 +139,7 @@ jobs:
           ls -hl output-cov-linux.tar.xz
 
       - name: Archive coverage kernel bzImage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-cov-bzImage
           path: bzImage
@@ -149,7 +149,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout repos
         run: make setup SHALLOW_CLONE=1
@@ -161,10 +161,10 @@ jobs:
 
       - name: Buildroot Build Cache
         id: buildroot-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: output-buildroot.tar.gz
-          key: ${{ runner.os }}-br-${{ hashFiles('buildroot.config', 'output-buildroot.tar.gz', 'root-key', 'root-key.pub') }}
+          key: ${{ runner.os }}-br-${{ hashFiles('buildroot-ci.config', 'output-buildroot.tar.gz', 'root-key', 'root-key.pub') }}
           restore-keys: |
             key: ${{ runner.os }}-br-
 
@@ -179,7 +179,7 @@ jobs:
               tar -xpzf output-buildroot.tar.gz
             fi
             # If the buildroot config is changed just wipe the cache
-            if ! diff -q -u1 buildroot.config output-buildroot/.config -I '^[ \t]*#' -I '^[ \t]*$' 2>/dev/null; then
+            if ! diff -q -u1 buildroot-ci.config output-buildroot/.config -I '^[ \t]*#' -I '^[ \t]*$' 2>/dev/null; then
               echo "Buildroot configs differ erasing cache"
               rm -rf output-buildroot output-buildroot.tar.gz
             fi
@@ -188,23 +188,29 @@ jobs:
           if [ ! -d output-buildroot ]; then
             echo "Creating new output directory"
             mkdir -p output-buildroot
-            cp -p buildroot.config output-buildroot/.config
-            cd output-buildroot
+            cp -p buildroot-ci.config output-buildroot/.config
           else
-            cd output-buildroot
-            make -j6 O=$PWD -C ../buildroot iproute2-dirclean
+            make -C buildroot -j6 V=0 O=$PWD/output-buildroot iproute2-dirclean
           fi
-          make -j6 O=$PWD -C ../buildroot
+          # make rootfs
+          make -C buildroot -j6 V=1 O=$PWD/output-buildroot LOCALVERSION='' > build-buildroot.txt 2>&1
 
           # tar up the remaining files including .ccache
-          cd ..
           echo "Collecting new cache contents: $(date)"
           tar -czf output-buildroot.tar.gz output-buildroot root-key root-key.pub
           ls -hl output-buildroot.tar.gz
           echo "Done collecting new cache contents: $(date)"
 
+      - name: Archive buildroot build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildroot-build-log
+          path: build-buildroot.txt
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Archive buildroot rootfs.cpio.gz
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rootfs-compressed-cpio
           path: output-buildroot/images/rootfs.cpio.gz
@@ -212,7 +218,7 @@ jobs:
           if-no-files-found: error
 
       - name: Archive buildroot root-key
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: root-key
           path: |
@@ -225,11 +231,11 @@ jobs:
     needs: ["build-cov-kernel", "build-rootfs"]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # For coverage data, extract the source files.
       - name: Checkout kernel repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: LabNConsulting/iptfs-linux
           path: linux
@@ -260,12 +266,12 @@ jobs:
       # We only need to artifacts for buildroot
       #
       - name: Fetch buildroot rootfs.cpio.gz archive
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: rootfs-compressed-cpio
 
       - name: Fetch root-key
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: root-key
 
@@ -335,7 +341,7 @@ jobs:
 
       - name: Archive test logs tarball
         if: ${{ always() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-logs-tar
           path: test-logs.tar.bz2
@@ -347,17 +353,17 @@ jobs:
     steps:
 
       - name: Download kernel bzImage
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kernel-bzImage
 
       - name: Download buildroot rootfs.cpio.gz
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: rootfs-compressed-cpio
 
       - name: Downlaod root-key
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: root-key
 
