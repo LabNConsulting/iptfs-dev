@@ -147,6 +147,7 @@ jobs:
 
   build-rootfs:
     runs-on: ubuntu-22.04
+    timeout-minutes: 600
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -169,6 +170,7 @@ jobs:
             key: ${{ runner.os }}-br-
 
       - name: Build Rootfs
+        timeout-minutes: 540
         run: |
           set -x
           if [ -f output-buildroot.tar.xz ] || [ -f output-buildroot.tar.gz ]; then
@@ -193,21 +195,27 @@ jobs:
             make -C buildroot -j6 V=0 O=$PWD/output-buildroot iproute2-dirclean
           fi
           # make rootfs
+          echo "Starting build: $(date)"
           make -C buildroot -j6 V=1 O=$PWD/output-buildroot LOCALVERSION='' > build-buildroot.txt 2>&1
-
-          # tar up the remaining files including .ccache
-          echo "Collecting new cache contents: $(date)"
-          tar -czf output-buildroot.tar.gz output-buildroot root-key root-key.pub
-          ls -hl output-buildroot.tar.gz
-          echo "Done collecting new cache contents: $(date)"
+          echo "Build complete: $(date)"
 
       - name: Archive buildroot build log
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: buildroot-build-log
           path: build-buildroot.txt
           retention-days: 30
           if-no-files-found: error
+
+      - name: Collect cache contents
+        timeout-minutes: 120
+        run: |
+          # tar up the remaining files including .ccache
+          echo "Collecting new cache contents: $(date)"
+          tar -czvf output-buildroot.tar.gz output-buildroot root-key root-key.pub || echo "error with tarball creation"
+          ls -hl output-buildroot.tar.gz || true
+          echo "Done collecting new cache contents: $(date)"
 
       - name: Archive buildroot rootfs.cpio.gz
         uses: actions/upload-artifact@v4
@@ -226,6 +234,7 @@ jobs:
             root-key.pub
           retention-days: 1
           if-no-files-found: error
+
   test:
     runs-on: ubuntu-22.04
     needs: ["build-cov-kernel", "build-rootfs"]
@@ -233,7 +242,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # For coverage data, extract the source files.
       - name: Checkout kernel repository
         uses: actions/checkout@v4
         with:
@@ -246,7 +254,11 @@ jobs:
           sudo apt-get install -y lcov qemu-system-x86 socat
           sudo python3 -m pip install -U munet pytest pytest-asyncio scapy
 
-      # For coverage data extract the full build to get the gcno
+      #
+      # For coverage data, extract the source and full build to get the gcno
+      # files.
+      #
+
       - name: Restore coverage kernel build
         id: linux-cov-cache-restore
         uses: actions/cache/restore@v3
@@ -310,6 +322,7 @@ jobs:
           sudo -E env CI=$CI python3 -m pytest -s --coverage tests/simplenet | tee $tmpf
           grep -v SKIPPED $tmpf
 
+      # Restore longer running test once working
       - name: UT packet test
         run: |
           set -e
@@ -373,4 +386,5 @@ jobs:
           files: |
             bzImage
             root-key
+            root-key.pub
             rootfs.cpio.gz
