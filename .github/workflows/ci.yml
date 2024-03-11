@@ -28,23 +28,21 @@ jobs:
         id: linux-cache
         uses: actions/cache@v4
         with:
-          path: output-linux.tar.xz
+          path: output-linux
           # We need a unique key name in order for new versions to save
-          key: ${{ runner.os }}-kernel-${{ hashFiles('linux-fast.config', 'output-linux.tar.xz') }}
+          key: ${{ runner.os }}-kernel-${{ hashFiles('linux-fast.config', 'output-linux/**/*.[ch]') }}
           restore-keys: |
             key: ${{ runner.os }}-kernel-
 
       - name: Build kernel
         run: |
           set -x
-          rm -rf output-linux
-          if [ -f output-linux.tar.xz ]; then
-            echo "Cache found, extracting"
-            tar -xpJf output-linux.tar.xz
+          if [ -d output-linux ]; then
+            echo "Cache found, checking for config difference"
             # If the kernel config is changed just wipe the cache
             if ! diff -q -u1 linux-fast.config output-linux/.config -I '^[ \t]*#' -I '^[ \t]*$' 2>/dev/null; then
               echo "Kernel configs differ erasing cache"
-              rm -rf output-linux output-linux.tar.xz
+              rm -rf output-linux
             fi
           fi
 
@@ -61,12 +59,6 @@ jobs:
           [ -e arch/x86/boot/bzImage ] && cp arch/x86/boot/bzImage ..
           # Ccache keeps it's own objects
           # make clean
-
-          # tar up the remaining files including .ccache
-          cd ..
-          echo "Collecting new cache contents"
-          tar -cf - output-linux | xz -T0 -c > output-linux.tar.xz
-          ls -hl output-linux.tar.xz
 
       - name: Archive kernel bzImage
         uses: actions/upload-artifact@v4
@@ -96,23 +88,21 @@ jobs:
         id: linux-cov-cache
         uses: actions/cache@v4
         with:
-          path: output-cov-linux.tar.xz
+          path: output-linux
           # We need a unique key name in order for new versions to save
-          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-cov-linux.tar.xz') }}
+          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-linux/**/*.[ch]') }}
           restore-keys: |
             key: ${{ runner.os }}-cov-kernel-
 
       - name: Build coverage kernel
         run: |
           set -x
-          rm -rf output-linux
-          if [ -f output-cov-linux.tar.xz ]; then
-            echo "Cache found, extracting"
-            tar -xpJf output-cov-linux.tar.xz
+          if [ -d output-linux ]; then
+            echo "Cache found, checking for config difference"
             # If the kernel config is changed just wipe the cache
             if ! diff -q -u1 linux-cov.config output-linux/.config -I '^[ \t]*#' -I '^[ \t]*$' 2>/dev/null; then
               echo "Kernel configs differ erasing cache"
-              rm -rf output-linux output-cov-linux.tar.xz
+              rm -rf output-linux
             fi
           fi
 
@@ -131,12 +121,6 @@ jobs:
           # We want the objects and images too for now, restroy once we know
           # coverage works
           # make clean
-
-          # tar up the remaining files including .ccache
-          cd ..
-          echo "Collecting new cache contents"
-          tar -cf - output-linux | xz -T0 -c > output-cov-linux.tar.xz
-          ls -hl output-cov-linux.tar.xz
 
       - name: Archive coverage kernel bzImage
         uses: actions/upload-artifact@v4
