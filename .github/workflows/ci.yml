@@ -242,18 +242,13 @@ jobs:
 
       - name: Restore coverage kernel build
         id: linux-cov-cache-restore
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
-          path: output-cov-linux.tar.xz
+          path: output-linux
           # We need a unique key name in order for new versions to save
-          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-cov-linux.tar.xz') }}
+          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-linux/**/*.[ch]') }}
           restore-keys: |
             key: ${{ runner.os }}-cov-kernel-
-
-      - name: Extract coverage kernel build
-        run: |
-          [ -d output-linux ] && echo "Error: found existinb build" && exit 1
-          tar -xvpJf output-cov-linux.tar.xz
 
       #
       # We only need to artifacts for buildroot
