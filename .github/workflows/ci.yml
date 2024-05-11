@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: LabNConsulting/iptfs-linux
+          ref: iptfs
           path: linux
 
       - name: Install build depencies
@@ -77,6 +78,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: LabNConsulting/iptfs-linux
+          ref: iptfs-ci
           path: linux
 
       - name: Install build depencies
@@ -224,6 +226,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: LabNConsulting/iptfs-linux
+          ref: iptfs-ci
           path: linux
 
       - name: Install test depencies
