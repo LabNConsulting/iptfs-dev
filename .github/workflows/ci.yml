@@ -55,7 +55,7 @@ jobs:
           fi
           cd output-linux
           ccache -z
-          KBUILD_BUILD_TIMESTAMP='' make CC="ccache gcc" -j2 O=$PWD -C ../linux
+          KBUILD_BUILD_TIMESTAMP='' make CC="ccache gcc" LINUXCONFIG=linux-fast.config O=$PWD -j2 -C ../linux
           ccache -sz
           [ -e arch/x86/boot/bzImage ] && cp arch/x86/boot/bzImage ..
           # Ccache keeps it's own objects
@@ -116,7 +116,7 @@ jobs:
           fi
           cd output-linux
           ccache -z
-          KBUILD_BUILD_TIMESTAMP='' make CC="ccache gcc" -j2 O=$PWD -C ../linux
+          KBUILD_BUILD_TIMESTAMP='' make CC="ccache gcc" LINUXCONFIG=linux-cov.config O=$PWD -j2 -C ../linux
           ccache -sz
           [ -e arch/x86/boot/bzImage ] && cp arch/x86/boot/bzImage ..
           # Ccache keeps it's own objects
