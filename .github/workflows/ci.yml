@@ -279,7 +279,7 @@ jobs:
         run: |
           set -e
           tmpf=test-logs/results-config.txt
-          sudo -E env CI=$CI python3 -m pytest -s --coverage tests/config | tee $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/config | tee $tmpf
           grep -v SKIPPED $tmpf
 
       - name: Errors test
@@ -287,7 +287,7 @@ jobs:
           set -e
           tmpf=test-logs/results-errors.txt
           tmpf=/tmp/test-results-$$.txt
-          sudo -E env CI=$CI python3 -m pytest -s --coverage tests/errors | tee $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/errors | tee $tmpf
           grep -v SKIPPED $tmpf
 
       - name: Simple test
@@ -295,7 +295,7 @@ jobs:
           set -e
           tmpf=test-logs/results-simplenet.txt
           tmpf=/tmp/test-results-$$.txt
-          sudo -E env CI=$CI python3 -m pytest -s --coverage tests/simplenet | tee $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/simplenet | tee $tmpf
           grep -v SKIPPED $tmpf
 
       # Restore longer running test once working
@@ -303,7 +303,7 @@ jobs:
         run: |
           set -e
           tmpf=test-logs/results-utpkt.txt
-          sudo python3 -m pytest -s --coverage tests/utpkt | tee $tmpf
+          sudo python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/utpkt | tee $tmpf
           grep -v SKIPPED $tmpf
 
       - name: Extract coverage data
