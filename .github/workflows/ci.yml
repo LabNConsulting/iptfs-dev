@@ -273,38 +273,43 @@ jobs:
           mkdir -p test-logs
 
       - name: Print the environment under sudo
-        run: sudo -E env
+        run: |
+          sudo -E env
+          qemu-system-x86_64 --version
+          munet --version
 
       - name: Config test
         run: |
           set -e
+          set -o pipefail
           tmpf=test-logs/results-config.txt
-          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/config | tee $tmpf
-          grep -v SKIPPED $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/config |& tee $tmpf
+          grep -qvz SKIPPED $tmpf
 
       - name: Errors test
         run: |
           set -e
+          set -o pipefail
           tmpf=test-logs/results-errors.txt
-          tmpf=/tmp/test-results-$$.txt
-          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/errors | tee $tmpf
-          grep -v SKIPPED $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/errors |& tee $tmpf
+          grep -qvz SKIPPED $tmpf
 
       - name: Simple test
         run: |
           set -e
+          set -o pipefail
           tmpf=test-logs/results-simplenet.txt
-          tmpf=/tmp/test-results-$$.txt
-          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/simplenet | tee $tmpf
-          grep -v SKIPPED $tmpf
+          sudo -E env CI=$CI python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/simplenet |& tee $tmpf
+          grep -qvz SKIPPED $tmpf
 
       # Restore longer running test once working
       - name: UT packet test
         run: |
           set -e
+          set -o pipefail
           tmpf=test-logs/results-utpkt.txt
-          sudo python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/utpkt | tee $tmpf
-          grep -v SKIPPED $tmpf
+          sudo python3 -m pytest -s --coverage --cov-build-dir=$PWD/output-linux tests/utpkt |& tee $tmpf
+          grep -qvz SKIPPED $tmpf
 
       - name: Extract coverage data
         if: ${{ always() }}
