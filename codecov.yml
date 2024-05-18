@@ -1,0 +1,8 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 10%
+fixes:
+  - "/home/runner/work/iptfs-linux/iptfs-linux/linux::"
