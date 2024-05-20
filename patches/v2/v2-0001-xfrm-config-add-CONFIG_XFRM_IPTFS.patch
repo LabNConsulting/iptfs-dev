@@ -1,7 +1,7 @@
-From 53a3a402912b9373cf757d9d613bbc270a66881e Mon Sep 17 00:00:00 2001
+From 5624f2ed73dc421981acfdd4978962dcc9c47a14 Mon Sep 17 00:00:00 2001
 From: Christian Hopps <chopps@labn.net>
 Date: Sun, 12 Nov 2023 06:28:49 -0500
-Subject: [PATCH ipsec-next v2 1/8] iptfs: config: add CONFIG_XFRM_IPTFS
+Subject: [PATCH ipsec-next v2 01/17] xfrm: config: add CONFIG_XFRM_IPTFS
 
 Add new Kconfig option to enable IP-TFS (RFC9347) functionality.
 
@@ -38,5 +38,5 @@ index d7b16f2c23e9..f0157702718f 100644
  	bool
  
 -- 
-2.43.2
+2.45.1
 

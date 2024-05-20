@@ -1,7 +1,7 @@
-From f78a7f448129d65028fff3c9257a3d0477e8b2d8 Mon Sep 17 00:00:00 2001
+From 75b39d8517b8b16aa9225caa7548954b3a8d972d Mon Sep 17 00:00:00 2001
 From: Christian Hopps <chopps@labn.net>
 Date: Wed, 26 Jul 2023 14:20:52 +0000
-Subject: [PATCH ipsec-next v2 4/8] iptfs: sysctl: allow configuration of
+Subject: [PATCH ipsec-next v2 04/17] xfrm: sysctl: allow configuration of
  global default values
 
 Add sysctls for the changing the IPTFS default SA values.
@@ -132,5 +132,5 @@ index 7fdeafc838a7..dddb1025b7de 100644
  	/* Don't export sysctls to unprivileged users */
  	if (net->user_ns != &init_user_ns) {
 -- 
-2.43.2
+2.45.1
 

@@ -1,8 +1,7 @@
-From e23c61a038e7bca3d8b23edfa696e977f04879b4 Mon Sep 17 00:00:00 2001
+From bbb79d6fa6900e22cbff9499f1d4ce78b907ba41 Mon Sep 17 00:00:00 2001
 From: Christian Hopps <chopps@labn.net>
 Date: Thu, 3 Aug 2023 15:15:00 +0000
-Subject: [PATCH ipsec-next v2 6/8] iptfs: xfrm: Add mode_cbs module
- functionality
+Subject: [PATCH ipsec-next v2 06/17] xfrm: add mode_cbs module functionality
 
 Add a set of callbacks xfrm_mode_cbs to xfrm_state. These callbacks
 enable the addition of new xfrm modes, such as IP-TFS to be defined
@@ -10,20 +9,20 @@ in modules.
 
 Signed-off-by: Christian Hopps <chopps@labn.net>
 ---
- include/net/xfrm.h     | 38 ++++++++++++++++++++++++++++++++++
+ include/net/xfrm.h     | 39 ++++++++++++++++++++++++++++++++++
  net/xfrm/xfrm_device.c |  3 ++-
- net/xfrm/xfrm_input.c  | 14 +++++++++++--
+ net/xfrm/xfrm_input.c  | 14 ++++++++++--
  net/xfrm/xfrm_output.c |  2 ++
- net/xfrm/xfrm_policy.c | 18 +++++++++-------
- net/xfrm/xfrm_state.c  | 47 ++++++++++++++++++++++++++++++++++++++++++
- net/xfrm/xfrm_user.c   | 10 +++++++++
- 7 files changed, 122 insertions(+), 10 deletions(-)
+ net/xfrm/xfrm_policy.c | 18 ++++++++++------
+ net/xfrm/xfrm_state.c  | 48 ++++++++++++++++++++++++++++++++++++++++++
+ net/xfrm/xfrm_user.c   | 13 ++++++++++++
+ 7 files changed, 127 insertions(+), 10 deletions(-)
 
 diff --git a/include/net/xfrm.h b/include/net/xfrm.h
-index 1d107241b901..f1d5e99f0a47 100644
+index 7c9be06f8302..cb75ec2993bf 100644
 --- a/include/net/xfrm.h
 +++ b/include/net/xfrm.h
-@@ -204,6 +204,7 @@ struct xfrm_state {
+@@ -206,6 +206,7 @@ struct xfrm_state {
  		u16		family;
  		xfrm_address_t	saddr;
  		int		header_len;
@@ -31,17 +30,17 @@ index 1d107241b901..f1d5e99f0a47 100644
  		int		trailer_len;
  		u32		extra_flags;
  		struct xfrm_mark	smark;
-@@ -289,6 +290,9 @@ struct xfrm_state {
- 	/* Private data of this transformer, format is opaque,
+@@ -292,6 +293,9 @@ struct xfrm_state {
  	 * interpreted by xfrm_type methods. */
  	void			*data;
+ 	u8			dir;
 +
 +	const struct xfrm_mode_cbs	*mode_cbs;
 +	void				*mode_data;
  };
  
  static inline struct net *xs_net(struct xfrm_state *x)
-@@ -441,6 +445,40 @@ struct xfrm_type_offload {
+@@ -444,6 +448,41 @@ struct xfrm_type_offload {
  int xfrm_register_type_offload(const struct xfrm_type_offload *type, unsigned short family);
  void xfrm_unregister_type_offload(const struct xfrm_type_offload *type, unsigned short family);
  
@@ -57,6 +56,7 @@ index 1d107241b901..f1d5e99f0a47 100644
 +			     struct netlink_ext_ack *extack);
 +	int	(*copy_to_user)(struct xfrm_state *x, struct sk_buff *skb);
 +	int     (*clone)(struct xfrm_state *x, struct xfrm_state *orig);
++	unsigned int (*sa_len)(const struct xfrm_state *x);
 +
 +	u32	(*get_inner_mtu)(struct xfrm_state *x, int outer_mtu);
 +
@@ -83,7 +83,7 @@ index 1d107241b901..f1d5e99f0a47 100644
  {
  	switch(family) {
 diff --git a/net/xfrm/xfrm_device.c b/net/xfrm/xfrm_device.c
-index 3784534c9185..8b848540ea47 100644
+index 2455a76a1cff..f91b2bee8190 100644
 --- a/net/xfrm/xfrm_device.c
 +++ b/net/xfrm/xfrm_device.c
 @@ -42,7 +42,8 @@ static void __xfrm_mode_tunnel_prep(struct xfrm_state *x, struct sk_buff *skb,
@@ -97,10 +97,10 @@ index 3784534c9185..8b848540ea47 100644
  
  static void __xfrm_mode_beet_prep(struct xfrm_state *x, struct sk_buff *skb,
 diff --git a/net/xfrm/xfrm_input.c b/net/xfrm/xfrm_input.c
-index bd4ce21d76d7..824f7b7f90e0 100644
+index 71b42de6e3c9..8ef1af2d39bf 100644
 --- a/net/xfrm/xfrm_input.c
 +++ b/net/xfrm/xfrm_input.c
-@@ -437,6 +437,9 @@ static int xfrm_inner_mode_input(struct xfrm_state *x,
+@@ -438,6 +438,9 @@ static int xfrm_inner_mode_input(struct xfrm_state *x,
  		WARN_ON_ONCE(1);
  		break;
  	default:
@@ -110,7 +110,7 @@ index bd4ce21d76d7..824f7b7f90e0 100644
  		WARN_ON_ONCE(1);
  		break;
  	}
-@@ -479,6 +482,10 @@ int xfrm_input(struct sk_buff *skb, int nexthdr, __be32 spi, int encap_type)
+@@ -485,6 +488,10 @@ int xfrm_input(struct sk_buff *skb, int nexthdr, __be32 spi, int encap_type)
  
  		family = x->props.family;
  
@@ -121,7 +121,7 @@ index bd4ce21d76d7..824f7b7f90e0 100644
  		/* An encap_type of -1 indicates async resumption. */
  		if (encap_type == -1) {
  			async = 1;
-@@ -660,11 +667,14 @@ int xfrm_input(struct sk_buff *skb, int nexthdr, __be32 spi, int encap_type)
+@@ -672,11 +679,14 @@ int xfrm_input(struct sk_buff *skb, int nexthdr, __be32 spi, int encap_type)
  
  		XFRM_MODE_SKB_CB(skb)->protocol = nexthdr;
  
@@ -139,7 +139,7 @@ index bd4ce21d76d7..824f7b7f90e0 100644
  			decaps = 1;
  			break;
 diff --git a/net/xfrm/xfrm_output.c b/net/xfrm/xfrm_output.c
-index 662c83beb345..8f98e42d4252 100644
+index e5722c95b8bb..ef81359e4038 100644
 --- a/net/xfrm/xfrm_output.c
 +++ b/net/xfrm/xfrm_output.c
 @@ -472,6 +472,8 @@ static int xfrm_outer_mode_output(struct xfrm_state *x, struct sk_buff *skb)
@@ -152,10 +152,10 @@ index 662c83beb345..8f98e42d4252 100644
  		break;
  	}
 diff --git a/net/xfrm/xfrm_policy.c b/net/xfrm/xfrm_policy.c
-index 53b7ce4a4db0..f3cd8483d427 100644
+index 298b3a9eb48d..a3b50e8bc85a 100644
 --- a/net/xfrm/xfrm_policy.c
 +++ b/net/xfrm/xfrm_policy.c
-@@ -2713,13 +2713,17 @@ static struct dst_entry *xfrm_bundle_create(struct xfrm_policy *policy,
+@@ -2721,13 +2721,17 @@ static struct dst_entry *xfrm_bundle_create(struct xfrm_policy *policy,
  
  		dst1->input = dst_discard;
  
@@ -181,7 +181,7 @@ index 53b7ce4a4db0..f3cd8483d427 100644
  		xdst_prev = xdst;
  
 diff --git a/net/xfrm/xfrm_state.c b/net/xfrm/xfrm_state.c
-index bda5327bf34d..2b58e35bea63 100644
+index 649bb739df0d..e9ea5c5dd183 100644
 --- a/net/xfrm/xfrm_state.c
 +++ b/net/xfrm/xfrm_state.c
 @@ -513,6 +513,36 @@ static const struct xfrm_mode *xfrm_get_mode(unsigned int encap, int family)
@@ -238,19 +238,20 @@ index bda5327bf34d..2b58e35bea63 100644
  	}
  	return x;
  }
-@@ -1745,6 +1778,11 @@ static struct xfrm_state *xfrm_state_clone(struct xfrm_state *orig,
- 	x->new_mapping = 0;
+@@ -1747,6 +1780,12 @@ static struct xfrm_state *xfrm_state_clone(struct xfrm_state *orig,
  	x->new_mapping_sport = 0;
+ 	x->dir = orig->dir;
  
++	x->mode_cbs = orig->mode_cbs;
 +	if (x->mode_cbs && x->mode_cbs->clone) {
-+		if (!x->mode_cbs->clone(x, orig))
++		if (x->mode_cbs->clone(x, orig))
 +			goto error;
 +	}
 +
  	return x;
  
   error:
-@@ -2765,6 +2803,9 @@ u32 xfrm_state_mtu(struct xfrm_state *x, int mtu)
+@@ -2786,6 +2825,9 @@ u32 xfrm_state_mtu(struct xfrm_state *x, int mtu)
  	case XFRM_MODE_TUNNEL:
  		break;
  	default:
@@ -260,7 +261,7 @@ index bda5327bf34d..2b58e35bea63 100644
  		WARN_ON_ONCE(1);
  		break;
  	}
-@@ -2850,6 +2891,12 @@ int __xfrm_init_state(struct xfrm_state *x, bool init_replay, bool offload,
+@@ -2871,6 +2913,12 @@ int __xfrm_init_state(struct xfrm_state *x, bool init_replay, bool offload,
  			goto error;
  	}
  
@@ -274,10 +275,10 @@ index bda5327bf34d..2b58e35bea63 100644
  	return err;
  }
 diff --git a/net/xfrm/xfrm_user.c b/net/xfrm/xfrm_user.c
-index d4c88d29703e..92d11f2306e7 100644
+index 6537bd520363..dfd52637abed 100644
 --- a/net/xfrm/xfrm_user.c
 +++ b/net/xfrm/xfrm_user.c
-@@ -779,6 +779,12 @@ static struct xfrm_state *xfrm_state_construct(struct net *net,
+@@ -914,6 +914,12 @@ static struct xfrm_state *xfrm_state_construct(struct net *net,
  			goto error;
  	}
  
@@ -290,7 +291,7 @@ index d4c88d29703e..92d11f2306e7 100644
  	return x;
  
  error:
-@@ -1192,6 +1198,10 @@ static int copy_to_user_state_extra(struct xfrm_state *x,
+@@ -1327,6 +1333,10 @@ static int copy_to_user_state_extra(struct xfrm_state *x,
  		if (ret)
  			goto out;
  	}
@@ -298,9 +299,19 @@ index d4c88d29703e..92d11f2306e7 100644
 +		ret = x->mode_cbs->copy_to_user(x, skb);
 +	if (ret)
 +		goto out;
- 	if (x->mapping_maxage)
+ 	if (x->mapping_maxage) {
  		ret = nla_put_u32(skb, XFRMA_MTIMER_THRESH, x->mapping_maxage);
- out:
+ 		if (ret)
+@@ -3526,6 +3536,9 @@ static inline unsigned int xfrm_sa_len(struct xfrm_state *x)
+ 	if (x->dir)
+ 		l += nla_total_size(sizeof(x->dir));
+ 
++	if (x->mode_cbs && x->mode_cbs->sa_len)
++		l += x->mode_cbs->sa_len(x);
++
+ 	return l;
+ }
+ 
 -- 
-2.43.2
+2.45.1
 
