@@ -23,6 +23,7 @@
 import binascii
 import ipaddress
 import os
+import re
 import shlex
 
 from . import iptfs
@@ -489,6 +490,30 @@ def setup_tunnel_routes(r1con, r2con, tun_ipv6, network3):
     return r1ipnh, r1ip6nh, r2ipnh, r2ip6nh
 
 
+def esp_flags_filter_dir(dir, esp_flags):
+    """Filter out esp flags inappropriate for the direction."""
+    if dir == "in":
+        esp_flags = esp_flags.replace("dont-encap-dscp", "")
+    else:
+        esp_flags = esp_flags.replace("decap-dscp", "")
+    return esp_flags
+
+
+def iptfs_opts_filter_dir(dir, iptfs_opts):
+    """Filter out iptfs options inappropriate for the direction."""
+    if dir == "in":
+        iptfs_opts = iptfs_opts.replace("dont-frag", "")
+        iptfs_opts = re.sub(r"init-delay \d+", "", iptfs_opts)
+        iptfs_opts = re.sub(r"max-queue-size \d+", "", iptfs_opts)
+        iptfs_opts = re.sub(r"pkt-size \d+", "", iptfs_opts)
+    else:
+        iptfs_opts = re.sub(r"drop-time \d+", "", iptfs_opts)
+        iptfs_opts = re.sub(r"reorder-window \d+", "", iptfs_opts)
+    if iptfs_opts.strip() == "iptfs-opts":
+        iptfs_opts = ""
+    return iptfs_opts
+
+
 async def setup_policy_tun(
     unet,
     mode=None,
@@ -566,23 +591,28 @@ async def setup_policy_tun(
         #
         # SAs
         #
+        dir = "out" if r == r1 else "in"
+        eflags = esp_flags_filter_dir(dir, esp_flags)
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"{esp_flags} reqid {reqid_1to2} "
+                f"{eflags} reqid {reqid_1to2} dir {dir} "
                 # f"reqid {reqid_1to2} "
             )
-            + iptfs_opts
+            + iptfs_opts_filter_dir(dir, iptfs_opts)
         )
+
+        dir = "in" if r == r1 else "out"
+        eflags = esp_flags_filter_dir(dir, esp_flags)
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"{esp_flags} reqid {reqid_2to1} "
+                f"{eflags} reqid {reqid_2to1} dir {dir} "
                 # f"reqid {reqid_2to1} "
             )
-            + iptfs_opts
+            + iptfs_opts_filter_dir(dir, iptfs_opts)
         )
 
         #
@@ -799,21 +829,23 @@ async def setup_routed_tun(
             lip = r2ip
             rip = r1ip
 
+        dir = "out" if r == r1 else "in"
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"{esp_flags} if_id 55 reqid {reqid_1to2} "
+                f"{esp_flags} if_id 55 reqid {reqid_1to2} dir {dir} "
             )
-            + iptfs_opts
+            + iptfs_opts_filter_dir(dir, iptfs_opts)
         )
+        dir = "in" if r == r1 else "out"
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"{esp_flags} if_id 55 reqid {reqid_2to1} "
+                f"{esp_flags} if_id 55 reqid {reqid_2to1} dir {dir} "
             )
-            + iptfs_opts
+            + iptfs_opts_filter_dir(dir, iptfs_opts)
         )
 
         # repl.cmd_raises(f"ip add vti0 local {lip} remote {rip} mode vti key 55")
