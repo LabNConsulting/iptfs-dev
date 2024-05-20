@@ -1,0 +1,17 @@
+From: Christian Hopps <chopps@labn.net>
+Subject: [PATCH ipsec-next v1 0/8] Add IP-TFS mode to xfrm
+
+This patchset adds a new xfrm mode implementing on-demand IP-TFS. IP-TFS
+(AggFrag encapsulation) has been standardized in RFC9347.
+
+Link: https://www.rfc-editor.org/rfc/rfc9347.txt
+
+This feature supports demand driven (i.e., non-constant send rate) IP-TFS to
+take advantage of the AGGFRAG ESP payload encapsulation. This payload type
+supports aggregation and fragmentation of the inner IP packet stream which in
+turn yields higher small-packet bandwidth as well as reducing MTU/PMTU issues.
+Congestion control is unimplementated as the send rate is demand driven rather
+than constant.
+
+In order to allow loading this fucntionality as a module a set of callbacks
+xfrm_mode_cbs has been added to xfrm as well.
