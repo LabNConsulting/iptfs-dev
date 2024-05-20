@@ -31,7 +31,7 @@ jobs:
         with:
           path: output-linux
           # We need a unique key name in order for new versions to save
-          key: ${{ runner.os }}-kernel-${{ hashFiles('linux-fast.config', 'output-linux/**/*.[ch]') }}
+          key: ${{ runner.os }}-kernel-${{ hashFiles('linux-fast.config', 'output-linux/**/*.[ch]', 'linux/**/*.[ch]') }}
           restore-keys: |
             key: ${{ runner.os }}-kernel-
 
@@ -92,7 +92,7 @@ jobs:
         with:
           path: output-linux
           # We need a unique key name in order for new versions to save
-          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-linux/**/*.[ch]') }}
+          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-linux/**/*.[ch]', 'linux/**/*.[ch]') }}
           restore-keys: |
             key: ${{ runner.os }}-cov-kernel-
 
@@ -246,7 +246,7 @@ jobs:
         with:
           path: output-linux
           # We need a unique key name in order for new versions to save
-          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-linux/**/*.[ch]') }}
+          key: ${{ runner.os }}-cov-kernel-${{ hashFiles('linux-cov.config', 'output-linux/**/*.[ch]', 'linux/**/*.[ch]') }}
           restore-keys: |
             key: ${{ runner.os }}-cov-kernel-
 

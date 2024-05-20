@@ -5,4 +5,5 @@ coverage:
         target: auto
         threshold: 10%
 fixes:
+  - ".*/iptfs-linux/linux::"
   - "/home/runner/work/iptfs-linux/iptfs-linux/linux::"
