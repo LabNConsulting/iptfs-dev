@@ -50,7 +50,7 @@ Patchset Changes:
 Patchset Structure:
 -------------------
 
-The first 8 commits are changes to the xfrm infrastructure to support
+The first 7 commits are changes to the xfrm infrastructure to support
 the callbacks as well as more generic IP-TFS additions that may be used
 outside the actual IP-TFS implementation.
 
