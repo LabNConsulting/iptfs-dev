@@ -17,9 +17,15 @@ setup:
 
 kernel: output-linux/arch/x86/boot/bzImage
 
-kernel-warn: output-linux/arch/x86/boot/bzImage
-	mkdir -p output-linux
-	make -C linux -j$(shell nproc) V=1 C=1 W=1 O=../output-linux LOCALVERSION='' 2>&1 | tee warn-log.txt
+warn-kernel-log.txt: output-linux
+	cp $(LINUXCONFIG) output-linux/.config
+	make -C linux -j$(shell nproc) V=1 C=1 W=1 O=../output-linux LOCALVERSION='' > $@ 2>&1 || true
+	grep -q " CC" $@ # make sure it tried to compile since we ignore errors
+
+# Filter out existing non-iptfs warnings with egrep
+test-warn-kernel: warn-kernel-log.txt
+	COUNT=$$(egrep -v -f check-ignore-warning.txt $< | egrep -c warning:); test $$COUNT = 0;
+
 
 # kernel: linux/arch/x86/boot/bzImage
 
