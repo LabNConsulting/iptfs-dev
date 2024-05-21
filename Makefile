@@ -24,7 +24,7 @@ warn-kernel-log.txt: output-linux
 
 # Filter out existing non-iptfs warnings with egrep
 test-warn-kernel: warn-kernel-log.txt
-	COUNT=$$(egrep -v -f check-ignore-warning.txt $< | egrep -c warning:); test $$COUNT = 0;
+	COUNT=$$(egrep -v -f check-ignore-warning.txt $< | egrep -c warning:); echo count=$$COUNT; test $$COUNT = 0;
 
 
 # kernel: linux/arch/x86/boot/bzImage
