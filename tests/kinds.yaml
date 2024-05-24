@@ -171,7 +171,8 @@ cli:
       help: "open trex monitor using X11"
       new-window: false
     - name: ssh
-      exec: "ssh -i %CONFIGDIR%/../../root-key -o 'UserKnownHostsFile=/dev/null' -o 'StrictHostKeyChecking=no' {host.get_intf_addr('eth0').ip}"
+      exec: "ssh -i %CONFIGDIR%/../../root-key -oUserKnownHostsFile=/dev/null -oStrictHostKeyChecking=no root@{host.get_intf_addr('eth0').ip}"
       format: "ssh HOST [HOST ...]"
       help: "open ssh to given hosts, * for all"
       new-window: true
+      top-level: true
