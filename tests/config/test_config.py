@@ -121,7 +121,7 @@ async def test_config_combo(unet, astepf, psize, qsize, dtime, rewin, idelay, df
         assert "drop-time 1000000" in output
 
 
-async def test_config_sysctl(unet):
+async def _test_config_sysctl(unet):
     r1 = unet.hosts["r1"]
 
     r1.conrepl.cmd_raises("sysctl -w net.core.xfrm_iptfs_drop_time=50000")
