@@ -1,0 +1,23 @@
+From: Christian Hopps <chopps@labn.net>
+Subject: [PATCH iproute-next v1 0/2] Add support for xfrm state direction attribute
+
+Summary of Changes:
+
+  This patchset adds support for setting the new xfrm state direction
+  attribute.
+
+  The change also takes into account the existing "offload" direction
+  atttribute. If the user is already setting the direction when
+  enabling offload then that direciton value is used, and the general
+  "dir in|out" need not additionally be specified.
+
+  This work was started based on an earlier patch from
+  "Antony Antony" <antony.antony@secunet.com>
+
+Patchset Changes:
+
+  4 files changed, 57 insertions(+), 16 deletions(-)
+  include/uapi/linux/xfrm.h |  6 ++++++
+  ip/ipxfrm.c               | 12 ++++++++++++
+  ip/xfrm_state.c           | 49 +++++++++++++++++++++++++++++++----------------
+  man/man8/ip-xfrm.8        |  6 ++++++

@@ -1,0 +1,37 @@
+From af2c9037e167d3cb2ade3b296aa9cf3b388938d0 Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Wed, 22 May 2024 06:11:55 -0400
+Subject: [PATCH iproute-next v1 2/2] xfrm: document new SA direction option
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+ man/man8/ip-xfrm.8 | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/man/man8/ip-xfrm.8 b/man/man8/ip-xfrm.8
+index 6dc73d23..960779dd 100644
+--- a/man/man8/ip-xfrm.8
++++ b/man/man8/ip-xfrm.8
+@@ -36,6 +36,8 @@ ip-xfrm \- transform configuration
+ .IR MASK " ] ]"
+ .RB "[ " reqid
+ .IR REQID " ]"
++.RB "[ " dir
++.IR SA-DIR " ]"
+ .RB "[ " seq
+ .IR SEQ " ]"
+ .RB "[ " replay-window
+@@ -165,6 +167,10 @@ ip-xfrm \- transform configuration
+ .IR MODE " := "
+ .BR transport " | " tunnel " | " beet " | " ro " | " in_trigger
+ 
++.ti -8
++.IR SA-DIR " := "
++.BR in " | " out
++
+ .ti -8
+ .IR FLAG-LIST " := [ " FLAG-LIST " ] " FLAG
+ 
+-- 
+2.45.1
+

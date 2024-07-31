@@ -1,0 +1,165 @@
+From ad87c4287884881334300bec24a13f982fc4c727 Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Wed, 26 Jul 2023 14:20:52 +0000
+Subject: [PATCH ipsec-next v5 04/17] xfrm: sysctl: allow configuration of
+ global default values
+
+Add sysctls for the changing the IPTFS default SA values.
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+ Documentation/networking/xfrm_sysctl.rst | 30 ++++++++++
+ include/net/netns/xfrm.h                 |  6 ++
+ net/xfrm/xfrm_sysctl.c                   | 70 ++++++++++++++++--------
+ 3 files changed, 82 insertions(+), 24 deletions(-)
+
+diff --git a/Documentation/networking/xfrm_sysctl.rst b/Documentation/networking/xfrm_sysctl.rst
+index 47b9bbdd0179..4d900c74b405 100644
+--- a/Documentation/networking/xfrm_sysctl.rst
++++ b/Documentation/networking/xfrm_sysctl.rst
+@@ -9,3 +9,33 @@ XFRM Syscall
+ 
+ xfrm_acq_expires - INTEGER
+ 	default 30 - hard timeout in seconds for acquire requests
++
++xfrm_iptfs_max_qsize - UNSIGNED INTEGER
++        The default IPTFS max output queue size in octets. The output queue is
++        where received packets destined for output over an IPTFS tunnel are
++        stored prior to being output in aggregated/fragmented form over the
++        IPTFS tunnel.
++
++        Default 1M.
++
++xfrm_iptfs_drop_time - UNSIGNED INTEGER
++        The default IPTFS drop time in microseconds. The drop time is the amount
++        of time before a missing out-of-order IPTFS tunnel packet is considered
++        lost. See also the reorder window.
++
++        Default 1s (1000000).
++
++xfrm_iptfs_init_delay - UNSIGNED INTEGER
++        The default IPTFS initial output delay in microseconds. The initial
++        output delay is the amount of time prior to servicing the output queue
++        after queueing the first packet on said queue. This applies anytime
++        the output queue was previously empty.
++
++        Default 0.
++
++xfrm_iptfs_reorder_window - UNSIGNED INTEGER
++        The default IPTFS reorder window size. The reorder window size dictates
++        the maximum number of IPTFS tunnel packets in a sequence that may arrive
++        out of order.
++
++        Default 3.
+diff --git a/include/net/netns/xfrm.h b/include/net/netns/xfrm.h
+index d489d9250bff..73fce57ab14e 100644
+--- a/include/net/netns/xfrm.h
++++ b/include/net/netns/xfrm.h
+@@ -66,6 +66,12 @@ struct netns_xfrm {
+ 	u32			sysctl_aevent_rseqth;
+ 	int			sysctl_larval_drop;
+ 	u32			sysctl_acq_expires;
++#if IS_ENABLED(CONFIG_XFRM_IPTFS)
++	u32			sysctl_iptfs_drop_time;
++	u32			sysctl_iptfs_init_delay;
++	u32			sysctl_iptfs_max_qsize;
++	u32			sysctl_iptfs_reorder_window;
++#endif
+ 
+ 	u8			policy_default[XFRM_POLICY_MAX];
+ 
+diff --git a/net/xfrm/xfrm_sysctl.c b/net/xfrm/xfrm_sysctl.c
+index ca003e8a0376..b70bb91d6984 100644
+--- a/net/xfrm/xfrm_sysctl.c
++++ b/net/xfrm/xfrm_sysctl.c
+@@ -10,34 +10,50 @@ static void __net_init __xfrm_sysctl_init(struct net *net)
+ 	net->xfrm.sysctl_aevent_rseqth = XFRM_AE_SEQT_SIZE;
+ 	net->xfrm.sysctl_larval_drop = 1;
+ 	net->xfrm.sysctl_acq_expires = 30;
++#if IS_ENABLED(CONFIG_XFRM_IPTFS)
++	net->xfrm.sysctl_iptfs_max_qsize = 1024 * 1024; /* 1M */
++	net->xfrm.sysctl_iptfs_drop_time = 1000000; /* 1s */
++	net->xfrm.sysctl_iptfs_init_delay = 0; /* no initial delay */
++	net->xfrm.sysctl_iptfs_reorder_window = 3; /* tcp folks suggested */
++#endif
+ }
+ 
+ #ifdef CONFIG_SYSCTL
+ static struct ctl_table xfrm_table[] = {
+-	{
+-		.procname	= "xfrm_aevent_etime",
+-		.maxlen		= sizeof(u32),
+-		.mode		= 0644,
+-		.proc_handler	= proc_douintvec
+-	},
+-	{
+-		.procname	= "xfrm_aevent_rseqth",
+-		.maxlen		= sizeof(u32),
+-		.mode		= 0644,
+-		.proc_handler	= proc_douintvec
+-	},
+-	{
+-		.procname	= "xfrm_larval_drop",
+-		.maxlen		= sizeof(int),
+-		.mode		= 0644,
+-		.proc_handler	= proc_dointvec
+-	},
+-	{
+-		.procname	= "xfrm_acq_expires",
+-		.maxlen		= sizeof(int),
+-		.mode		= 0644,
+-		.proc_handler	= proc_dointvec
+-	},
++	{ .procname = "xfrm_aevent_etime",
++	  .maxlen = sizeof(u32),
++	  .mode = 0644,
++	  .proc_handler = proc_douintvec },
++	{ .procname = "xfrm_aevent_rseqth",
++	  .maxlen = sizeof(u32),
++	  .mode = 0644,
++	  .proc_handler = proc_douintvec },
++	{ .procname = "xfrm_larval_drop",
++	  .maxlen = sizeof(int),
++	  .mode = 0644,
++	  .proc_handler = proc_dointvec },
++	{ .procname = "xfrm_acq_expires",
++	  .maxlen = sizeof(int),
++	  .mode = 0644,
++	  .proc_handler = proc_dointvec },
++#if IS_ENABLED(CONFIG_XFRM_IPTFS)
++	{ .procname = "xfrm_iptfs_drop_time",
++	  .maxlen = sizeof(uint),
++	  .mode = 0644,
++	  .proc_handler = proc_douintvec },
++	{ .procname = "xfrm_iptfs_init_delay",
++	  .maxlen = sizeof(uint),
++	  .mode = 0644,
++	  .proc_handler = proc_douintvec },
++	{ .procname = "xfrm_iptfs_max_qsize",
++	  .maxlen = sizeof(uint),
++	  .mode = 0644,
++	  .proc_handler = proc_douintvec },
++	{ .procname = "xfrm_iptfs_reorder_window",
++	  .maxlen = sizeof(uint),
++	  .mode = 0644,
++	  .proc_handler = proc_douintvec },
++#endif
+ };
+ 
+ int __net_init xfrm_sysctl_init(struct net *net)
+@@ -54,6 +70,12 @@ int __net_init xfrm_sysctl_init(struct net *net)
+ 	table[1].data = &net->xfrm.sysctl_aevent_rseqth;
+ 	table[2].data = &net->xfrm.sysctl_larval_drop;
+ 	table[3].data = &net->xfrm.sysctl_acq_expires;
++#if IS_ENABLED(CONFIG_XFRM_IPTFS)
++	table[4].data = &net->xfrm.sysctl_iptfs_drop_time;
++	table[5].data = &net->xfrm.sysctl_iptfs_init_delay;
++	table[6].data = &net->xfrm.sysctl_iptfs_max_qsize;
++	table[7].data = &net->xfrm.sysctl_iptfs_reorder_window;
++#endif
+ 
+ 	/* Don't export sysctls to unprivileged users */
+ 	if (net->user_ns != &init_user_ns)
+-- 
+2.45.2
+

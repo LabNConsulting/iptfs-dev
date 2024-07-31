@@ -162,8 +162,11 @@ flame-%.svg: $(PERFPFX)/perf-%.fdata
 # Making and sending patches
 #
 #
-# git format-patch -v2 --subject-prefix="RFC ipsec-next" -o ../patches/v2/ upstream/master..HEAD
+# V=6; git format-patch -v$V --subject-prefix="RFC ipsec-next" -o ../patches/v$V/ upstream/master..origin/iptfs
+#
+# for f in ../patches/v$V/v$V-*; do echo ====$f====; scripts/checkpatch.pl --ignore=AVOID_BUG $f; done
+#
 # git send-email --cc='Steffen Klassert <steffen.klassert@secunet.com>' \
 #   --cc='netdev@vger.kernel.org' --to='devel@linux-ipsec.org' \
-#   --cc='chopps@chopps.org' ../patches/v2 \
+#   --cc='chopps@chopps.org' ../patches/v$V \
 #

@@ -1,0 +1,102 @@
+From ea4b3341f341bf2cc82a540476ba89c7c9b5fbe7 Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Mon, 17 Jun 2024 15:30:20 -0400
+Subject: [PATCH ipsec-next v4 17/18] xfrm: iptfs: only send the NL attrs that
+ corr. to the SA dir
+
+When sending the netlink attributes to the user for a given SA, only
+send those NL attributes which correspond to the SA's direction.
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+ net/xfrm/xfrm_iptfs.c | 64 ++++++++++++++++++++++++-------------------
+ 1 file changed, 36 insertions(+), 28 deletions(-)
+
+diff --git a/net/xfrm/xfrm_iptfs.c b/net/xfrm/xfrm_iptfs.c
+index 59fd8ee49cd4..049a94a5531b 100644
+--- a/net/xfrm/xfrm_iptfs.c
++++ b/net/xfrm/xfrm_iptfs.c
+@@ -2498,13 +2498,16 @@ static unsigned int iptfs_sa_len(const struct xfrm_state *x)
+ 	struct xfrm_iptfs_config *xc = &xtfs->cfg;
+ 	unsigned int l = 0;
+ 
+-	if (xc->dont_frag)
+-		l += nla_total_size(0);
+-	l += nla_total_size(sizeof(xc->reorder_win_size));
+-	l += nla_total_size(sizeof(xc->pkt_size));
+-	l += nla_total_size(sizeof(xc->max_queue_size));
+-	l += nla_total_size(sizeof(u32)); /* drop time usec */
+-	l += nla_total_size(sizeof(u32)); /* init delay usec */
++	if (x->dir == XFRM_SA_DIR_IN) {
++		l += nla_total_size(sizeof(u32)); /* drop time usec */
++		l += nla_total_size(sizeof(xc->reorder_win_size));
++	} else {
++		if (xc->dont_frag)
++			l += nla_total_size(0);	  /* dont-frag flag */
++		l += nla_total_size(sizeof(u32)); /* init delay usec */
++		l += nla_total_size(sizeof(xc->max_queue_size));
++		l += nla_total_size(sizeof(xc->pkt_size));
++	}
+ 
+ 	return l;
+ }
+@@ -2516,30 +2519,35 @@ static int iptfs_copy_to_user(struct xfrm_state *x, struct sk_buff *skb)
+ 	int ret;
+ 	u64 q;
+ 
+-	if (xc->dont_frag) {
+-		ret = nla_put_flag(skb, XFRMA_IPTFS_DONT_FRAG);
++	if (x->dir == XFRM_SA_DIR_IN) {
++		q = xtfs->drop_time_ns;
++		(void)do_div(q, NSECS_IN_USEC);
++		ret = nla_put_u32(skb, XFRMA_IPTFS_DROP_TIME, q);
++		if (ret)
++			return ret;
++
++		ret = nla_put_u16(skb, XFRMA_IPTFS_REORDER_WINDOW,
++				  xc->reorder_win_size);
++	} else {
++		if (xc->dont_frag) {
++			ret = nla_put_flag(skb, XFRMA_IPTFS_DONT_FRAG);
++			if (ret)
++				return ret;
++		}
++
++		q = xtfs->init_delay_ns;
++		(void)do_div(q, NSECS_IN_USEC);
++		ret = nla_put_u32(skb, XFRMA_IPTFS_INIT_DELAY, q);
++		if (ret)
++			return ret;
++
++		ret = nla_put_u32(skb, XFRMA_IPTFS_MAX_QSIZE,
++				  xc->max_queue_size);
+ 		if (ret)
+ 			return ret;
++
++		ret = nla_put_u32(skb, XFRMA_IPTFS_PKT_SIZE, xc->pkt_size);
+ 	}
+-	ret = nla_put_u16(skb, XFRMA_IPTFS_REORDER_WINDOW, xc->reorder_win_size);
+-	if (ret)
+-		return ret;
+-	ret = nla_put_u32(skb, XFRMA_IPTFS_PKT_SIZE, xc->pkt_size);
+-	if (ret)
+-		return ret;
+-	ret = nla_put_u32(skb, XFRMA_IPTFS_MAX_QSIZE, xc->max_queue_size);
+-	if (ret)
+-		return ret;
+-
+-	q = xtfs->drop_time_ns;
+-	(void)do_div(q, NSECS_IN_USEC);
+-	ret = nla_put_u32(skb, XFRMA_IPTFS_DROP_TIME, q);
+-	if (ret)
+-		return ret;
+-
+-	q = xtfs->init_delay_ns;
+-	(void)do_div(q, NSECS_IN_USEC);
+-	ret = nla_put_u32(skb, XFRMA_IPTFS_INIT_DELAY, q);
+ 
+ 	return ret;
+ }
+-- 
+2.45.2
+
