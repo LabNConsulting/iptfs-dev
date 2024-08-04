@@ -19,13 +19,28 @@ kernel: output-linux/arch/x86/boot/bzImage
 
 warn-kernel-log.txt: output-linux
 	cp $(LINUXCONFIG) output-linux/.config
-	make -C linux -j$(shell nproc) V=1 C=1 W=1 O=../output-linux LOCALVERSION='' > $@ 2>&1 || true
+	make -k -C linux -j$(shell nproc) V=1 C=1 W=1 O=../output-linux LOCALVERSION='' > $@ 2>&1 || true
 	grep -q " CC" $@ # make sure it tried to compile since we ignore errors
 
 # Filter out existing non-iptfs warnings with egrep
 test-warn-kernel: warn-kernel-log.txt
 	COUNT=$$(egrep -v -f check-ignore-warning.txt $< | egrep -c warning:); echo count=$$COUNT; test $$COUNT = 0;
 
+test-warn-range:
+	MERGE_BASE=$$(cd linux && git merge-base upstream/master iptfs); \
+	FIRST_COMMIT=$$(cd linux && git rev-list $$MERGE_BASE..iptfs | tail -n 1); \
+	(cd linux && git-for-each.py --start=$$FIRST_COMMIT --end=iptfs -- bash -c 'make -C .. test-warn-kernel && mv ../warn-kernel-log.txt ../warn-kernel-log-$$SHA.txt')
+
+test-build-range:
+	MERGE_BASE=$$(cd linux && git merge-base upstream/master iptfs); \
+	FIRST_COMMIT=$$(cd linux && git rev-list $$MERGE_BASE..iptfs | tail -n 1); \
+	(cd linux && git-for-each.py --start=$$FIRST_COMMIT --end=iptfs -- bash -c 'make -C .. kernel > ../build-log.txt && mv ../build-log.txt ../build-log-$$SHA.txt')
+
+test-all-config-range:
+	MERGE_BASE=$$(cd linux && git merge-base upstream/master iptfs); \
+	FIRST_COMMIT=$$(cd linux && git rev-list $$MERGE_BASE..iptfs | tail -n 1); \
+	TEST_OUTPUT_DIR=../output-test; \
+	(cd linux && git-for-each.py --start=$$FIRST_COMMIT --end=iptfs -- ../scripts/test-build.sh)
 
 # kernel: linux/arch/x86/boot/bzImage
 
