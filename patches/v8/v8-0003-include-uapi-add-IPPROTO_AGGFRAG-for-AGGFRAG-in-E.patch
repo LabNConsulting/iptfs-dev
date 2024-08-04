@@ -1,0 +1,29 @@
+From 93deaa06aefbdf1f581f9956c27e3e765671dea3 Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Sat, 27 Aug 2022 02:26:52 +0000
+Subject: [PATCH ipsec-next v8 03/16] include: uapi: add IPPROTO_AGGFRAG for
+ AGGFRAG in ESP
+
+Add the RFC assigned IP protocol number for AGGFRAG.
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+ include/uapi/linux/in.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/uapi/linux/in.h b/include/uapi/linux/in.h
+index d358add1611c..268086e85d04 100644
+--- a/include/uapi/linux/in.h
++++ b/include/uapi/linux/in.h
+@@ -79,6 +79,8 @@ enum {
+ #define IPPROTO_MPLS		IPPROTO_MPLS
+   IPPROTO_ETHERNET = 143,	/* Ethernet-within-IPv6 Encapsulation	*/
+ #define IPPROTO_ETHERNET	IPPROTO_ETHERNET
++  IPPROTO_AGGFRAG = 144,	/* AGGFRAG in ESP (RFC 9347)		*/
++#define IPPROTO_AGGFRAG		IPPROTO_AGGFRAG
+   IPPROTO_RAW = 255,		/* Raw IP packets			*/
+ #define IPPROTO_RAW		IPPROTO_RAW
+   IPPROTO_SMC = 256,		/* Shared Memory Communications		*/
+-- 
+2.46.0
+
