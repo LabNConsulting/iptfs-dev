@@ -53,7 +53,7 @@ async def network_up(unet):
 #   | h1 | --- net0 --- | r1 | --- net1 --- | r2 | --- net2 --- | r1 |
 #   +----+ .1        .2 +----+ .2        .3 +----+ .3        .4 +----+
 #          10.0.0.0/24         10.0.1.0/24         10.0.2.0/24
-#           MTU: 9000           MTU: 1500           MTU: 9000
+#                          IP-TFS pkt-size: 560
 
 
 async def test_net_up(unet):
