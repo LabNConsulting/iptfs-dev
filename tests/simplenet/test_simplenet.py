@@ -23,7 +23,7 @@ import logging
 import os
 
 import pytest
-from common.config import _network_up, get_sa_values, setup_policy_tun, setup_routed_tun
+from common.config import _network_up, setup_policy_tun, setup_routed_tun
 from common.tests import _test_net_up
 
 # All tests are coroutines
