@@ -580,8 +580,9 @@ async def setup_policy_tun(
     else:
         await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
 
-    if bool(tun_ipv6) != bool(ipv6):
+    if (tun_ipv6 and ipv4) or (not tun_ipv6 and ipv6):
         esp_flags = "af-unspec " + esp_flags
+
     if esp_flags:
         esp_flags = "flag " + esp_flags
 
@@ -810,8 +811,9 @@ async def setup_routed_tun(
     else:
         await cleanup_config(unet, r1only=r1only, ipv4=ipv4, ipv6=ipv6)
 
-    if bool(tun_ipv6) != bool(ipv6):
+    if (tun_ipv6 and ipv4) or (not tun_ipv6 and ipv6):
         esp_flags = "af-unspec " + esp_flags
+
     if esp_flags:
         esp_flags = "flag " + esp_flags
 
