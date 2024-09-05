@@ -64,6 +64,15 @@ async def do_ping(host, dest4, dest6, astepf):
     logging.debug(host.cmd_raises(f"ping -q -n -s 8 -f  -c{count} {dest6}"))
 
 
+def check_rx_tx_count(host, v6, nrx, ntx):
+    # Now validate that we have sent and received the exact number of ESP packets
+    base = "fc00:0:0:1::" if v6 else "10.0.1."
+    o = host.cmd_raises(f"ip x s l src {base}2")
+    assert f" oseq 0x{ntx:x}," in o or f" oseq 0x{ntx:x}\n" in o
+    o = host.cmd_raises(f"ip x s l src {base}3")
+    assert f" seq 0x{nrx:x}," in o or f" seq 0x{nrx:x}\n" in o
+
+
 @pytest.mark.parametrize("tun_ipv6", [False, True])
 async def test_policy_tun_agg(unet, astepf, tun_ipv6):
     await setup_policy_tun(
@@ -75,14 +84,10 @@ async def test_policy_tun_agg(unet, astepf, tun_ipv6):
     )
 
     await do_ping(unet.hosts["r1"], "10.0.1.3", "fc00:0:0:1::3", astepf)
-    await do_ping(unet.hosts["h1"], "10.0.2.4", "fc00:0:0:2::4", astepf)
+    check_rx_tx_count(unet.hosts["r1"], tun_ipv6, 2, 2)
 
-    # Now validate that we have sent and received exactly 8 ESP packets
-    base = "fc00:0:0:1::" if tun_ipv6 else "10.0.1."
-    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}2")
-    assert " oseq 0x4" in o
-    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}3")
-    assert " seq 0x4" in o
+    await do_ping(unet.hosts["h1"], "10.0.2.4", "fc00:0:0:2::4", astepf)
+    check_rx_tx_count(unet.hosts["r1"], tun_ipv6, 4, 4)
 
 
 @pytest.mark.parametrize("tun_ipv6", [False, True])
@@ -98,10 +103,4 @@ async def test_routed_tun_agg(unet, astepf, tun_ipv6):
 
     # We don't have routes setup for local originated pings
     await do_ping(unet.hosts["h1"], "10.0.2.4", "fc00:0:0:2::4", astepf)
-
-    # Now validate that we have sent and received exactly 8 ESP packets
-    base = "fc00:0:0:1::" if tun_ipv6 else "10.0.1."
-    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}2")
-    assert " oseq 0x2" in o
-    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}3")
-    assert " seq 0x2" in o
+    check_rx_tx_count(unet.hosts["r1"], tun_ipv6, 2, 2)

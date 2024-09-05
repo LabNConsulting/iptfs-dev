@@ -915,12 +915,19 @@ async def setup_routed_tun(
 
     mtustr = f"mtu {tun_route_mtu}" if tun_route_mtu else ""
 
+    # r1tunip = "10.0.1.2"
+    # r1tunip6 = "fc00:0:0:1::2"
+    # XXX should this be 10.0.0.2??
     r1srcip = f"src 10.0.1.2 {mtustr}"
     r1srcip6 = f"src fc00:0:0:0::2 {mtustr}"
     if network3:
+        # r2tunip = "10.0.2.4"
+        # r2tunip6 = "fc00:0:0:2::4"
         r2srcip = f"src 10.0.3.4 {mtustr}"
         r2srcip6 = f"src fc00:0:0:3::4 {mtustr}"
     else:
+        # r2tunip = "10.0.1.3"
+        # r2tunip6 = "fc00:0:0:1::3"
         r2srcip = f"src 10.0.2.3 {mtustr}"
         r2srcip6 = f"src fc00:0:0:2::3 {mtustr}"
 
@@ -933,10 +940,14 @@ async def setup_routed_tun(
                 r1con.cmd_raises(f"ip route add 10.0.2.0/24 dev ipsec0 {r1srcip}")
                 if network3:
                     r1con.cmd_raises(f"ip route add 10.0.3.0/24 dev ipsec0 {r1srcip}")
+                # This causes a routing loop, not sure how to do routed local originated
+                # r1con.cmd_raises(f"ip route add {r2tunip}/32 dev ipsec0")
             if r2con:
                 r2con.cmd_raises(f"ip route add 10.0.0.0/24 dev ipsec0 {r2srcip}")
                 if network3:
                     r2con.cmd_raises(f"ip route add 10.0.1.0/24 dev ipsec0 {r2srcip}")
+                # This causes a routing loop, not sure how to do routed local originated
+                # r2con.cmd_raises(f"ip route add {r1tunip}/32 dev ipsec0")
 
         else:
             if r1con:
@@ -955,12 +966,16 @@ async def setup_routed_tun(
                     r1con.cmd_raises(
                         f"ip route add fc00:0:0:3::/64 dev ipsec0 {r1srcip6}"
                     )
+                # This causes a routing loop, not sure how to do routed local originated
+                # r1con.cmd_raises(f"ip route add {r2tunip6}/128 dev ipsec0")
             if r2con:
                 r2con.cmd_raises(f"ip route add fc00:0:0:0::/64 dev ipsec0 {r2srcip6}")
                 if network3:
                     r2con.cmd_raises(
                         f"ip route add fc00:0:0:1::/64 dev ipsec0 {r2srcip6}"
                     )
+                # This causes a routing loop, not sure how to do routed local originated
+                # r2con.cmd_raises(f"ip route add {r1tunip6}/128 dev ipsec0")
         else:
             if r1con:
                 r1con.cmd_raises(f"ip route add 2012::/64 dev ipsec0 {r1srcip6}")
