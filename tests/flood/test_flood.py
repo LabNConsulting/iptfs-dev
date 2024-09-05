@@ -45,65 +45,63 @@ async def network_up(unet):
 #   +----+ .1        .2 +----+ .2        .3 +----+ .3        .4 +----+
 #          10.0.0.0/24         10.0.1.0/24         10.0.2.0/24
 
+PING_COUNT = 5
+INIT_DELAY = 100000
+
 
 async def test_net_up(unet, astepf):
     await astepf("Before test network up")
     await _test_net_up(unet, ipv6=True)
 
 
-async def do_ping(h1, astepf):
-    count = 3000
+async def do_ping(host, dest4, dest6, astepf):
+    count = PING_COUNT
 
-    await astepf("first IPv6 ping")
-    logging.debug(h1.cmd_raises("ping -c1 fc00:0:0:2::4"))
-    await astepf(f"flood {count} IPv6 ping")
-    logging.debug(h1.cmd_raises(f"ping -f -c{count} fc00:0:0:2::4"))
-
-    await astepf("first IPv4 ping")
-    logging.debug(h1.cmd_raises("ping -c1 10.0.2.4"))
     await astepf(f"flood {count} IPv4 ping")
-    logging.debug(h1.cmd_raises(f"ping -f -c{count} 10.0.2.4"))
+    logging.debug(host.cmd_raises(f"ping -q -n -s 8 -f  -c{count} {dest4}"))
+
+    await astepf(f"flood {count} IPv6 ping")
+    logging.debug(host.cmd_raises(f"ping -q -n -s 8 -f  -c{count} {dest6}"))
 
 
-async def test_policy_tun4_up(unet, astepf, pytestconfig):
-    h1 = unet.hosts["h1"]
-
-    opts = pytestconfig.getoption("--iptfs-opts", "dont-frag")
+@pytest.mark.parametrize("tun_ipv6", [False, True])
+async def test_policy_tun_agg(unet, astepf, tun_ipv6):
     await setup_policy_tun(
-        unet, mode="iptfs", iptfs_opts=opts, ipv6=True, tun_ipv6=False
+        unet,
+        mode="iptfs",
+        iptfs_opts=f"init-delay {INIT_DELAY}",
+        ipv6=True,
+        tun_ipv6=tun_ipv6,
     )
 
-    await do_ping(h1, astepf)
+    await do_ping(unet.hosts["r1"], "10.0.1.3", "fc00:0:0:1::3", astepf)
+    await do_ping(unet.hosts["h1"], "10.0.2.4", "fc00:0:0:2::4", astepf)
+
+    # Now validate that we have sent and received exactly 8 ESP packets
+    base = "fc00:0:0:1::" if tun_ipv6 else "10.0.1."
+    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}2")
+    assert " oseq 0x4" in o
+    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}3")
+    assert " seq 0x4" in o
 
 
-async def test_routed_tun4_up(unet, astepf, pytestconfig):
-    h1 = unet.hosts["h1"]
-
-    opts = pytestconfig.getoption("--iptfs-opts", "")
+@pytest.mark.parametrize("tun_ipv6", [False, True])
+async def test_routed_tun_agg(unet, astepf, tun_ipv6):
     await setup_routed_tun(
-        unet, mode="iptfs", iptfs_opts=opts, ipv6=True, tun_ipv6=False
+        unet,
+        mode="iptfs",
+        esp_flags="esn",
+        iptfs_opts=f"init-delay {INIT_DELAY}",
+        ipv6=True,
+        tun_ipv6=tun_ipv6,
     )
 
-    await do_ping(h1, astepf)
+    # We don't have routes setup for local originated pings
+    await do_ping(unet.hosts["h1"], "10.0.2.4", "fc00:0:0:2::4", astepf)
 
-
-async def test_policy_tun6_up(unet, astepf, pytestconfig):
-    h1 = unet.hosts["h1"]
-
-    opts = pytestconfig.getoption("--iptfs-opts", "dont-frag")
-    await setup_policy_tun(
-        unet, mode="iptfs", iptfs_opts=opts, ipv6=True, tun_ipv6=True
-    )
-
-    await do_ping(h1, astepf)
-
-
-async def test_routed_tun6_up(unet, astepf, pytestconfig):
-    h1 = unet.hosts["h1"]
-
-    opts = pytestconfig.getoption("--iptfs-opts", "")
-    await setup_routed_tun(
-        unet, mode="iptfs", iptfs_opts=opts, ipv6=True, tun_ipv6=True
-    )
-
-    await do_ping(h1, astepf)
+    # Now validate that we have sent and received exactly 8 ESP packets
+    base = "fc00:0:0:1::" if tun_ipv6 else "10.0.1."
+    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}2")
+    assert " oseq 0x2" in o
+    o = unet.hosts["r1"].cmd_raises(f"ip x s l src {base}3")
+    assert " seq 0x2" in o

@@ -490,18 +490,18 @@ def setup_tunnel_routes(r1con, r2con, tun_ipv6, network3):
     return r1ipnh, r1ip6nh, r2ipnh, r2ip6nh
 
 
-def esp_flags_filter_dir(dir, esp_flags):
+def esp_flags_filter_dir(direction, esp_flags):
     """Filter out esp flags inappropriate for the direction."""
-    if dir == "in":
+    if direction == "in":
         esp_flags = esp_flags.replace("dont-encap-dscp", "")
     else:
         esp_flags = esp_flags.replace("decap-dscp", "")
     return esp_flags
 
 
-def iptfs_opts_filter_dir(dir, iptfs_opts):
+def iptfs_opts_filter_dir(direction, iptfs_opts):
     """Filter out iptfs options inappropriate for the direction."""
-    if dir == "in":
+    if direction == "in":
         iptfs_opts = iptfs_opts.replace("dont-frag", "")
         iptfs_opts = re.sub(r"init-delay \d+", "", iptfs_opts)
         iptfs_opts = re.sub(r"max-queue-size \d+", "", iptfs_opts)
@@ -592,28 +592,30 @@ async def setup_policy_tun(
         #
         # SAs
         #
-        dir = "out" if r == r1 else "in"
-        eflags = esp_flags_filter_dir(dir, esp_flags)
+        direction = "out" if r == r1 else "in"
+        eflags = esp_flags_filter_dir(direction, esp_flags)
+        esp_args = "replay-window 128" if direction == "in" else ""
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"{eflags} reqid {reqid_1to2} dir {dir} "
+                f"{esp_args} {eflags} reqid {reqid_1to2} dir {direction} "
                 # f"reqid {reqid_1to2} "
             )
-            + iptfs_opts_filter_dir(dir, iptfs_opts)
+            + iptfs_opts_filter_dir(direction, iptfs_opts)
         )
 
-        dir = "in" if r == r1 else "out"
-        eflags = esp_flags_filter_dir(dir, esp_flags)
+        direction = "in" if r == r1 else "out"
+        eflags = esp_flags_filter_dir(direction, esp_flags)
+        esp_args = "replay-window 128" if direction == "in" else ""
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"{eflags} reqid {reqid_2to1} dir {dir} "
+                f"{esp_args} {eflags} reqid {reqid_2to1} dir {direction} "
                 # f"reqid {reqid_2to1} "
             )
-            + iptfs_opts_filter_dir(dir, iptfs_opts)
+            + iptfs_opts_filter_dir(direction, iptfs_opts)
         )
 
         #
@@ -831,23 +833,27 @@ async def setup_routed_tun(
             lip = r2ip
             rip = r1ip
 
-        dir = "out" if r == r1 else "in"
+        direction = "out" if r == r1 else "in"
+        eflags = esp_flags_filter_dir(direction, esp_flags)
+        esp_args = "replay-window 128" if direction == "in" else ""
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r1ip} dst {r2ip} proto esp "
                 f"spi {spi_1to2} mode {mode} {sa_auth} {sa_enc} "
-                f"{esp_flags} if_id 55 reqid {reqid_1to2} dir {dir} "
+                f"{esp_args} {eflags} if_id 55 reqid {reqid_1to2} dir {direction} "
             )
-            + iptfs_opts_filter_dir(dir, iptfs_opts)
+            + iptfs_opts_filter_dir(direction, iptfs_opts)
         )
-        dir = "in" if r == r1 else "out"
+        direction = "in" if r == r1 else "out"
+        eflags = esp_flags_filter_dir(direction, esp_flags)
+        esp_args = "replay-window 128" if direction == "in" else ""
         repl.cmd_raises(
             (
                 f"ip xfrm state add src {r2ip} dst {r1ip} proto esp "
                 f"spi {spi_2to1} mode {mode} {sa_auth} {sa_enc} "
-                f"{esp_flags} if_id 55 reqid {reqid_2to1} dir {dir} "
+                f"{esp_args} {eflags} if_id 55 reqid {reqid_2to1} dir {direction} "
             )
-            + iptfs_opts_filter_dir(dir, iptfs_opts)
+            + iptfs_opts_filter_dir(direction, iptfs_opts)
         )
 
         # repl.cmd_raises(f"ip add vti0 local {lip} remote {rip} mode vti key 55")
