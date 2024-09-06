@@ -78,6 +78,7 @@ async def test_policy_tun_agg(unet, astepf, tun_ipv6):
     await setup_policy_tun(
         unet,
         mode="iptfs",
+        esp_args="replay-window 128",
         iptfs_opts=f"init-delay {INIT_DELAY}",
         ipv6=True,
         tun_ipv6=tun_ipv6,
@@ -95,6 +96,7 @@ async def test_routed_tun_agg(unet, astepf, tun_ipv6):
     await setup_routed_tun(
         unet,
         mode="iptfs",
+        esp_args="replay-window 128",
         esp_flags="esn",
         iptfs_opts=f"init-delay {INIT_DELAY}",
         ipv6=True,
