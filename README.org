@@ -66,7 +66,6 @@ or
   == PAUSING: before test 'tests/simplenet/test_simplenet.py::test_net_up' ==
 #+end_src
 
-
 You can now log into the running setup in another terminal. Use ~socat~ to log
 into the console of the running qemu'd linux.
 
@@ -133,7 +132,6 @@ If your ~socat~ doesn't support ~rawer~ option replace with ~raw,echo=0,icanon=0
 #+end_src
 
 ** Building/Editing Notes
-
 *** CCLS
 
 I like to use ccls with LSP mode in emacs, which will allow you to jump to all
@@ -147,7 +145,6 @@ In order for this to work seemlessly you need to do a couple steps:
   3. printf "%%compile_commands.json\n-D__IN_CCLS__\n" > .ccls
 
 ** CI Usage
-
 *** Testing.
 
 The tests contained herein are used directly in the ~iptfs-linux~ github project
@@ -197,7 +194,6 @@ tunnel should run in.
 - iptfs-initial-delay :: amount of time in microseconds to wait before servicing
   the output queue after the initial packet arrives (first in queue). This time
   allows for collecting more packets to take advantage of IPTFS packet aggregation.
-
 
 *** From Steffen's Mail
 
@@ -493,7 +489,6 @@ the padding added to the trailer will be (this value - skb->len)
       /* ((1500 - size(ESP) - size(CRYPTAUTH) - size(IP)) & 0xFFFFFFFc) + size(IP) - 2; */
   }
 
-
 #+end_src
 **** xfrm_device
 - pcode: prepping skb's for???
@@ -555,7 +550,6 @@ xfrm_outer_mode_prep
 #0  esp_output (x=0xffff888107a8a000, skb=0xffff888109584b40) at /home/chopps/w/iptfs-dev/linux/net/ipv4/esp4.c:655
 #1  0xffffffff827a5f8c in xfrm_output_one (err=0, skb=0xffff888109584b40) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:600
 
-
 #2  xfrm_output_resume (sk=sk@entry=0x0 <fixed_percpu_data>, skb=skb@entry=0xffff888109584b40, err=<optimized out>, err@entry=1)
     at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:635
 #3  0xffffffff827a6483 in xfrm_output2 (skb=0xffff888109584b40, sk=0x0 <fixed_percpu_data>, net=0xffffffff849f7e40 <init_net>)
@@ -565,8 +559,6 @@ xfrm_outer_mode_prep
     at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:1648
 #6  0xffffffff827bc427 in iptfs_output_queued (list=0xffff888237609db0, x=<optimized out>) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2080
 #7  iptfs_delay_timer (me=<optimized out>) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2129
-
-
 
 #8  0xffffffff812431fe in __run_hrtimer (flags=642, now=0xffff888237609ec0, timer=0xffff888107a8f468, base=0xffff88823762b3c0,
     cpu_base=0xffff88823762b240) at /home/chopps/w/iptfs-dev/linux/kernel/time/hrtimer.c:1685
@@ -604,7 +596,6 @@ xfrm_outer_mode_prep
 #7  0xffffffff82590b8d in dev_queue_xmit (skb=0xffff888109589b40)
     at /home/chopps/w/iptfs-dev/linux/include/linux/netdevice.h:3085
 
-
 #8  neigh_resolve_output (neigh=0xffff8881092ac000, skb=0xffff888109589b40)
     at /home/chopps/w/iptfs-dev/linux/net/core/neighbour.c:1552
 #9  0xffffffff826a844d in neigh_output (skip_cache=false, skb=0xffff888109589b40, n=0xffff8881092ac000)
@@ -624,7 +615,6 @@ xfrm_outer_mode_prep
 #15 0xffffffff827b7bd9 in dst_output (skb=0xffff888109589b40, sk=0x0 <fixed_percpu_data>, net=0xffffffff849fcec0 <init_net>)
     at /home/chopps/w/iptfs-dev/linux/include/net/dst.h:458
 
-
 #16 xfrm_output_resume (sk=sk@entry=0x0 <fixed_percpu_data>, skb=skb@entry=0xffff888109589b40, err=err@entry=1)
     at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_output.c:643
 #17 0xffffffff827b97dd in xfrm_output2 (skb=0xffff888109589b40, sk=0x0 <fixed_percpu_data>, net=<optimized out>)
@@ -636,7 +626,6 @@ xfrm_outer_mode_prep
 #20 0xffffffff827d1cf7 in iptfs_output_queued (list=0xffff888237609db0, x=<optimized out>)
     at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2080
 #21 iptfs_delay_timer (me=<optimized out>) at /home/chopps/w/iptfs-dev/linux/net/xfrm/xfrm_iptfs.c:2129
-
 
 
 #22 0xffffffff812431fe in __run_hrtimer (flags=642, now=0xffff888237609ec0, timer=0xffff888107a91c68,
@@ -656,7 +645,6 @@ xfrm_outer_mode_prep
 (gdb) c
 
 ARP
-
 
 #0  esp_xmit (x=0xffff888107a8e000, skb=0xffff8881095893c0, features=0)
     at /home/chopps/w/iptfs-dev/linux/net/ipv4/esp4_offload.c:270
@@ -758,7 +746,6 @@ $26 = {flags = 0 '\000', meta_len = 0 '\000', nr_frags = 2 '\002', tx_flags = 0 
 These 2 pages are 0x80 apart (sizeof *page == 0x40 so 2 pages), but the offset
 is 192 (0xc0) on both with lengths of 3072 and 1910 these regions overlap.
 That's b/c the actual page address is not the page struct.
-
 
 Here's a SW based 2 frag version:
 (gdb) p *skb
@@ -885,11 +872,7 @@ $21 = {flags = 0x200000000010000, {{{lru = {next = 0x0, prev = 0xdead00000000012
     callback_head = {next = 0x0, func = 0xdead000000000122}}, {_mapcount = {
       counter = 0xffffffff}, page_type = 0xffffffff}, _refcount = {counter = 0x4}}
 
-
-
-
 ** Sandbox
-
 *** CONFIG options for tracing
 
 CONFIG_DEBUG_INFO=y
@@ -974,7 +957,6 @@ empty results in the file not the `code` as instructed.
   echo "Hello World"
 #+end_src
 
-
 *** Performance Triaging
 
 Testing done on a single server with 3 networks cards using munet and wiring the
@@ -1000,7 +982,6 @@ ports to each other.
 - IPTFS [r1,r2] tunnel, from h1 to h2 iperf bidir     700Kbps-3.87Mbps
 
 ** Examples
-
 *** These are single Core
 
 **** tests/stress/trex_stress_phy.py::test_policy_imix
@@ -1142,7 +1123,6 @@ status:  \
 
 browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
 dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
-
 
 ***** mode == tunnel (i.e., normal ipsec) (imix legacy 7,4,1)
 
@@ -1387,7 +1367,6 @@ status:  \
 browse:     'q' - quit, 'd' - dashboard, 'u' - util, 's' - streams, 'l' - latency,
 dashboard:  'n' - reset view, 'o' - owned ports, 'a' - all ports, 'c' - clear,
 
-
 ****** mode == iptfs (i.e., normal ipsec) 1G 40 octet packet
 ****** mode == tunnel (i.e., normal ipsec) 1G 40 octet packet
 
@@ -1489,7 +1468,6 @@ status:
 tui(read-only)>
 
 **** UPKT 1K, rate=8G, 4core
-
 
 Global Statistics
 
@@ -1685,7 +1663,6 @@ tui(read-only)>
 
 FAILED tests/stress/test_stress_phy.py::test_policy_small_pkt - Exception: FAILED: p0missed: 18908723 (75.29220704883792%) p1missed: 18699872 (74.46058807941534%)
 
-
 *** ipsec
 
 **** 1400UPKT 5G rate 4core
@@ -1743,7 +1720,6 @@ but then another run got:
 and was showing more like 2G
 
 FAILED tests/stress/test_stress_phy.py::test_policy_small_pkt - Exception: FAILED: p0missed: 14448450 (57.53194908692576%) p1missed: 14270021 (56.82146677611519%)
-
 
 *** ipsec tunnel
 
@@ -1821,9 +1797,6 @@ tui(read-only)>
   258 root        20   0  3300   508   448 S   0.0  0.0  0:00.00 sleep 1200
   283 root        20   0  3432   524   456 S   0.0  0.0  0:00.00 /sbin/getty -n -l /bin/sh -L ttyS3 115200 vt100
 
-
-F
-
 *** IPTFS
 
 Global Statistics
@@ -1873,7 +1846,6 @@ status:
 tui(read-only)>
 
 
-
     0[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||100.0%] Tasks: 17, 0 thr, 67 kthr; 2 running
     1[|||||||||||||||||||||||||||||||||||||||||||||||||||||||                       66.2%] Load average: 0.64 0.18 0.06
     2[|||||                                                                          5.4%] Uptime: 00:01:05
@@ -1897,7 +1869,6 @@ tui(read-only)>
   256 root        20   0  3300   520   460 S   0.0  0.0  0:00.00 sleep 1200
   257 root        20   0  3164  2236  2080 S   0.0  0.1  0:00.00 /usr/sbin/dropbear -R -2
   258 root        20   0  4660  3676  3184 S   0.0  0.1  0:00.00 bash
-
 
 ** Poor performance 150Kpps @ 40 w 4 cores:
 
@@ -2049,8 +2020,6 @@ PIW:          0          0          0          0   Posted-interrupt wakeup event
 b
 but even moving the IRQ didn't change anything maybe b/c rx-2 is being shared?
 
-
-
 * New Perfs
 ** NO GRO
     no "generic-receive-offload",
@@ -2074,7 +2043,6 @@ TCP window size: 85.0 KByte (default)
 [ ID] Interval       Transfer     Bandwidth
 [  1] 0.0000-10.0113 sec  6.32 GBytes  5.42 Gbits/sec
 root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1#
-
 
 *** iptfs
 
@@ -2168,11 +2136,6 @@ TCP window size: 85.0 KByte (default)
 [ ID] Interval       Transfer     Bandwidth
 [  1] 0.0000-10.0099 sec  4.43 GBytes  3.80 Gbits/sec
 root@h1:/tmp/unet-test/tests.iperf.test_iperf_phy/h1#
-
-
-
-
-
 * Debugging SLAB
 
   5s IPv6
@@ -2273,8 +2236,6 @@ sh-5.2# ip -d  route list table 220
 unicast 10.0.0.0/24 via 10.0.2.3 dev eth2 proto static scope global src 10.0.3.4
 
 
-
-
 BAD:
 ------ Host: r1 ------
 unicast 10.0.3.0/24 via 10.0.1.3 dev eth2 proto static scope global
@@ -2359,9 +2320,6 @@ unicast 10.0.1.0/24 dev eth1 proto kernel scope link src 10.0.1.3
 unicast 10.0.2.0/24 dev eth2 proto kernel scope link src 10.0.2.3
 unicast 192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.3
 ------- End: rm ------
-
-
-
 
 *** BAD FULLuTABLE
 munet> sh ip -d route list table all
@@ -2545,10 +2503,6 @@ broadcast 192.168.0.255 dev eth0 table local proto kernel scope link src 192.168
 'GSO_IPXIP4_BIT', 'GSO_IPXIP6_BIT', 'GSO_UDP_TUNNEL_BIT',
                            'GSO_PARTIAL_BIT', 'SCTP_CRC_BIT', 'RXHASH_BIT',
  'RXCSUM_BIT', 'HW_TC_BIT']
-
-
-
-
 * packets at egress:
 ** GRO/GSO enabled
 *** PHY
@@ -2627,7 +2581,6 @@ PHY: [001] ..s1.     7.412970: iptfs_egress_recv: EGRESS: skb=0000000043420e6b l
 
 *** R2
 **** NON:
-
 
      ksoftirqd/0-14      [000] ..s1.     8.180352: iptfs_egress_recv: EGRESS: skb=00000000acf45ccb len=1446 data_len=1446 headroom=114 head_frag=1 frag_list=0 nr_frags=1 blkoff=0
 		tailroom=0 tail=114 end=704 head=ffff88801a90b400 hdpgaddr=ffff88801a90b000 pg0->addr=ffff888012148000 pg0->data=ffff88801214da3e pg0->off=23102
