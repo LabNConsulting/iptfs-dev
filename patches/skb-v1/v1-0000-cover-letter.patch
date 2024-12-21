@@ -1,0 +1,29 @@
+Cc: "David S. Miller" <davem@davemloft.net>, Eric Dumazet <edumazet@google.com>
+Cc: Jakub Kicinski <kuba@kernel.org>, Paolo Abeni <pabeni@redhat.com>
+Cc: Florian Westphal <fw@strlen.de>, Sabrina Dubroca <sd@queasysnail.net>
+Cc: Simon Horman <horms@kernel.org>, Antony Antony <antony@phenome.org>
+Subject: [PATCH ipsec-next v1 00/02] Add 2 functions to skbuff for code sharing
+
+* Summary of Changes:
+
+This patchset contains 2 commits which add 2 functions to skbuff.[ch].
+
+  - skb_copy_seq_read() - copy from a skb_seq_state to a buffer
+  - ___copy_skb_header() - factored existing code
+
+these are used in a followup patchset implementing IP-TFS/AggFrag
+encapsulation (https://www.rfc-editor.org/rfc/rfc9347.txt)
+
+Patchset History:
+-----------------
+
+v1 (8/9/2024)
+  - Created from IP-TFS patchset v9
+
+Patchset Changes:
+-----------------
+
+  include/linux/skbuff.h |  2 ++
+  net/core/skbuff.c      | 43 ++++++++++++++++++++++++++++++++++++++++++-
+  2 files changed, 44 insertions(+), 1 deletion(-)
+

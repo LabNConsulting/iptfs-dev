@@ -1,0 +1,42 @@
+From 8eadb8fd453e3be66deee598a3ddb797695bf90b Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Sun, 12 Nov 2023 06:28:49 -0500
+Subject: [PATCH ipsec-next v13 01/15] xfrm: config: add CONFIG_XFRM_IPTFS
+
+Add new Kconfig option to enable IP-TFS (RFC9347) functionality.
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+ net/xfrm/Kconfig | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/net/xfrm/Kconfig b/net/xfrm/Kconfig
+index d7b16f2c23e9..f0157702718f 100644
+--- a/net/xfrm/Kconfig
++++ b/net/xfrm/Kconfig
+@@ -135,6 +135,22 @@ config NET_KEY_MIGRATE
+ 
+ 	  If unsure, say N.
+ 
++config XFRM_IPTFS
++	tristate "IPsec IP-TFS/AGGFRAG (RFC 9347) encapsulation support"
++	depends on XFRM
++	help
++	  Information on the IP-TFS/AGGFRAG encapsulation can be found
++	  in RFC 9347. This feature supports demand driven (i.e.,
++	  non-constant send rate) IP-TFS to take advantage of the
++	  AGGFRAG ESP payload encapsulation. This payload type
++	  supports aggregation and fragmentation of the inner IP
++	  packet stream which in turn yields higher small-packet
++	  bandwidth as well as reducing MTU/PMTU issues. Congestion
++	  control is unimplementated as the send rate is demand driven
++	  rather than constant.
++
++	  If unsure, say N.
++
+ config XFRM_ESPINTCP
+ 	bool
+ 
+-- 
+2.47.0
+

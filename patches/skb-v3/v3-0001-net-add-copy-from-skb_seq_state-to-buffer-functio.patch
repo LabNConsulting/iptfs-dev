@@ -1,0 +1,92 @@
+From 7ffaf668766de728f8c483f50fe0a592c9303efd Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Thu, 8 Aug 2024 21:33:54 -0400
+Subject: [PATCH ipsec-next v3 1/1] net: add copy from skb_seq_state to buffer
+ function
+
+Add an skb helper function to copy a range of bytes from within
+an existing skb_seq_state.
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+
+This is used in a followup patchset implementing IP-TFS/AggFrag
+encapsulation (https://www.rfc-editor.org/rfc/rfc9347.txt)
+
+Patchset History:
+
+  v1 (8/9/2024)
+    - Created from IP-TFS patchset v9
+
+  v2 (8/9/2024)
+    - resend with corrected CC list.
+
+  v3 (8/15/2024)
+    - removed ___copy_skb_header refactoring
+
+---
+ include/linux/skbuff.h |  1 +
+ net/core/skbuff.c      | 35 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 36 insertions(+)
+
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+index 29c3ea5b6e93..a871533b8568 100644
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -1433,6 +1433,7 @@ void skb_prepare_seq_read(struct sk_buff *skb, unsigned int from,
+ unsigned int skb_seq_read(unsigned int consumed, const u8 **data,
+ 			  struct skb_seq_state *st);
+ void skb_abort_seq_read(struct skb_seq_state *st);
++int skb_copy_seq_read(struct skb_seq_state *st, int offset, void *to, int len);
+ 
+ unsigned int skb_find_text(struct sk_buff *skb, unsigned int from,
+ 			   unsigned int to, struct ts_config *config);
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+index 83f8cd8aa2d1..aa5dc64dbd2f 100644
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -4409,6 +4409,41 @@ void skb_abort_seq_read(struct skb_seq_state *st)
+ }
+ EXPORT_SYMBOL(skb_abort_seq_read);
+ 
++/**
++ * skb_copy_seq_read() - copy from a skb_seq_state to a buffer
++ * @st: source skb_seq_state
++ * @offset: offset in source
++ * @to: destination buffer
++ * @len: number of bytes to copy
++ *
++ * Copy @len bytes from @offset bytes into the source @st to the destination
++ * buffer @to. `offset` should increase (or be unchanged) with each subsequent
++ * call to this function. If offset needs to decrease from the previous use `st`
++ * should be reset first.
++ *
++ * Return: 0 on success or a negative error code on failure
++ */
++int skb_copy_seq_read(struct skb_seq_state *st, int offset, void *to, int len)
++{
++	const u8 *data;
++	u32 sqlen;
++
++	for (;;) {
++		sqlen = skb_seq_read(offset, &data, st);
++		if (sqlen == 0)
++			return -ENOMEM;
++		if (sqlen >= len) {
++			memcpy(to, data, len);
++			return 0;
++		}
++		memcpy(to, data, sqlen);
++		to += sqlen;
++		offset += sqlen;
++		len -= sqlen;
++	}
++}
++EXPORT_SYMBOL(skb_copy_seq_read);
++
+ #define TS_SKB_CB(state)	((struct skb_seq_state *) &((state)->cb))
+ 
+ static unsigned int skb_ts_get_next_block(unsigned int offset, const u8 **text,
+-- 
+2.46.0
+

@@ -1,0 +1,43 @@
+From e6805437010e31c01de5096cc0616b8126db44e6 Mon Sep 17 00:00:00 2001
+From: Christian Hopps <chopps@labn.net>
+Date: Wed, 20 Apr 2022 13:15:20 -0400
+Subject: [PATCH ipsec-next v12 02/16] include: uapi: add ip_tfs_*_hdr packet
+ formats
+
+Add the on-wire basic and congestion-control IP-TFS packet headers.
+
+Signed-off-by: Christian Hopps <chopps@labn.net>
+---
+ include/uapi/linux/ip.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/include/uapi/linux/ip.h b/include/uapi/linux/ip.h
+index 283dec7e3645..5bd7ce934d74 100644
+--- a/include/uapi/linux/ip.h
++++ b/include/uapi/linux/ip.h
+@@ -137,6 +137,22 @@ struct ip_beet_phdr {
+ 	__u8 reserved;
+ };
+ 
++struct ip_iptfs_hdr {
++	__u8 subtype;		/* 0*: basic, 1: CC */
++	__u8 flags;
++	__be16 block_offset;
++};
++
++struct ip_iptfs_cc_hdr {
++	__u8 subtype;		/* 0: basic, 1*: CC */
++	__u8 flags;
++	__be16 block_offset;
++	__be32 loss_rate;
++	__be64 rtt_adelay_xdelay;
++	__be32 tval;
++	__be32 techo;
++};
++
+ /* index values for the variables in ipv4_devconf */
+ enum
+ {
+-- 
+2.46.0
+
